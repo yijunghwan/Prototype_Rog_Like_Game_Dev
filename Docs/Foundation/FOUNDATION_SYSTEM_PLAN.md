@@ -4,6 +4,8 @@
 > **문서 상태:** 구현 전 계획서  
 > **목적:** 다른 개발자의 적·맵·콘텐츠 작업과 분리된 상태에서, 모든 전투 콘텐츠가 공통으로 사용할 확장 가능한 기반을 정의한다.
 
+초기 Foundation은 **싱글플레이 전용**이다. 네트워크 Replication과 RPC는 구현 범위에 포함하지 않는다. 멀티플레이가 필요해지면 피해 권한, Action 예측, Runtime Instance 소유권을 별도 설계한 뒤 확장한다.
+
 ---
 
 ## 1. 담당 범위
@@ -91,7 +93,7 @@ ACharacter (언리얼 기본 클래스)
 | `UARStaggerComponent` | 즉시 경직, 경직 면역, 슈퍼아머, 선택형 그로기 게이지 |
 | `UARActionComponent` | 현재 행동 등록, 시작 검증, 정상 종료, 경직에 의한 취소 |
 | `UARMovementControlComponent` | 모든 플레이어·적 이동 요청의 공통 통로, 이동 잠금과 CharacterMovement 제어 |
-| `UARWeaponComponent` | 현재 무기, 무기 교체, 공격·스킬 요청 |
+| `UARLoadoutComponent` | 무기 1개, 액티브 유물 2개, 패시브 유물 목록, 장착·교체·진화·스킬 등록과 입력 요청 |
 | `UARCombatSourceComponent` | 일반 맵 Actor가 `Environment` 팀의 피해 출처·로그 정보를 제공하도록 하는 선택형 컴포넌트 |
 
 ### 플레이어 전용 컴포넌트
@@ -100,8 +102,9 @@ ACharacter (언리얼 기본 클래스)
 |---|---|
 | `UARStaminaComponent` | 현재 스태미나, 소비, 회복, 구르기 비용 처리 |
 | `UARManaComponent` | 현재 MP, 소비, MP 재생, 회복 처리 |
-| `UARRelicComponent` | 패시브 유물 누적과 액티브 유물 2칸 관리 |
 | `UARConsumableComponent` | 가변 소모품 슬롯, 획득·사용·슬롯 수 변화와 초과 소모품 드롭 처리 |
+| `UARCameraFollowComponent` | 정사영 카메라의 부드러운 추적, 거리 기반 가속과 최대 지연 제한 |
+| `UARInteractionComponent` | 상호작용 후보 탐색, 거리·우선순위 검증, 현재 상호작용 대상 관리 |
 
 ### 전투 팀과 피격 대상 규칙
 
@@ -197,7 +200,7 @@ ACharacter (언리얼 기본 클래스)
 - `현재 체력`, `현재 보호막`, `현재 스태미나`, `현재 MP`, `현재 그로기 수치`는 플레이 도중 계속 변하는 자원값이다.
 - 체력은 최대 체력을 넘을 수 없다. 회복력은 자동 초당 재생이 아니라 별도의 회복 시점에서만 사용한다.
 - 보호막은 별도 최대치 없이 임시 체력으로 구현한다. 보호막은 인스턴스별 수치와 지속시간을 가지며, 현재 보호막은 활성 인스턴스의 합계다.
-- 실시간 자원은 각각 `HealthComponent`, `StaminaComponent`, `StaggerComponent`가 관리한다. 블루프린트는 이 값을 직접 변경하지 않는다.
+- 실시간 자원은 각각 `HealthComponent`, `StaminaComponent`, `ManaComponent`, `StaggerComponent`가 관리한다. 블루프린트는 이 값을 직접 변경하지 않는다.
 
 최종 스탯은 아래 원칙을 따른다.
 
@@ -228,6 +231,29 @@ ACharacter (언리얼 기본 클래스)
 쿨다운 감소율은 캐릭터 상한을 높게 설정하더라도 재사용 대기시간이 정확히 0이 되는 것을 막기 위해, 각 행동이 가진 `최소 재사용 대기시간`보다 낮아질 수 없다. 이 최소값은 나중에 무기·스킬 데이터에서 정한다.
 
 이동 속도와 공격 속도는 초기 기반에서 최종 상한을 두지 않는다. 경직 저항력도 최종 상한을 두지 않는다. 물리·화염·마법 방어력과 물리·화염·마법 피격 피해 증가율의 최종 최저치는 공통으로 `0`이며, 방어 관통률은 대상 방어력이 양수일 때만 적용한다. 전체·물리·화염·마법 피해 감소율은 감소 효과가 100%를 넘지 않으며, 음수 감소율은 받는 피해 증가로 작동할 수 있다.
+
+### 스탯 단위·최솟값·정수화 규칙
+
+| 스탯 종류 | 단위와 기준 | 최종 안전 규칙 |
+|---|---|---|
+| 이동 속도 | Unreal Unit/초 | `0` 이상, 상한 없음 |
+| 공격 속도 | `100 = 1배` | 계산 시 최소 `1`로 제한, 상한 없음 |
+| 사거리 | Unreal Unit 또는 콘텐츠의 기본 거리 배율 입력값 | 공격 Definition이 절대 거리/배율 사용 여부를 명시 |
+| 치명타 확률·회피력·강인함 | `%` | 캐릭터별 Details 상한 적용 후 실제 확률·지속시간 계산에서는 `0~100`으로 제한 |
+| 치명타 피해량 | `%`, `150 = 1.5배` | 최소 `0` |
+| 방어 관통률 | `%` | 스탯 자체 상한 없음, 유효 관통은 `0~100` |
+| 최대 체력 | 자원 수치 | 최소 `1` |
+| 최대 스태미나·최대 MP·최대 그로기 | 자원 수치 | 최소 `0` |
+| 최대 소모품 슬롯 수 | 개수 | 최종 실수값을 `Floor`한 뒤 최소 `0` |
+
+공격 속도의 공통 시간 변환은 아래와 같다. 공격 Definition은 선딜·후딜·차지 중 어떤 구간에 공격 속도를 적용할지 명시한다.
+
+```text
+공격 속도 적용 시간
+= 기본 시간 × 100 ÷ Max(최종 공격 속도, 1)
+```
+
+최대 자원 스탯이 런타임에 바뀌면 현재값은 새 최대값 이하로 즉시 제한한다. 최대값이 증가해도 현재값을 자동 회복하지 않는다. 이 변화는 `On Resource Changed`를 발생시키며, 별도 회복 효과만 현재값을 증가시킨다.
 
 ### 독립 피해 감소율 누적
 
@@ -335,10 +361,19 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 ```
 
 ```text
-치명타 가능, 치명타 성공
+치명타 가능
+→ Random(0 이상 100 미만)
+  < Clamp(최종 치명타 확률,
+          0,
+          Min(캐릭터 최대 치명타 확률, 100))
+이면 치명타 성공
+
+치명타 성공
 → 치명타 적용 피해
 = 증폭 후 피해 × (치명타 피해량 ÷ 100)
 ```
+
+회피와 치명타 난수는 C++ Resolver가 주입받은 `FRandomStream`으로 판정한다. 자동화 테스트는 고정 Seed 또는 지정된 Roll 값을 사용해 결과를 재현한다.
 
 치명타 피해량 `150`은 1.5배를 뜻한다. 지속 피해도 피해 요청의 치명타 적용 여부를 켜면 동일한 방식으로 치명타를 적용할 수 있다.
 
@@ -490,14 +525,16 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 상태이상은 개별 기능을 따로 만들지 않고 하나의 공통 규칙으로 관리한다.
 
-### 상태이상 데이터가 가져야 할 정보
+### 상태이상 Definition이 가져야 할 정보
 
-- 종류: 기절, 침묵, 화상, 둔화 등
-- 기본 지속시간과 남은 시간
-- 화상 등 지속 피해의 틱당 피해와 틱 간격
-- 이동·공격·스킬 사용 제한
-- 스탯 보정
+- Asset Manager용 `PrimaryAssetId`와 상태 Gameplay Tag
+- 표시 이름·아이콘
+- 기본 지속시간과 동일 상태 갱신 정책
+- 이동·구르기·Skill Group 시작 제한
+- 적용 시 Action 취소 규칙
 - 해제 조건과 면역 여부
+
+런타임 남은 시간은 Definition이 아니라 `UARStatusEffectComponent`의 상태 인스턴스가 소유한다. 화상·독의 피해량과 틱 간격은 초기 상태이상 Definition에 넣지 않고 DOT Spec이 소유한다.
 
 ### 초기 상태이상
 
@@ -605,12 +642,13 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 제한 중에는 이동·공격·무기 스킬·액티브 유물을 사용할 수 없다. 경직은 기본적으로 넉백을 포함하지 않는다. 넉백은 필요해질 때 공격별 별도 효과로만 추가한다.
 
-각 플레이어·적 블루프린트의 `StaggerComponent` Details 패널에서 아래 기본값을 설정한다.
+각 플레이어·적 블루프린트의 `StaggerComponent` Details 패널에는 상태 소유 값만 설정한다.
 
 - `경직 가능`
-- `경직 저항력`
 - `기본 경직 시간`
 - `경직 후 면역 시간`
+
+`경직 저항력`은 `StatsComponent`가 소유하는 최종 스탯이며 `StaggerComponent`가 읽는다. 같은 값을 두 Component의 Details에 중복 보관하지 않는다.
 
 ### 슈퍼아머: 기술 중의 임시 상태
 
@@ -650,12 +688,11 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 그로기 피해는 체력 피해처럼 대상의 현재 그로기 수치를 감소시키지만, 체력 피해와는 독립적으로 계산한다. 경직력에서 시작하고 그로기 피해 증폭을 추가로 적용한다. 치명타, 물리·화염·마법 방어력, 일반 피해 증폭은 그로기 피해에 적용하지 않는다. 공격별 기본 그로기 피해가 `0`이면 그로기 피해를 주지 않는다. 지속 피해의 틱도 그로기 피해를 주도록 설정된 경우, 매 틱이 마지막 그로기 피해 시점을 갱신한다.
 
-`StaggerComponent` Details 패널의 그로기 설정은 아래와 같다.
+`StaggerComponent` Details 패널의 그로기 상태 설정은 아래와 같다.
 
 - `그로기 게이지 사용`
-- `최대 그로기 수치`
-- `그로기 게이지 회복 대기시간` — 마지막 피해 후 회복을 기다리는 시간
-- `초당 그로기 게이지 회복량`
+
+`최대 그로기 수치`, `그로기 게이지 회복 대기시간`, `초당 그로기 게이지 회복량`은 `StatsComponent`가 소유한다. `StaggerComponent`는 현재 그로기와 마지막 피해 시각, 고갈 잠금 상태만 소유하고 최종 스탯 변경 이벤트를 구독한다.
 
 ```text
 마지막 그로기 피해 후 회복 대기시간 경과
@@ -682,7 +719,8 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 | 구분 | 항목 | 규칙 |
 |---|---|---|
-| 공통 식별 | `DefinitionId` | 안정적인 고유 Gameplay Tag. 예: `Item.Weapon.Sword.Basic` |
+| 공통 식별 | `DefinitionTag` | 게임 규칙과 조회에 사용하는 안정적인 고유 Gameplay Tag. 예: `Item.Weapon.Sword.Basic` |
+| 에셋 식별 | `PrimaryAssetId` | Asset Manager가 Definition을 로드하는 정식 에셋 ID. 저장·비동기 로딩에서 사용하며 표시 이름으로 대체하지 않음 |
 | 공통 분류 | `ItemTags` | `Weapon.Melee`, `Weapon.Sword`, `Element.Fire` 같은 세부 분류. 무기/액티브/패시브의 큰 분류는 데이터 에셋 클래스가 확정한다. |
 | 공통 UI | `DisplayName`, `ShortDescription`, `UIIcon` | 모두 UI용 정적 정보. 텍스트는 `FText`를 사용한다. |
 | 공통 설명 | `DescriptionSections[]` | 일반, 패시브, 특이사항 등 제목·본문(`FText`)을 가진 문단 목록. 제공 스탯과 스킬 설명은 중복 작성하지 않고 자동 생성한다. |
@@ -710,7 +748,7 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 검의 진화는 기존 런타임 무기 객체를 해제하고, 선택한 다음 단계 정의로 새 런타임 무기 객체를 생성·등록하는 교체 방식이다. 따라서 기존 무기의 쿨다운, 임시 스택, 조건부 효과는 기본적으로 사라지며 새 무기는 새 상태로 시작한다. 특정 진화에서만 상태 계승이 필요해질 때 별도 계승 규칙을 추가한다.
 
-`Request Weapon Evolution`은 현재 장착 무기의 `EvolutionOptions[]`만 읽는다. 장착 무기가 없으면 `NoEquippedWeapon`, 선택지가 없으면 `NoEvolutionAvailable`, 한 개면 즉시 교체 등록 후 `EvolvedImmediately`, 둘 이상이면 `NeedEvolutionChoice`와 진화 요청 핸들을 반환한다. 선택 UI는 `Get Weapon Evolution Options`로 후보의 표시 정보를 얻고, `Commit Weapon Evolution`에 선택한 `DefinitionId`를 전달한다. 취소는 `Cancel Weapon Evolution`으로 처리한다.
+`Request Weapon Evolution`은 현재 장착 무기의 `EvolutionOptions[]`만 읽는다. 장착 무기가 없으면 `NoEquippedWeapon`, 선택지가 없으면 `NoEvolutionAvailable`, 한 개면 즉시 교체 등록 후 `EvolvedImmediately`, 둘 이상이면 `NeedEvolutionChoice`와 진화 요청 핸들을 반환한다. 선택 UI는 `Get Weapon Evolution Options`로 후보의 표시 정보를 얻고, `Commit Weapon Evolution`에 선택한 `PrimaryAssetId`를 전달한다. 취소는 `Cancel Weapon Evolution`으로 처리한다.
 
 ---
 
@@ -732,7 +770,7 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 - 직접 키를 눌러 사용한다.
 - 재사용 대기시간 또는 충전 규칙을 지원한다.
 - 예시: 긴급 회복, 보호막, 광역 폭발
-- 스킬 수가 적더라도 `SkillDefinitions[]`를 공유하며, MP·스태미나 비용과 쿨다운 및 UI 정보는 각 스킬 정의에 기록한다. 최대 2개라는 제한은 데이터 에셋이 아니라 Player의 `UARRelicComponent`가 관리한다.
+- 스킬 수가 적더라도 `SkillDefinitions[]`를 공유하며, MP·스태미나 비용과 쿨다운 및 UI 정보는 각 스킬 정의에 기록한다. 최대 2개라는 제한은 데이터 에셋이 아니라 Player의 `UARLoadoutComponent`가 관리한다.
 
 패시브와 액티브의 차이는 데이터 에셋 클래스, 장착 제한, 스킬 등록 여부, HUD 표시 위치로 구분한다. 충전 횟수·특수 소모품 같은 액티브 유물 전용 정적 규칙이 실제로 필요해질 때만 전용 필드를 추가한다.
 
@@ -744,7 +782,9 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 무기, 액티브 유물, 패시브 유물은 내부적으로 공통 `UARLoadoutItemInstance`(Blueprintable `UObject`)를 사용한다. 이 객체는 월드에 배치되는 Actor가 아니라 플레이어가 소유하는 장착 중 인스턴스다. 타입만 `Weapon` / `ActiveRelic` / `PassiveRelic`으로 구분한다.
 
-런타임 객체는 소유 Player 참조, 원본 Definition 참조, 고유 `InstanceId`, 적용한 스탯 수정치 핸들, 등록한 스킬 핸들, 이벤트 구독 핸들, 쿨다운·스택·전용 UI 상태 등 개인 상태를 가진다. C++ 내부 초기화만 이 값을 주입하며, 콘텐츠 BP는 임의의 Player나 Definition을 넣어 초기화할 수 없다.
+런타임 객체는 소유 Player 참조, 원본 Definition 참조, 고유 `InstanceId`, 적용한 스탯 수정치 핸들, 등록한 스킬 핸들, 이벤트 구독 핸들, 쿨다운·스택·전용 UI 상태 등 개인 상태를 가진다. C++ 내부 초기화만 이 값을 주입하며, 콘텐츠 BP는 임의의 Player나 Definition을 넣어 초기화할 수 없다. `InstanceId`는 `FGuid`, 등록된 스킬은 `FARRegisteredSkillHandle`, 각 효과는 전용 불투명 Handle을 사용한다.
+
+`UARLoadoutComponent`는 `UPROPERTY(Transient)` 배열·슬롯으로 Runtime Instance를 강하게 소유하고 Instance의 Outer가 된다. Instance는 Owner Character를 약하게 참조하고 장착 중인 Definition을 강하게 참조한다. 제거·EndPlay 전에 Delegate 구독을 해제하므로 GC와 파괴 순서에 의존하지 않는다.
 
 등록은 다음 순서로 원자 처리한다.
 
@@ -796,7 +836,7 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 런타임 BP는 `Set Item UI State(StateId, CurrentValue, MaxValue, bVisible)`로 실제 값을 갱신하며 `On Item UI State Changed`가 발생한다. 데이터 에셋에는 현재값을 저장하지 않는다. 아이템 제거 시 해당 Instance의 UI 상태도 함께 제거한다.
 
-HUD 위젯은 아이템 종류별로 서로 다르다. 무기의 상태는 무기 스킬 HUD·무기 패널, 액티브 유물의 상태는 장착된 액티브 유물 1·2번 슬롯 내부, 패시브 유물의 상태는 기본적으로 인벤토리 상세 패널과 필요 시 별도 패시브 상태 HUD에 표시한다. 어느 액티브 슬롯에 표시되는지는 데이터 에셋이 아니라 `UARRelicComponent`의 실제 장착 슬롯이 결정한다. 데이터 에셋은 개별 위젯 클래스를 직접 지정하지 않고, UI Manager가 `DisplayType`과 아이템 분류에 맞는 공통 위젯을 생성한다.
+HUD 위젯은 아이템 종류별로 서로 다르다. 무기의 상태는 무기 스킬 HUD·무기 패널, 액티브 유물의 상태는 장착된 액티브 유물 1·2번 슬롯 내부, 패시브 유물의 상태는 기본적으로 인벤토리 상세 패널과 필요 시 별도 패시브 상태 HUD에 표시한다. 어느 액티브 슬롯에 표시되는지는 데이터 에셋이 아니라 `UARLoadoutComponent`의 실제 장착 슬롯이 결정한다. 데이터 에셋은 개별 위젯 클래스를 직접 지정하지 않고, UI Manager가 `DisplayType`과 아이템 분류에 맞는 공통 위젯을 생성한다.
 
 ### 획득 요청과 월드 픽업 객체
 
@@ -959,19 +999,20 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 무기 / 유물 / 버프 / 기타
 ```
 
-출처 이름은 로그 표시와 제거 조회에 함께 쓰는 식별자다. 같은 출처 분류와 출처 이름을 가진 **버프**는 중첩 가능하며, 각 중첩은 독립된 수치와 지속시간을 가진다.
+수정치의 안정적인 식별에는 `SourceId`를 사용하고 `DisplayName`은 UI·로그에만 사용한다. 표시 이름을 변경해도 제거와 저장 규칙이 깨지지 않아야 한다. 같은 출처 분류와 `SourceId`를 가진 **버프**는 중첩 가능하며, 각 중첩은 독립된 Handle·수치·지속시간을 가진다.
 
 | 블루프린트 노드 | 입력 | 용도 및 반환값 |
 |---|---|---|
-| `Apply Stat Modifier` | 대상 캐릭터, 스텟, 계산 방식(고정 수치/합연산 %/곱연산 %), 수치, 지속시간, 출처 분류, 출처 이름, `무적 보장` 또는 `회피 보장` 선택값 | 수정치를 추가. 지속시간 `-1`은 직접 제거할 때까지 유지 |
-| `Remove Stat Modifiers` | 대상 캐릭터, 제거 범위(모두/무기/유물/버프/기타), 선택 출처 이름 | 범위와 이름에 맞는 수정치를 모두 제거. 이름이 비어 있으면 해당 범위 전체 제거 |
+| `Apply Stat Modifier` | 대상 캐릭터, 스텟, 계산 방식(고정 수치/합연산 %/곱연산 %), 수치, 지속시간, 출처 분류, `SourceId`, `DisplayName`, `무적 보장` 또는 `회피 보장` 선택값 | `ModifierHandle`과 성공 여부 반환. 지속시간 `-1`은 직접 제거할 때까지 유지 |
+| `Remove Stat Modifier` | 대상 캐릭터, `ModifierHandle` | 정확한 수정치 하나 제거 |
+| `Remove Stat Modifiers` | 대상 캐릭터, 제거 범위(모두/무기/유물/버프/기타), 선택 `SourceId` | 범위와 ID에 맞는 수정치를 모두 제거. ID가 비어 있으면 해당 범위 전체 제거 |
 | `Get Final Stat` | 대상 캐릭터, 스텟 | 모든 수정치가 반영된 현재 최종 수치 반환 |
-| `Get Stat Modifier Remaining Time` | 대상 캐릭터, 출처 분류, 출처 이름 | 가장 긴 남은 시간과 현재 중첩 수 반환. 무제한 지속 효과는 남은 시간 `-1` |
-| `Has Stat Modifier By Source` | 대상 캐릭터, 출처 분류, 출처 이름 | 적용 여부와 현재 중첩 수 반환 |
-| `Remove One Stat Modifier Stack` | 대상 캐릭터, 출처 분류, 출처 이름, 제거 기준(최근 적용/가장 오래된 것) | 같은 이름으로 중첩된 수정치 중 하나만 제거 |
+| `Get Stat Modifier Remaining Time` | 대상 캐릭터, `ModifierHandle` 또는 출처 분류·`SourceId` | Handle이면 정확한 남은 시간, 출처 조회면 가장 긴 남은 시간과 현재 중첩 수 반환. 무제한 지속 효과는 `-1` |
+| `Has Stat Modifier By Source` | 대상 캐릭터, 출처 분류, `SourceId` | 적용 여부와 현재 중첩 수 반환 |
+| `Remove One Stat Modifier Stack` | 대상 캐릭터, 출처 분류, `SourceId`, 제거 기준(최근 적용/가장 오래된 것) | 같은 ID로 중첩된 수정치 중 하나만 제거 |
 
 ```text
-제거 범위: 유물, 출처 이름: 화염의 반지
+제거 범위: 유물, SourceId: Item.Relic.FireRing
 → 화염의 반지가 준 모든 스텟 수정치 제거
 
 제거 범위: 버프, 출처 이름: 비움
@@ -984,13 +1025,13 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 | C++ 이벤트 | 전달값 | 용도 |
 |---|---|---|
 | `On Final Stat Changed` | 스텟 종류, 이전 최종값, 새 최종값 | UI·연출·무기 상태 갱신 |
-| `On Stat Modifiers Changed` | 출처 분류, 출처 이름, 변경 종류(추가/제거/만료), 중첩 수, 가장 긴 남은 시간 | 버프 아이콘, 중첩 수, 남은 시간 갱신 |
+| `On Stat Modifiers Changed` | 출처 분류, `SourceId`, `DisplayName`, 변경 종류(추가/제거/만료), 중첩 수, 가장 긴 남은 시간 | 버프 아이콘, 중첩 수, 남은 시간 갱신 |
 
 `On Final Stat Changed`만으로는 최종 스텟이 상한에 막힌 경우 수정치 아이콘을 갱신할 수 없으므로, `On Stat Modifiers Changed`를 별도로 제공한다. 모든 수정치의 재계산과 지속시간 만료 처리는 C++가 담당하고, 블루프린트는 스텟 값을 직접 설정하지 않는다.
 
-`무적 보장` 선택값은 `전체 피해 감소율` 수정치를 선택했을 때만 블루프린트 Details에 표시한다. 이를 켜면 수치가 단순히 `+100` 되는 것이 아니라, 같은 출처·지속시간을 가진 관리형 무적 항목이 함께 생성된다. 일반 피해 계산기는 하나라도 활성인 관리형 무적 항목이 있으면 전체 남은 피해 배율을 정확히 `0`으로 처리한다. 따라서 기존 감소 페널티나 다른 수정치와 관계없이 무적이 보장된다. 공허 피해는 이 무적을 무시한다. 출처 이름으로 수정치를 제거하거나 시간이 만료되면 연결된 관리형 무적도 함께 제거된다.
+`무적 보장` 선택값은 `전체 피해 감소율` 수정치를 선택했을 때만 블루프린트 Details에 표시한다. 이를 켜면 수치가 단순히 `+100` 되는 것이 아니라, 같은 SourceId·지속시간을 가진 관리형 무적 항목이 함께 생성된다. 일반 피해 계산기는 하나라도 활성인 관리형 무적 항목이 있으면 전체 남은 피해 배율을 정확히 `0`으로 처리한다. 따라서 기존 감소 페널티나 다른 수정치와 관계없이 무적이 보장된다. 공허 피해는 이 무적을 무시한다. SourceId 또는 Handle로 수정치를 제거하거나 시간이 만료되면 연결된 관리형 무적도 함께 제거된다.
 
-`회피 보장` 선택값은 `회피력` 수정치를 선택했을 때만 블루프린트 Details에 표시한다. 이를 켜면 수치가 단순히 회피력에 더해지는 것이 아니라, 같은 출처·지속시간을 가진 관리형 회피 보장 항목이 함께 생성된다. 피해 요청이 필중이 아니고 회피 판정 적용 상태라면, 회피력 상한과 관계없이 회피를 확정한다. 필중 피해는 회피 보장을 무시하며 정상 적중한다. 구르기는 이 방식을 사용한다. 출처 이름으로 수정치를 제거하거나 시간이 만료되면 연결된 회피 보장도 함께 제거된다.
+`회피 보장` 선택값은 `회피력` 수정치를 선택했을 때만 블루프린트 Details에 표시한다. 이를 켜면 수치가 단순히 회피력에 더해지는 것이 아니라, 같은 SourceId·지속시간을 가진 관리형 회피 보장 항목이 함께 생성된다. 피해 요청이 필중이 아니고 회피 판정 적용 상태라면, 회피력 상한과 관계없이 회피를 확정한다. 필중 피해는 회피 보장을 무시하며 정상 적중한다. 구르기는 이 방식을 사용한다. SourceId 또는 Handle로 수정치를 제거하거나 시간이 만료되면 연결된 회피 보장도 함께 제거된다.
 
 ### 14.1a 자원 소비·회복
 
@@ -1042,13 +1083,30 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 
 `Apply Stagger and Groggy Damage`는 `On Damage Hit` 또는 `Apply Combat Damage`가 반환한 `DamageHitContext`, 기본 경직 피해, 기본 그로기 피해, 공격별 경직 배율, 출처 분류·이름과 로그용 이름을 입력으로 받는다. 유효한 적중 맥락이 아닌 경우에는 아무 처리도 하지 않는다. 이 규칙으로 회피·일반 무적에 막힌 공격이 경직·그로기만 적용하는 실수를 방지한다.
 
+DOT 틱이 경직·그로기 피해를 주어야 하면 `FARDamageOverTimeSpec`에 선택적 `FARStaggerRequestTemplate`을 함께 저장한다. 중앙 처리기는 각 틱의 유효한 `DamageHitContext`로 템플릿을 실행한다. 템플릿이 없으면 DOT는 체력 피해만 적용한다. 이 방식으로 DOT를 부여한 런타임 아이템이 제거되거나 시전자가 사망한 뒤에도 남은 틱의 규칙이 유지된다.
+
 `Apply Damage Over Time`은 공통 피해 입력에 지속시간, 틱 간격, 틱당 피해, 지속 피해 이름, 중첩 방식(독립 중첩/같은 이름 지속시간 갱신)을 추가로 받는다. 후자를 고르면 대상에게 같은 이름의 지속 피해가 이미 있을 때 새 인스턴스를 만들지 않고, 같은 피해·지속시간·틱 간격인지 검증한 뒤 기존 인스턴스의 지속시간만 초기화한다. 서로 다른 정의라면 기존 효과를 건드리지 않고 개발 경고를 출력한다. `Remove Damage Over Time`은 대상, 선택 `DamageOverTimeHandle`, 제거 범위(모두/무기/유물/버프/기타), 선택 출처 이름, 선택 로그용 피해 이름을 입력으로 받는다. 화상 해제, 정화, 보스 페이즈 전환, 장판 범위 이탈 등에 사용한다.
 
 `Apply Shield`는 대상, 보호막 수치, 지속시간, 출처 분류(무기/유물/버프/기타), 출처 이름을 입력으로 받는다. 지속시간 `-1`은 직접 제거 전까지 유지한다. `Remove Shield`는 대상, 선택 `ShieldHandle`, 제거 범위, 선택 출처 이름, 수명 필터(전체/시간제 보호막만/영구 보호막만)를 입력으로 받는다. `Get Current Shield`는 UI의 보호막 바, 피격 연출, 조건부 유물 효과가 대상의 현재 보호막 총량을 확인할 때 사용한다.
 
-`Apply Super Armor`는 대상, 지속시간, 출처 분류(무기/유물/버프/기타), 출처 이름을 입력으로 받는다. 지속시간 `-1`은 직접 제거 전까지 유지한다. `Remove Super Armor`는 대상, 제거 범위(모두/무기/유물/버프/기타), 선택 출처 이름으로 항목을 제거한다.
+`Apply Super Armor`는 대상, 지속시간, 출처 분류(무기/유물/버프/기타), SourceId와 DisplayName을 입력으로 받는다. 지속시간 `-1`은 직접 제거 전까지 유지한다. `Remove Super Armor`는 Handle 또는 제거 범위와 선택 SourceId로 항목을 제거한다. 행동 중 슈퍼아머는 `Apply Action Super Armor(ActionHandle, Spec)`를 사용해 행동 종료·취소 시 자동 제거한다.
 
 `On Death`는 사망 상태가 처음 확정될 때만 발생하며, 이미 사망한 대상이 추가 피해를 받아도 다시 발생하지 않는다. 드롭, 처치 유물, 적 사망 연출은 이 이벤트를 구독해 처리한다.
+
+피해 한 건의 이벤트 순서는 아래로 고정한다.
+
+```text
+요청·팀·대상 검증
+→ 회피/치명타/방어/감소 계산
+→ 보호막과 체력 반영
+→ OnHealthChanged / OnShieldChanged
+→ OnDamageReceived 또는 OnDamageEvaded / OnDamageBlocked
+→ 공격자 OnDamageHit
+→ 흡수 누적 및 정수 회복 적용
+→ 사망이 확정된 경우 OnDeath 1회
+```
+
+`DamageResult`는 콜백 전에 처치 여부까지 확정하므로 OnHit·처치 효과가 같은 결과를 읽는다. 이벤트 처리 중 발생한 새 피해는 별도의 요청으로 큐에 넣고 현재 피해 이벤트가 끝난 뒤 처리한다. 기본 OnHit 추가 피해는 `적중시 효과 적용=false`이며, 전투 Subsystem은 비정상 순환을 잡기 위한 설정 가능한 연쇄 깊이 경고를 제공한다.
 
 | 피해 이벤트 | 발생 조건 | 전달값 | 용도 |
 |---|---|---|---|
@@ -1062,11 +1120,11 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 
 ### 14.3 상태이상(CC)
 
-상태이상은 `StatusEffectDefinition` 데이터 에셋으로 정의한다. 개별 상태이상마다 새로운 복잡한 블루프린트 그래프를 복사하지 않는다.
+상태이상은 `UARStatusEffectDefinition` 데이터 에셋으로 정의한다. 개별 상태이상마다 새로운 복잡한 블루프린트 그래프를 복사하지 않는다. 초기 Definition 필드는 `PrimaryAssetId`, 상태 Gameplay Tag, 표시 이름·아이콘, 기본 지속시간, 동일 상태 갱신 정책, 이동 차단, 구르기 차단, 신규 Skill Group 차단, 적용 시 Action 취소 사유다. 초기 콘텐츠는 `Stun`과 `Root` 두 Definition만 만든다.
 
 | 블루프린트 노드 | 용도 |
 |---|---|
-| `Apply Status Effect` | 대상에 정의된 상태이상을 적용 또는 갱신 |
+| `Apply Status Effect` | 대상, `StatusEffectDefinition`, 선택 지속시간 Override, `SourceId`를 받아 강인함 반영 후 적용 또는 갱신 |
 | `Remove Status Effect` | 특정 상태이상 제거 |
 | `Has Status Effect` | 상태이상 보유 여부 확인 |
 | `Is Stunned` / `Is Rooted` | 현재 활성 상태이상 목록에서 계산한 읽기 전용 기절·속박 상태 확인 |
@@ -1115,7 +1173,7 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 
 스킬은 `Input.Skill.Primary`, `Input.Skill.1`, `Input.Skill.2`처럼 실제 키와 분리된 **입력 태그(Input Tag)** 를 가진다. IMC의 각 입력 액션은 하나의 입력 태그를 전달하며, 런타임 객체가 같은 입력 태그로 등록한 스킬은 한 번의 입력에 함께 실행된다. 예를 들어 `Input.Skill.1`을 Q에 매핑하면, 무기·액티브 유물 등 여러 객체가 등록한 `Input.Skill.1` 스킬이 모두 대상이 된다.
 
-`ActionComponent`는 한 번의 입력으로 시작된 스킬들을 `Skill Group Action`으로 묶어 관리한다. 같은 입력 태그의 스킬은 `InputPriority` 오름차순으로 검사하며, 같은 우선순위의 스킬만 하나의 원자적 우선순위 그룹이 된다.
+`ActionComponent`는 한 번의 입력으로 시작된 스킬들을 `Skill Group Action`으로 묶어 관리한다. 그룹은 `FARSkillGroupHandle` 하나를 가지며 각 참여 스킬은 별도의 `FARActionHandle`을 가진다. 따라서 참여 스킬마다 종료 시점과 구르기 취소 허용 여부가 달라도 안전하게 관리할 수 있다. 같은 입력 태그의 스킬은 `InputPriority` 오름차순으로 검사하며, 같은 우선순위의 스킬만 하나의 원자적 우선순위 그룹이 된다.
 
 ```text
 1. 플레이어의 공통 행동 가능 여부 검사
@@ -1129,6 +1187,8 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 ```
 
 따라서 기본 공격을 `InputPriority = 0`, 3초마다 나가는 추가 공격을 `InputPriority = 1`로 두면, 추가 공격이 쿨다운이더라도 기본 공격은 정상 실행된다. 반대로 같은 우선순위의 의도적 동시 스킬 중 하나가 쿨다운·조건·자원 부족이면 그 우선순위 그룹 전체와 이후 우선순위는 실행되지 않는다. 통과한 그룹이 하나도 없으면 행동·자원 소비·쿨다운 시작이 모두 발생하지 않는다. 그룹은 참여한 모든 스킬 행동이 종료될 때 끝난다.
+
+모든 정적 검사와 런타임 `CanExecuteItemSkill`이 끝난 뒤에만 예약 비용을 실제 소비하고 참여 스킬의 쿨다운과 Action Handle을 한 번에 Commit한다. Commit 뒤 경직·기절·구르기·아이템 제거로 취소되더라도 기본적으로 소비 자원과 쿨다운은 환불하지 않는다. 환불은 별도 콘텐츠 효과가 명시적으로 자원 회복·쿨다운 변경 노드를 호출할 때만 발생한다. 인벤토리에서 실행 중 아이템을 제거하면 해당 Item Instance가 소유한 참여 Action만 `ItemRemoved` 사유로 취소하고, 그룹의 다른 참여 Action은 각자의 규칙대로 계속된다.
 
 초기 행동 취소 규칙은 아래로 고정한다.
 
@@ -1157,10 +1217,10 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 
 | 블루프린트 노드 | 입력 | 용도 및 반환 |
 |---|---|---|
-| `Get Skill Cooldown State` | 소유자, `SkillId` | 준비 여부, 남은 시간, 전체 쿨다운, 진행 비율 반환. HUD 표시용. |
-| `Reset Skill Cooldown` | 소유자, `SkillId` | 해당 스킬 쿨다운을 즉시 0으로 만들고 성공 여부 반환. |
-| `Modify Skill Cooldown` | 소유자, `SkillId`, 변경 시간 | 음수면 남은 쿨다운 감소, 양수면 증가. 변경 후 남은 시간과 성공 여부 반환. |
-| `Get Registered Skill UI Data` | 플레이어 | 등록된 각 스킬의 `SkillId`, 소유 Item InstanceId, 이름·아이콘·설명, 입력 태그와 실제 키 표기, 출처, HUD 정렬, 비용, 쿨다운 상태를 배열로 반환. |
+| `Get Skill Cooldown State` | `RegisteredSkillHandle` | 준비 여부, 남은 시간, 전체 쿨다운, 진행 비율 반환. HUD 표시용. |
+| `Reset Skill Cooldown` | `RegisteredSkillHandle` | 해당 등록 스킬 쿨다운을 즉시 0으로 만들고 성공 여부 반환. |
+| `Modify Skill Cooldown` | `RegisteredSkillHandle`, 변경 시간 | 음수면 남은 쿨다운 감소, 양수면 증가. 변경 후 남은 시간과 성공 여부 반환. |
+| `Get Registered Skill UI Data` | 플레이어 | 등록된 각 스킬의 `RegisteredSkillHandle`, `SkillId`, 소유 Item InstanceId, 이름·아이콘·설명, 입력 태그와 실제 키 표기, 출처, HUD 정렬, 비용, 쿨다운 상태를 배열로 반환. |
 | `Get Loadout Inventory` | 플레이어 | 현재 무기, 액티브 유물, 패시브 유물 런타임 객체 목록을 UI에 반환. |
 | `Get Loadout Item Display Data` | 런타임 Item Instance | 이미지·이름·설명·자동 생성 제공 스탯·스킬 설명·현재 상태 UI 정보를 UI 전달 구조체로 반환. |
 | `Request Discard Loadout Item` | 플레이어, Item InstanceId | 인벤토리 UI에서 선택한 액티브·패시브 유물의 폐기 요청. 성공 시 런타임 객체를 해제하고 플레이어 근처에 같은 Definition의 월드 픽업을 생성한다. 무기 요청은 거부한다. |
@@ -1169,10 +1229,12 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 | `Cancel Loadout Acquisition` | 획득 요청 핸들 | 획득·교체 요청을 변경 없이 취소. |
 | `Request Weapon Evolution` | 플레이어, 진화 출처 | 현재 무기의 진화 선택지를 검사. 없음/즉시 진화/선택 필요 결과와 필요 시 요청 핸들을 반환. |
 | `Get Weapon Evolution Options` | 진화 요청 핸들 | 다음 단계 무기 후보의 UI 정보 목록 반환. |
-| `Commit Weapon Evolution` | 진화 요청 핸들, 선택 `DefinitionId` | 현재 무기를 해제하고 검증된 다음 단계 무기를 새로 등록. |
+| `Commit Weapon Evolution` | 진화 요청 핸들, 선택 `PrimaryAssetId` | 현재 무기를 해제하고 검증된 다음 단계 무기를 새로 등록. |
 | `Cancel Weapon Evolution` | 진화 요청 핸들 | 진화 선택을 취소. |
 
 `Try Use Weapon Skill`, `Try Use Active Relic`, `Equip Weapon`, `Add Passive Relic`처럼 타입별로 중복된 공개 노드는 초기 기반에 만들지 않는다. 입력·스킬 실행은 `ActionComponent`의 공통 Skill 등록 경로가, 획득·교체는 공통 Loadout Acquisition 경로가 처리한다. 무기와 액티브 유물의 차이는 각각 1개·2개 슬롯 제한과 UI·진화 규칙으로만 처리한다.
+
+획득·진화 요청 핸들은 요청 당시의 Player, Loadout Revision, 현재 무기 InstanceId와 후보 목록을 보관한다. Commit 시 슬롯·생존·무기·Revision을 다시 검증하며, 플레이어 사망, 다른 장착 변경, UI 취소, 새 요청 생성으로 오래된 핸들이 되면 `StaleRequest`로 거부한다. 인벤토리와 이벤트 UI가 게임을 일시정지하지 않으므로 이 재검증은 필수다.
 
 ### 14.6 UI
 
@@ -1228,7 +1290,7 @@ HUD 위젯은 이 이벤트를 구독해 필요한 때만 갱신한다. 표시�
 | 캐릭터 | `AARBaseEnemy` | 적이 상속할 최소 기반 |
 | 환경 출처 | `UARCombatSourceComponent` | 가시 함정·용암·낙석 같은 일반 맵 Actor에 붙어 `Environment` 팀의 피해 출처·로그 정보를 제공 |
 | 스탯 | `UARStatsComponent` | 기본·보정·최종 스탯 |
-| 스탯 데이터 | `FARStatModifier` | 스텟, 계산 방식, 수치, 지속시간, 출처 분류와 출처 이름을 담는 런타임 수정치 |
+| 스탯 데이터 | `FARStatModifier` | 스텟, 계산 방식, 수치, 지속시간, 출처 분류·SourceId·DisplayName을 담는 런타임 수정치 |
 | 생존 | `UARHealthComponent` | 체력, 피해, 회복, 사망 |
 | 자원 | `UARStaminaComponent` | 플레이어 전용 스태미나, 소비, 회복 |
 | 자원 | `UARManaComponent` | 플레이어 전용 MP, 소비, 재생, 회복 |
@@ -1237,13 +1299,14 @@ HUD 위젯은 이 이벤트를 구독해 필요한 때만 갱신한다. 표시�
 | 경직·그로기 | `UARStaggerComponent` | 즉시 경직, 경직 면역, 슈퍼아머, 선택형 그로기 게이지 |
 | 행동 | `UARActionComponent` | 행동 시작·종료·취소와 블루프린트 취소 이벤트 |
 | 이동 | `UARMovementControlComponent` | 플레이어·AI·행동 이동 요청의 공통 실행과 이동 잠금 |
-| 무기 | `UARWeaponComponent` | 현재 무기 1개, 무기 등록·해제, 진화 요청과 선택 처리 |
-| 유물 | `UARRelicComponent` | 패시브 목록과 액티브 2슬롯, 유물 등록·해제 |
+| 장착 | `UARLoadoutComponent` | 현재 무기 1개, 액티브 2슬롯, 패시브 목록, 등록·해제·스킬·진화 요청 통합 관리 |
+| 상호작용 | `UARInteractionComponent` | 후보 탐색, 거리·우선순위 검증과 F 상호작용 요청 |
+| 카메라 | `UARCameraFollowComponent` | 정사영 카메라 추적과 거리 기반 가속 |
 | 장착 런타임 | `UARLoadoutItemInstance` | Blueprintable UObject. 무기·액티브 유물·패시브 유물의 공통 런타임 상태, 소유 Player·Definition·InstanceId·적용/구독 기록 |
 | 월드 획득 | `BP_LoadoutItemPickup` | `IARInteractable` 기반 F 상호작용 Actor. Definition을 공통 획득 요청에 전달하는 역할만 수행 |
 | 소모품 런타임 | `UARConsumableInstance` | Blueprintable UObject. Definition과 슬롯 소유 정보를 가진 독립 소모품 인스턴스, 사용 BP 이벤트 실행 |
 | 소모품 월드 획득 | `BP_ConsumablePickup` | `IARInteractable` 기반 F 상호작용 Actor. Consumable Definition을 공통 소모품 획득 요청에 전달 |
-| 데이터 | `FARDamageRequest` / `FARDamageResult` | 피해 요청과 결과 |
+| 데이터 | `FARCombatDamageRequest` / `FARCombatDamageResult` | 피해 요청과 결과 |
 | 데이터 | `UARStatusEffectDefinition` | 상태이상 데이터 에셋 |
 | 데이터 | `UARLoadoutItemDefinition` | 무기·액티브·패시브의 공통 Definition Data Asset. 식별·UI·설명·고정 스탯·스킬·런타임 클래스·UI 상태 정의 보관 |
 | 데이터 | `UARWeaponDefinition` / `UARActiveRelicDefinition` / `UARPassiveRelicDefinition` | 공통 Definition을 상속한 종류별 데이터 에셋. 무기만 진화 필드를 추가 |
@@ -1251,9 +1314,9 @@ HUD 위젯은 이 이벤트를 구독해 필요한 때만 갱신한다. 표시�
 | 데이터 | `FARSkillDefinition` | 스킬 식별·입력 태그·InputPriority·자원 비용·쿨다운·행동·HUD 정적 정보 |
 | 데이터 | `FARUIStateDisplayDefinition` / `FARItemUIState` | 아이템별 UI 상태의 표시 정의와 실제 런타임 값 |
 | UI 데이터 | `FARLoadoutItemDisplayData` / `FARRegisteredSkillUIData` | 인벤토리 상세와 등록된 스킬 HUD에 전달하는 읽기 전용 데이터 |
-| 편의 노드 | `UARBlueprintFunctionLibrary` | 블루프린트용 안전한 보조 노드 |
+| 편의 노드 | `UARCombatBlueprintLibrary` / `UARActionBlueprintLibrary` / `UARUIBlueprintLibrary` | 영역별 블루프린트용 안전한 보조 노드 |
 
-`UARBlueprintFunctionLibrary`는 상태를 직접 소유하지 않는다. 실제 처리는 대상 Actor의 Component나 Subsystem에 위임한다.
+Blueprint Function Library는 상태를 직접 소유하지 않는다. 실제 처리는 대상 Actor의 Component나 Subsystem에 위임한다.
 
 ---
 
@@ -1270,12 +1333,15 @@ HUD 위젯은 이 이벤트를 구독해 필요한 때만 갱신한다. 표시�
 
 ---
 
-## 18. 다음 설계 단계
+## 18. 구현 기준 문서와 다음 단계
 
-1. 확정된 계산식을 기준으로 `DamageRequest`와 `DamageResult`의 필드, 블루프린트 노드 입력·출력을 설계한다.
-2. 상태이상 데이터 에셋의 실제 필드와 행동 제한 규칙을 확정한다.
-3. `ActionComponent`의 행동 시작·종료·취소와 블루프린트 취소 이벤트를 C++로 구현한다.
-4. `StatsComponent`, `HealthComponent`, `StaminaComponent`의 최종 스탯·회복·자원 재생 계산을 구현한다.
-5. `StaggerComponent`의 즉시 경직, 슈퍼아머, 선택형 그로기 게이지 규칙을 구현한다.
-6. 실제 검 블루프린트 하나를 기준으로 필요한 C++ 노드를 최소 단위로 구현한다.
-7. 지팡이와 예시 액티브 유물로 구조가 충분히 일반적인지 검증한다.
+게임 규칙은 이 문서, 실제 C++ 파일·소유권·구현 순서는 `FOUNDATION_CODE_ARCHITECTURE.md`, Blueprint 입력·출력 계약은 `FOUNDATION_BLUEPRINT_PLAN.md`를 기준으로 한다. 서로 충돌할 때 임의 구현하지 않고 세 문서를 함께 갱신한다.
+
+다음 구현 순서는 코드 설계서의 단계 0~5를 따른다.
+
+1. 프로젝트 설정, 공통 타입·태그·Handle, Paper2D 테스트 환경
+2. Character, Stats, Health, 자원과 최대값 변경 규칙
+3. Damage Resolver·Combat Subsystem·자동화 테스트
+4. DOT·Stagger·Status·Action
+5. Loadout·소모품·UI 데이터 통로
+6. 예제 적·무기로 다른 개발자가 Foundation 내부 수정 없이 콘텐츠를 만들 수 있는지 검증

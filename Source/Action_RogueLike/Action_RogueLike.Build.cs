@@ -14,6 +14,8 @@ public class Action_RogueLike : ModuleRules
 			"Engine",
 			"InputCore",
 			"EnhancedInput",
+			"GameplayTags",
+			"Paper2D",
 			"AIModule",
 			"NavigationSystem",
 			"StateTreeModule",

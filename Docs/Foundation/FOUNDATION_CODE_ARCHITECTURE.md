@@ -12,6 +12,7 @@
 기존 계획서는 **게임 규칙이 무엇인가**를 정의한다. 이 문서는 그 규칙을 구현할 때 어떤 클래스가 무엇을 소유하고, 블루프린트가 어떤 공개 함수를 호출해야 하는지를 정의한다. 기존 문서의 간단한 `Source/Foundation` 폴더 그림은 방향 설명으로 남기되, 실제 파일 구조는 이 문서를 기준으로 한다.
 
 - Unreal 월드를 사용하되 화면 표현은 **Paper2D, 64×64 도트 그래픽, 정사영(Orthographic) 탑뷰**다.
+- 초기 Foundation은 **싱글플레이 전용**이며 Replication/RPC를 구현하지 않는다.
 - 초기에는 게임 모듈 `Action_RogueLike` 하나 안에서 구현한다. 실제로 분리 필요성이 생기기 전에는 Foundation 플러그인이나 별도 모듈을 만들지 않는다.
 - C++는 최종 판정과 상태를 소유한다. Blueprint는 공격 형태, 히트박스, 투사체, 플립북, VFX/SFX, 개별 조건을 만든다.
 - Foundation은 특정 무기·유물·적·보스의 고유 이름이나 예외를 모른다.
@@ -90,6 +91,9 @@ Action_RogueLike/
 │  │  │  ├─ ARBaseCharacter.h
 │  │  │  ├─ ARPlayerCharacter.h
 │  │  │  └─ ARBaseEnemy.h
+│  │  ├─ Player/
+│  │  │  ├─ ARPlayerController.h
+│  │  │  └─ ARGameMode.h
 │  │  ├─ Components/
 │  │  │  ├─ ARStatsComponent.h
 │  │  │  ├─ ARHealthComponent.h
@@ -102,7 +106,9 @@ Action_RogueLike/
 │  │  │  ├─ ARCombatSourceComponent.h
 │  │  │  ├─ ARLoadoutComponent.h
 │  │  │  ├─ ARConsumableComponent.h
-│  │  │  └─ ARCameraFollowComponent.h
+│  │  │  ├─ ARCameraFollowComponent.h
+│  │  │  ├─ ARInteractionComponent.h
+│  │  │  └─ ARUIManagerComponent.h
 │  │  ├─ Combat/
 │  │  │  ├─ ARCombatSubsystem.h
 │  │  │  ├─ ARCombatBlueprintLibrary.h
@@ -123,6 +129,8 @@ Action_RogueLike/
 │  │  │  ├─ ARLoadoutItemInstance.h
 │  │  │  ├─ ARConsumableInstance.h
 │  │  │  └─ ARItemTypes.h
+│  │  ├─ Status/
+│  │  │  └─ ARStatusEffectDefinition.h
 │  │  ├─ Interaction/
 │  │  │  ├─ ARInteractionTypes.h
 │  │  │  └─ ARInteractionBlueprintLibrary.h
@@ -155,6 +163,7 @@ Action_RogueLike/
 └─ Docs/Foundation/
    ├─ FOUNDATION_SYSTEM_PLAN.md
    ├─ FOUNDATION_CODE_ARCHITECTURE.md
+   ├─ FOUNDATION_BLUEPRINT_PLAN.md
    └─ FOUNDATION_ENEMY_CONTENT_GUIDE.md  ← 기반 구현 후 작성
 ```
 
@@ -185,7 +194,7 @@ Action_RogueLike/
 
 ### `Action_RogueLike.Build.cs`
 
-초기 공개 의존성은 `Core`, `CoreUObject`, `Engine`, `InputCore`, `EnhancedInput`, `GameplayTags`, `Paper2D`, `UMG`로 제한한다. 적 AI를 실제 구현할 때만 `AIModule`, `NavigationSystem`을 추가한다.
+Foundation 공개 헤더에 필요한 기본 의존성은 `Core`, `CoreUObject`, `Engine`, `InputCore`, `EnhancedInput`, `GameplayTags`, `Paper2D`, `UMG`다. 현재 프로젝트의 TopDown/Strategy/TwinStick 템플릿 코드가 `AIModule`, `NavigationSystem`, `StateTreeModule`, `GameplayStateTreeModule`, `Niagara`, `Slate`를 이미 사용하므로 새 Foundation 테스트 맵이 정상 동작하고 템플릿 제거 여부를 결정하기 전에는 이 의존성을 제거하지 않는다. 템플릿 정리 후 공개 헤더에서 쓰지 않는 모듈은 `PrivateDependencyModuleNames`로 이동하거나 제거한다. `.uproject`에도 Paper2D를 명시적으로 활성화한다.
 
 ### `ARFoundationTypes.h`
 
@@ -263,12 +272,31 @@ Player 전용 Component는 `UARStaminaComponent`, `UARManaComponent`, `UARLoadou
 
 Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다. 적 BP/후속 C++는 반드시 `UARMovementControlComponent`로 이동하고 `UARActionComponent` Handle로 공격한다.
 
+### `AARPlayerController`, `AARGameMode`, UI·상호작용
+
+`AARPlayerController`는 `IMC_Player` 등록, 마우스 위치의 월드 평면 투영, 게임/UI 입력 모드 전환을 소유한다. `AARPlayerCharacter`는 Controller가 전달한 이동·조준·논리 Input Tag를 실제 Component 요청으로 바꾼다. `UARUIManagerComponent`는 HUD, 인벤토리, 진화 선택 UI를 한 번에 하나만 열고 Player 사망 시 열린 UI와 대기 Token을 취소한다.
+
+`UARInteractionComponent`는 Player 주변의 `ARInteractable` 채널을 조회해 거리, 우선순위, 선택적 시야 검사를 통과한 현재 후보를 보관한다. F 입력은 이 Component의 `TryInteract`만 호출한다. 상점·픽업·NPC는 `IARInteractable`을 구현하고, UI 생성은 직접 하지 않고 UI Manager에 요청한다.
+
+`AARGameMode`는 새 Foundation Player/Controller를 기본 클래스로 지정한다. 기존 `/Game/TopDown` 맵과 클릭 이동 Controller는 Foundation Test Map이 정상 동작한 뒤에만 기본 설정에서 교체한다.
+
 ### Paper2D 및 카메라
 
 - Character BP는 Paper2D Flipbook/Sprite Component를 붙인다.
 - C++는 이동 방향, Aim Direction, Action 시작/종료, 피격/사망 이벤트만 제공한다. 어떤 Flipbook을 재생할지는 BP가 정한다.
 - 2D 표현은 피해/충돌 계산을 화면 좌표로 바꾸라는 뜻이 아니다. 판정은 Unreal 월드 좌표에서 실행한다.
 - 텍스처는 Nearest 필터링을 사용하고, 정사영 폭과 목표 해상도는 정수 배율이 유지되도록 조정한다.
+
+초기 좌표·임포트 규약은 다음으로 고정한다.
+
+- 게임플레이 이동 평면은 `XY`, 높이와 표시 우선순위는 `Z`다.
+- Sprite/Flipbook은 정사영 카메라를 향하도록 공통 BP 부모에서 회전을 고정한다.
+- 원본 프레임은 64×64이며 Texture는 Nearest, Mipmap 비활성, UI가 아닌 Sprite용 압축 설정을 사용한다.
+- `PixelsPerUnrealUnit`, 목표 내부 해상도, 기준 `OrthoWidth`는 `PixelScaleProfile` 데이터로 한 곳에서 관리한다. 초기 수치는 Test Map에서 1픽셀 이동 안정성을 검증한 뒤 확정한다.
+- 충돌은 Sprite의 불투명 픽셀을 사용하지 않고 Capsule/Box/Circle 같은 단순 Shape와 Query 전용 Hitbox를 사용한다.
+- 표시 순서는 Z 계층과 Translucency Sort 규약으로 통일하고 개별 Sprite가 임의의 큰 Sort Priority를 사용하지 않는다.
+
+프로젝트 충돌 채널은 `ARPlayer`, `AREnemy`, `ARInteractable`, `ARPlayerHitbox`, `AREnemyHitbox`, `ARProjectile`, `ARWorldObstacle`을 예약한다. Overlap은 후보 필터일 뿐이며 최종 팀·생존·피격 가능 판정은 Combat Subsystem이 다시 수행한다.
 
 `UARCameraFollowComponent` 설정은 `BaseFollowSpeed`, `AccelerationStartDistance`, `MaxFollowSpeed`, `MaxLagDistance`, `OrthoWidth`, `CameraRotation`, `PixelScaleProfile`로 둔다. 기본 추적은 C++가 소유하고, 흔들림/줌은 BP가 연출 요청만 한다.
 
@@ -291,9 +319,13 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 | `ClearModifiers(Category)` | All 또는 한 분류 전체 초기화 |
 | `GetFinalStat(StatType)` | 캐시된 최종값 반환 |
 | `GetModifierRemainingTime(Handle)` | 영구/남은 시간 상태 반환 |
+| `GetModifiersBySource(Category, SourceId)` | 존재 여부, 중첩 수, 가장 긴 남은 시간 반환 |
+| `RemoveOneModifierStack(Category, SourceId, Policy)` | 최신/가장 오래된 중첩 하나 제거 |
 | `GetStatBreakdown(StatType)` | 인벤토리/디버그용 읽기 전용 분해 정보 |
 
-이벤트는 `OnFinalStatChanged`, `OnModifierAdded`, `OnModifierRemoved`다. Modifier Spec에는 출처 분류, 출처 ID, 표시 이름, 지속시간, 스탯, 계산 방식을 항상 넣는다. Buff는 같은 이름이어도 Handle 기준으로 독립 중첩한다.
+이벤트는 `OnFinalStatChanged`, `OnStatModifiersChanged`, `OnModifierAdded`, `OnModifierRemoved`다. Modifier Spec에는 출처 분류, 출처 ID, 표시 이름, 지속시간, 스탯, 계산 방식을 항상 넣는다. Buff는 같은 SourceId여도 Handle 기준으로 독립 중첩한다. `DisplayName`은 조회 키로 쓰지 않는다.
+
+전체 피해 감소율 Modifier의 `bGuaranteeInvulnerability`, 회피력 Modifier의 `bGuaranteeEvasion`은 별도 관리형 Token을 함께 생성한다. 단순 수치 `+100`으로 구현하지 않으며 원 Modifier가 제거·만료되면 연결 Token도 제거한다. Action 귀속 Modifier는 Action 종료·취소 시 Handle로 정리한다.
 
 ### `UARHealthComponent`
 
@@ -302,7 +334,7 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 
 | 공개 함수 | 역할 |
 |---|---|
-| `CanReceiveDamage` | 사망/피격 불가 상태의 최종 확인 |
+| `CanAcceptResolvedDamage` | 사망 또는 명시적 시스템 비활성 상태 확인. 일반 무적은 여기서 거부하지 않음 |
 | `ApplyResolvedDamage(Result)` | 보호막→체력 반영 |
 | `RestoreHealth(Amount, Source)` | 최대 체력을 넘기지 않는 회복 |
 | `ApplyShield(Spec)` | 수치·지속시간·출처가 있는 보호막 스택 추가 |
@@ -310,6 +342,8 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 | `GetCurrentHealth`, `GetCurrentShield`, `IsDead` | 읽기 전용 조회 |
 
 이벤트는 `OnHealthChanged`, `OnShieldChanged`, `OnDamageApplied`, `OnDeath`다. 체력/보호막 직접 Set 노드는 만들지 않는다.
+
+일반 무적은 Request 속성과 공허 여부가 필요한 Combat Resolver에서 처리한다. Health Component가 Request를 보기 전에 일반 무적만으로 요청을 거부하면 공허 피해까지 잘못 막히므로 금지한다. 최대 체력 감소 시 현재 체력은 새 최대값으로 제한하고, 최대 체력 증가만으로 현재 체력을 회복하지 않는다.
 
 ### `UARStaminaComponent`, `UARManaComponent`
 
@@ -326,10 +360,14 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 
 스태미나는 마지막 **성공 소비** 뒤 회복 대기시간이 지나야 재생한다. MP는 즉시 초당 재생하며 소수점을 누적한다. 스킬이 두 자원을 함께 요구하면 Loadout 실행 경로가 먼저 둘 다 예약하고, 가능할 때만 함께 소비한다.
 
+최대 스태미나·MP 감소 시 현재값은 즉시 새 최대값으로 제한하고, 최대값 증가만으로 현재값을 채우지 않는다. 최대값 변화도 `OnResourceChanged` 원인 `MaxChanged`로 전달한다.
+
 ### `UARStatusEffectComponent`
 
 **파일:** `Components/ARStatusEffectComponent.h/.cpp`  
 **책임:** 상태 인스턴스, 강인함 기반 지속시간, 같은 상태 갱신, 이동/행동 잠금 연결.
+
+정적 규칙은 `Status/ARStatusEffectDefinition.h`의 `UARStatusEffectDefinition`이 소유한다. Definition은 Primary Asset ID, Status Tag, 표시 정보, 기본 지속시간, 갱신 정책, 이동·구르기·Skill Group 제한과 Action 취소 사유를 가진다. 런타임 남은 시간·SourceId·Handle은 Component의 상태 인스턴스만 소유한다.
 
 | 공개 함수 | 역할 |
 |---|---|
@@ -374,7 +412,7 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 ### `UARActionComponent`
 
 **파일:** `Components/ARActionComponent.h/.cpp`, `Actions/ARActionTypes.h`, `Actions/ARAsyncActionDelay.h/.cpp`  
-**책임:** 행동의 시작/종료/취소와 Action 소유 Delay·Hitbox·이동 잠금·임시 수정치 정리.
+**책임:** 행동의 시작/종료/취소와 Skill Group, Action 소유 Delay·Hitbox·이동 잠금·임시 수정치·슈퍼아머 정리.
 
 | 공개 함수/노드 | 역할 |
 |---|---|
@@ -389,8 +427,11 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 | `Action Delay` | Handle 취소 시 자동 종료되는 지연 노드 |
 | `Register Action Hitbox` | Handle 귀속 히트박스 등록 |
 | `Apply Action Stat Modifier` | 종료/취소 시 자동 제거되는 Modifier |
+| `Apply Action Super Armor` | 종료/취소 시 자동 제거되는 슈퍼아머 Token |
 
 `FARActionHandle`에는 Owner의 약한 참조와 단조 증가 Serial을 넣어, 오래된 Handle이 새 행동을 종료하지 못하게 한다.
+
+한 번의 스킬 입력은 `FARSkillGroupHandle` 하나를 만들고 참여 스킬마다 별도 `FARActionHandle`을 만든다. 모든 정적/고유 조건 검사가 끝난 뒤 자원 소비, 쿨다운 시작, 참가 Action 생성을 한 트랜잭션으로 Commit한다. Commit 후 취소는 기본적으로 자원과 쿨다운을 환불하지 않는다. 그룹은 마지막 참가 Action이 종료될 때 끝나며, Item 제거는 그 Instance가 소유한 참가 Action만 `ItemRemoved` 사유로 취소한다.
 
 ### `UARLoadoutComponent`
 
@@ -404,10 +445,10 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 | `CancelLoadoutAcquisition(Token)` | 선택 UI 취소 |
 | `DiscardLoadoutItem(InstanceId)` | 액티브/패시브 제거 뒤 픽업 생성 요청, 무기는 거부 |
 | `GetEquippedWeapon`, `GetActiveRelics`, `GetPassiveRelics` | UI용 읽기 전용 스냅샷 |
-| `HandleSkillInput(InputTag)` | 우선순위·자원 원자 소비·실행 |
+| `HandleSkillInput(InputTag)` | 등록 스킬 후보를 수집해 Action Component의 Skill Group 실행 요청으로 전달 |
 | `RequestWeaponEvolution`, `CommitWeaponEvolution` | 진화 후보/새 무기 Instance 교체 |
 
-같은 Input Tag의 스킬은 `InputPriority` 오름차순으로 검사한다. 같은 우선순위는 하나의 원자 그룹이며, static 쿨다운/MP/스태미나와 `CanExecuteItemSkill`을 통과한 스킬만 함께 실행한다.
+Loadout Component는 등록·소유권과 후보 열거의 유일한 소유자이고, Action Component는 우선순위 그룹 검사, 자원 예약·소비, 쿨다운 Commit, 참가 Action 생명주기의 유일한 소유자다. 같은 Input Tag의 스킬은 `InputPriority` 오름차순으로 검사한다. 같은 우선순위는 하나의 원자 그룹이며, 정적 쿨다운/MP/스태미나와 `CanExecuteItemSkill`을 모두 통과한 그룹만 함께 실행한다. 각 등록 스킬은 `FARRegisteredSkillHandle`로 식별하며 `SkillId` 단독으로 쿨다운을 찾지 않는다.
 
 ### `UARConsumableComponent`과 `UARCombatSourceComponent`
 
@@ -427,14 +468,14 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 | `ARDotTypes.h` | `FARDamageOverTimeSpec`, `FARDotHandle` | DOT 이름, 간격, 갱신, Handle |
 | `ARStaggerTypes.h` | `FARStaggerRequest`, `FARStaggerResult`, `FARSuperArmorSpec` | 경직/그로기/슈퍼아머 |
 
-Damage Request는 공격자/환경 출처, 대상, 전달 방식, 속성, 기본 피해, 공격력/주문력 계수, 치명타/회피/증감식/방어력 무시/보호막 무시/적중시 효과/필중 여부, 출처 ID와 표시 이름을 담는다.
+Damage Request는 공격자/환경 출처, 대상, 전달 방식, 속성, 기본 피해, 공격력/주문력 계수, 치명타/회피/증감식/방어력 무시/보호막 무시/**흡수 적용**/적중시 효과/필중 여부, 출처 ID와 표시 이름을 담는다.
 
 경직과 그로기는 Damage Request에 숨기지 않는다. 공격 BP가 필요할 때 별도 `FARStaggerRequest`로 호출한다. 따라서 **경직력은 자동 경직을 만들지 않고, 공격이 제공한 기본 경직 피해 또는 기본 그로기 피해를 강화할 뿐이다.** 공격력·주문력도 스킬이 계수를 지정할 때만 참여하며, 계수 없는 깡 피해도 가능하다.
 
 ### `UARCombatSubsystem`
 
 **파일:** `Combat/ARCombatSubsystem.h/.cpp`  
-**종류:** `UWorldSubsystem`  
+**종류:** `UTickableWorldSubsystem`
 **책임:** 월드 단위 피해 진입점과 DOT 등록 목록의 유일한 소유자.
 
 | 공개 함수 | 역할 |
@@ -446,6 +487,8 @@ Damage Request는 공격자/환경 출처, 대상, 전달 방식, 속성, 기본
 | `GetActiveDotsForTarget` | 디버그/특수 UI 읽기 |
 
 DOT 첫 틱은 `TickInterval` 뒤에 들어가고 기본 간격은 0.25초다. 프레임 지연으로 밀린 틱은 모두 처리한다. 갱신형 DOT는 같은 이름이며 기본 피해·지속시간·간격이 모두 같을 때만 남은 시간을 초기화하고, 다르면 경고 로그 후 기존 DOT를 유지한다. 독립 중첩은 별도 Handle로 처리한다.
+
+DOT Instance는 최종 피해를 저장하지 않고 원본 Request를 보관해 매 틱 캐시된 최신 스탯으로 다시 계산한다. 공격자 참조가 사라지는 순간 마지막 유효 공격 스탯을 Snapshot하여 남은 틱을 계속 처리한다. `FARDamageOverTimeSpec`은 선택적 `FARStaggerRequestTemplate`을 가질 수 있으며, 존재하면 각 성공 틱의 Hit Context로 경직·그로기 요청을 실행한다. 활성 DOT 수와 한 프레임 밀린 틱 수가 설정 임계값을 넘으면 경고하되 합의된 틱을 버리지는 않는다.
 
 ### `AARActionHitboxActor`
 
@@ -473,7 +516,9 @@ DOT 첫 틱은 `TickInterval` 뒤에 들어가고 기본 간격은 0.25초다. �
 → 보호막·체력 분배
 ```
 
-공허은 방어력·방관·일반 감소율·일반 무적 단계를 건너뛴다. 보호막은 `bIgnoreShield`일 때만 무시한다. Resolver는 Actor 생성, UI, VFX를 하지 않고 결과만 반환한다.
+공허 피해는 방어력·방관·일반 감소율·일반 무적 단계를 건너뛴다. 보호막은 `bIgnoreShield`일 때만 무시한다. Resolver는 Actor 생성, UI, VFX를 하지 않고 결과만 반환한다. 회피와 치명타는 주입된 `FRandomStream` 또는 테스트 Roll 값을 사용해 자동화 테스트에서 재현 가능해야 한다.
+
+Combat Subsystem의 한 요청은 검증·계산·보호막/체력 반영·자원 변경 이벤트·피격/회피/차단 이벤트·공격자 OnHit·흡수·사망 이벤트 순으로 발행한다. Result의 처치 여부는 콜백 전에 확정한다. 콜백 중 새 피해가 들어오면 재귀 실행하지 않고 요청 큐에 넣어 현재 이벤트 체인이 끝난 뒤 처리한다. OnHit 추가 피해는 기본적으로 다시 OnHit을 발생시키지 않으며 설정 가능한 연쇄 깊이 경고를 둔다. Stats 변경 이벤트에서 다시 Modifier를 바꾸는 경우도 Dirty Queue로 다음 재계산 패스에 처리한다.
 
 ### Blueprint 전투 노드
 
@@ -503,7 +548,7 @@ UARLoadoutItemDefinition (추상 UPrimaryDataAsset)
 UARConsumableDefinition (UPrimaryDataAsset)
 ```
 
-Definition의 공통 필드는 `DefinitionId`, Item Type Tag, 표시 이름, 짧은/상세 설명, UI 아이콘, 기본 스탯 수정치, Skill Definitions, Runtime Behavior Class, UI State Display Definitions이다. Weapon Definition에만 진화 그룹/단계/다음 후보 정보를 둔다. 사용하지 않는 빈 필드는 공통 부모에 넣지 않는다.
+Definition의 공통 필드는 Asset Manager가 제공하는 `PrimaryAssetId`, 게임 규칙용 `DefinitionTag`, Item Type Tag, 표시 이름, 짧은/상세 설명, UI 아이콘, 기본 스탯 수정치, Skill Definitions, Runtime Behavior Class, UI State Display Definitions이다. `PrimaryAssetId`는 로드·저장, `DefinitionTag`는 규칙·검색, `FText` 이름은 표시 전용으로 역할을 분리한다. Weapon Definition에만 진화 그룹/단계/다음 후보 정보를 둔다. 사용하지 않는 빈 필드는 공통 부모에 넣지 않는다. Project Asset Manager 설정에 Item/Status Primary Asset Type과 스캔 경로를 등록한다.
 
 ### Runtime Instance 계층
 
@@ -517,7 +562,7 @@ UARConsumableInstance (추상 Blueprintable UObject)
 └─ BP_ConsumableRuntime_Base
 ```
 
-Instance는 Definition/Owner 약한 참조, 고유 Instance ID, 자기 Modifier Handle, 쿨다운, UI 상태, 이벤트 구독 Handle만 소유한다.
+Loadout/Consumable Component는 `UPROPERTY(Transient)` 슬롯·배열로 Instance를 강하게 소유하며 Instance의 Outer가 된다. Instance는 Owner Character를 약하게, 장착 중인 Definition을 `TObjectPtr<const ...>`로 강하게 참조한다. Instance는 `FGuid` Instance ID, 자기 Modifier Handle, 등록 Skill Handle, 쿨다운, UI 상태, 이벤트 구독 Handle만 소유한다. 제거와 EndPlay에서 구독을 먼저 해제하고 Component 소유 참조를 마지막에 제거한다.
 
 | 함수/이벤트 | 성격 | 역할 |
 |---|---|---|
@@ -531,6 +576,8 @@ Instance는 Definition/Owner 약한 참조, 고유 Instance ID, 자기 Modifier 
 | `OnItemUnregistered` | BP 이벤트 | 고유 Object/연출 정리 |
 
 픽업, 상점, 보상, 제단은 아이템을 직접 장착하지 않는다. 모두 `Begin Loadout Acquisition → Commit Loadout Acquisition` 경로를 사용한다. 월드 픽업은 `BP_LoadoutItemPickup`/`BP_ConsumablePickup`이 `IARInteractable`로 구현한다.
+
+Acquisition/Evolution Token은 Player 약한 참조, 요청 당시 Loadout Revision, 현재 무기 InstanceId, 허용 후보 Primary Asset ID를 보관한다. Commit에서 모두 다시 검증하고 사망·다른 장착 변경·UI 취소로 오래된 요청은 `StaleRequest`로 거부한다. 월드 드롭은 유효 위치와 Pickup 생성 가능성을 먼저 확인한 뒤 Instance 제거를 Commit하며, Spawn 실패 시 아이템을 잃지 않도록 원상 복구한다.
 
 ---
 
@@ -642,8 +689,11 @@ Widget은 매 프레임 Component를 순회하지 않는다. 아래 이벤트를
 
 ### 단계 0 — 기반
 
-- Build.cs, 로그, Gameplay Tag, 공통 Types, Test Map
+- Git 기준점, `.gitignore`/LFS, Build.cs와 `.uproject`의 Paper2D·GameplayTags
+- 기존 클릭 이동 TopDown Controller/GameMode와 새 Foundation Player/Controller/GameMode의 이행 경로
+- 로그, Gameplay Tag, 공통 Types, 충돌 채널, Asset Manager 설정, Test Map
 - Paper2D Player 최소 BP와 Orthographic Camera
+- 2D 프로토타입에 불필요한 Ray Tracing/Lumen/Substrate 설정 검토
 
 **완료:** 빈 맵에서 Paper2D Player가 WASD·마우스 조준·카메라 추적을 정상 수행한다.
 

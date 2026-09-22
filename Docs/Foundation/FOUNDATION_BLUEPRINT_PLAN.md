@@ -45,7 +45,7 @@ Blueprint가 하는 일은 다음과 같다.
 | 입력 에셋 | `IA_`, `IMC_` | `IA_Roll`, `IMC_Player` | `Content/Game/Foundation/Input` |
 | Widget | `WBP_` | `WBP_HUD` | `Content/Game/Foundation/UI` 또는 `Content/Game/UI` |
 | 테스트 BP | `BP_Test_` | `BP_Test_CombatDummy` | `Content/Game/Foundation/Test` |
-| Flipbook/Sprite/Texture | `FB_`, `SPR_`, `T_` | `FB_Player_Idle` | 콘텐츠별 `Visuals` |
+| Flipbook/Sprite/Texture | `FB_`, `SPR_`, `T_` | `FB_Player_Idle` | 콘텐츠별 `Art` |
 
 개별 무기/유물/적의 이름은 에셋 이름과 Data Asset ID에만 넣는다. Foundation 부모 BP와 C++ 노드 이름에는 콘텐츠 이름을 넣지 않는다.
 
@@ -193,7 +193,7 @@ Runtime BP는 월드 Actor가 아니다. 장착 중인 플레이어의 런타임
 
 | 그룹 | 필드 | 데이터 타입/설명 |
 |---|---|---|
-| 식별 | `DefinitionId`, Item Type Tag | 고유 ID와 Weapon/Active/Passive 분류 |
+| 식별 | `PrimaryAssetId`, `DefinitionTag`, Item Type Tag | 에셋 로드 ID, 게임 규칙 ID와 Weapon/Active/Passive 분류 |
 | 표시 | 이름, 짧은/상세 설명, 아이콘 | 인벤토리/HUD용 정적 정보 |
 | 고정 효과 | `DefaultStatModifiers[]` | 스탯, Flat/Additive/Multiplicative, 값, 출처 정보 |
 | 스킬 | `SkillDefinitions[]` | Skill ID, Input Tag, 우선순위, 쿨다운, MP/스태미나 비용, Action 설정 |
@@ -215,6 +215,10 @@ Definition의 “상세 설명”은 `FText`다. 제공 스탯 목록은 `Defaul
 
 특수 자원, 현재 스택, 대상 거리 같은 런타임 조건은 Runtime BP의 `CanExecuteItemSkill`에서 판단한다. 스킬 실행 때만 확정되는 추가 비용은 `ExecuteItemSkill` 내부에서 별도 `Try Consume`을 호출하되, 정적 비용과 중복 소비하지 않는다.
 
+### 5.3 상태이상 Definition
+
+`DA_Status_Stun`, `DA_Status_Root`는 `UARStatusEffectDefinition`을 사용한다. Primary Asset ID, Status Tag, 표시 이름·아이콘, 기본 지속시간, 동일 상태 갱신 정책, 이동·구르기·Skill Group 제한과 적용 시 Action 취소 사유만 저장한다. 남은 시간과 적용 대상·출처는 Data Asset에 기록하지 않는다.
+
 ---
 
 ## 6. Blueprint 공통 노드 상세 계약
@@ -223,14 +227,16 @@ Definition의 “상세 설명”은 `FText`다. 제공 스탯 목록은 `Defaul
 
 | 노드 | 입력 | 출력 | 동작 |
 |---|---|---|---|
-| `Apply Stat Modifier` | Target, Stat Type, Operation, Value, Duration(-1 영구), Source Category, Source ID, Display Name | Modifier Handle, Success | 최종 스탯 변경 및 만료 예약 |
+| `Apply Stat Modifier` | Target, Stat Type, Operation, Value, Duration(-1 영구), Source Category, Source ID, Display Name, 조건부 무적/회피 보장 | Modifier Handle, Success | 최종 스탯 변경 및 만료 예약. 보장 옵션은 호환 스탯일 때만 노출 |
 | `Remove Stat Modifier` | Target, Modifier Handle | Success | 정확한 수정치 하나 제거 |
-| `Remove Stat Modifiers` | Target, Category, 선택 Source ID/Display Name | Removed Count | 출처/이름 기준 제거 |
+| `Remove Stat Modifiers` | Target, Category, 선택 Source ID | Removed Count | 출처 ID 기준 제거. Display Name은 조회 키가 아님 |
 | `Clear Stat Modifiers` | Target, All/Weapon/Relic/Buff/Other | Removed Count | 분류 전체 초기화 |
 | `Get Final Stat` | Target, Stat Type | Final Value | 캐시된 최종값 조회 |
 | `Get Stat Modifier Remaining Time` | Target, Handle | Exists, IsPermanent, Remaining Seconds | UI/디버그용 |
+| `Get Stat Modifiers By Source` | Target, Category, Source ID | Exists, Stack Count, Longest Remaining Time | 버프 UI/조건 검사 |
+| `Remove One Stat Modifier Stack` | Target, Category, Source ID, Newest/Oldest | Removed, Handle | 중첩 하나만 제거 |
 
-`On Final Stat Changed` 이벤트는 `Target`, `StatType`, `OldValue`, `NewValue`를 전달한다. UI/조건부 패시브는 이 이벤트를 구독할 수 있으나, 이벤트 안에서 같은 스탯을 무한 수정하는 구조는 만들지 않는다.
+`On Final Stat Changed` 이벤트는 `Target`, `StatType`, `OldValue`, `NewValue`를 전달한다. `On Stat Modifiers Changed`는 Source ID, Display Name, 추가/제거/만료, 중첩 수, 가장 긴 남은 시간을 전달한다. UI/조건부 패시브는 이 이벤트를 구독할 수 있으나, 이벤트 안에서 같은 스탯을 무한 수정하는 구조는 만들지 않는다.
 
 ### 6.2 회복·자원·보호막 노드
 
@@ -241,9 +247,12 @@ Definition의 “상세 설명”은 `FText`다. 제공 스탯 목록은 `Defaul
 | `Restore Stamina` | Target, Amount, Source | Applied Amount, New Stamina | 최대 스태미나까지만 회복 |
 | `Try Consume MP` | Target, Amount, Source | Success, New MP, Failure Reason | 가능할 때만 소비 |
 | `Try Consume Stamina` | Target, Amount, Source | Success, New Stamina, Failure Reason | 성공 소비면 재생 대기 재시작 |
+| `Can Afford Resources` | Target, MP Amount, Stamina Amount | Can Afford, Missing Resource | 값을 바꾸지 않는 사전 조회 |
 | `Try Consume Resources` | Target, MP Amount, Stamina Amount, Source | Success, New MP/Stamina, Failure Reason | 둘 다 가능할 때만 함께 소비 |
 | `Apply Shield` | Target, Amount, Duration(-1 영구), Source | Shield Handle, New Total Shield | 새 보호막을 LIFO 스택 맨 위에 추가 |
 | `Remove Shield` | Target, Handle 또는 Source, Remove All | Removed Amount/Count | 보호막 제거 |
+| `Get Current Resource` | Target, Health/Shield/MP/Stamina/Groggy | Current, Max, Ratio | UI와 조건 조회 |
+| `Get Current Shield` | Target | Total Shield | 활성 보호막 총량 조회 |
 
 회복력 기반 비율 회복은 콘텐츠 BP가 `MaxHealth × (FinalRecoveryPower / 100)`처럼 필요한 양을 계산한 뒤 `Restore Health`를 호출한다. `Restore Health`는 어떤 공식을 자동으로 가정하지 않는다.
 
@@ -265,6 +274,7 @@ Definition의 “상세 설명”은 `FText`다. 제공 스탯 목록은 `Defaul
 | `bApplyAmplification` | 공격자 증폭/대상 취약 적용 여부 |
 | `bIgnoreDefense` | 방관 100% 취급 |
 | `bIgnoreShield` | 보호막 관통 여부 |
+| `bApplyAbsorption` | 공격자의 흡수 누적 적용 여부 |
 | `bApplyOnHitEffects` | 성공 직접 타격의 OnHit 발생 여부 |
 | Source ID / Damage Display Name | 로그·피해 숫자·후속 효과 식별 |
 
@@ -277,7 +287,9 @@ Definition의 “상세 설명”은 `FText`다. 제공 스탯 목록은 `Defaul
 
 Damage Result에는 성공 여부, 회피 여부, 치명타 여부, 최종 피해, 보호막 피해, 체력 피해, 대상 사망 여부, OnHit 발생 여부가 들어간다. VFX·SFX·피해 숫자는 이 Result를 기준으로 처리한다.
 
-DOT Spec은 Damage Request 외에 지속시간, Tick Interval, DOT Name, 독립 중첩/갱신형 정책을 입력받는다. 갱신형은 같은 이름에 기본 피해·지속시간·간격이 정확히 같을 때만 남은 시간을 초기화한다.
+전투 이벤트는 `On Damage Received`, `On Damage Hit`, `On Damage Evaded`, `On Damage Blocked`, `On Shield Broken`, `On Death`를 제공한다. 이벤트 안에서 발생한 새 피해는 현재 이벤트 체인이 끝난 뒤 처리되며, OnHit 추가 피해는 기본적으로 `bApplyOnHitEffects=false`를 사용한다.
+
+DOT Spec은 Damage Request 외에 지속시간, Tick Interval, DOT Name, 독립 중첩/갱신형 정책과 선택적 `Stagger Request Template`을 입력받는다. 갱신형은 같은 이름에 기본 피해·지속시간·간격이 정확히 같을 때만 남은 시간을 초기화한다. 템플릿이 있으면 성공한 각 틱이 경직·그로기 요청도 실행한다.
 
 ### 6.4 경직·그로기·상태이상 노드
 
@@ -287,7 +299,9 @@ DOT Spec은 Damage Request 외에 지속시간, Tick Interval, DOT Name, 독립 
 | `Apply Stagger And Groggy Damage` | Stagger Request | `FARStaggerResult` | 경직력 계수와 대상 저항/슈퍼아머 처리 |
 | `Apply Super Armor` | Target, Source ID, Duration | SuperArmor Handle | 일반 경직만 막는 관리형 슈퍼아머 |
 | `Remove Super Armor` | Target, Handle/Source | Success/Count | 슈퍼아머 제거 |
-| `Apply Status Effect` | Target, Status Tag, Base Duration, Source ID, Stack/Refresh Policy | Status Handle, Actual Duration | 강인함 반영 후 적용 |
+| `Is Super Armor Active` | Target | bool | 읽기 전용 |
+| `Reset Groggy Gauge` | Target, 선택 새 현재값 | Success, Current Groggy | 고갈 잠금 해제와 게이지 초기화 |
+| `Apply Status Effect` | Target, Status Effect Definition, 선택 Duration Override, Source ID | Status Handle, Actual Duration | Definition 규칙과 강인함 반영 후 적용 |
 | `Remove Status Effect` | Target, Handle/Source | Removed Count | 상태 제거 |
 | `Has Status Effect` | Target, Status Tag | bool | 읽기 전용 |
 
@@ -304,10 +318,13 @@ Stagger Result에는 경직 시도/성공/슈퍼아머 차단 여부, 실제 그
 | `Action Delay` | Action Handle, Duration | Completed / Cancelled | 취소된 Handle이면 즉시 Cancelled |
 | `Register Action Hitbox` | Action Handle, Hitbox Actor | Registered, Failure Reason | Hitbox를 Action 생명주기에 귀속 |
 | `Apply Action Stat Modifier` | Action Handle, Modifier Spec | Modifier Handle, Success | 종료/취소 시 자동 제거 |
+| `Apply Action Super Armor` | Action Handle, SuperArmor Spec | SuperArmor Handle, Success | 종료/취소 시 자동 제거 |
 | `Set Action Roll Blocked` | Action Handle, Blocked | Success | Action 생존 동안 구르기 제어 |
 | `Set Action Basic Movement Blocked` | Action Handle, Blocked | Success | Action 생존 동안 WASD 제어 |
 
 Action 이벤트는 `On Action Ended(Handle)`, `On Action Cancelled(Handle, Reason)`다. BP는 애니메이션, VFX, 루프 SFX, Spawn한 보조 Actor를 두 이벤트에서 정리한다. 체력 피해/등록 DOT/이미 날아간 투사체처럼 취소 뒤에도 남는 것은 의도적으로 Action 밖에 둔다.
+
+한 입력의 전체 묶음은 `Skill Group Handle`, 각 Runtime BP 호출은 서로 다른 `Action Handle`을 받는다. BP는 그룹 비용을 직접 소비하거나 쿨다운을 시작하지 않는다. 공통 C++가 모든 참가 스킬을 검증한 뒤 한 번에 Commit하며, 취소 후 기본 환불은 없다.
 
 ### 6.6 아이템·획득·진화·소모품 노드
 
@@ -318,13 +335,26 @@ Action 이벤트는 `On Action Ended(Handle)`, `On Action Cancelled(Handle, Reas
 | `Cancel Loadout Acquisition` | Player, Token | Success | 선택 취소 |
 | `Discard Loadout Item` | Player, Item Instance ID | Success, Spawn Pickup Request | 액티브/패시브만 버림 |
 | `Request Weapon Evolution` | Player | Evolution Result, Candidate Definitions | 다음 단계 확인 |
-| `Commit Weapon Evolution` | Player, Candidate Definition ID | Success, New Weapon Instance | 기존 무기 제거 후 새 Instance |
+| `Commit Weapon Evolution` | Player, Evolution Token, Candidate Primary Asset ID | Success, New Weapon Instance | Token 재검증 후 기존 무기 제거 및 새 Instance 등록 |
 | `Try Acquire Consumable` | Player, Consumable Definition | Success, Slot Index, Failure Reason | 빈 슬롯에 새 Instance |
 | `Try Use Consumable Slot` | Player, Slot Index | Success, Failure Reason | 즉발 실행 후 성공 시 슬롯 비움 |
 | `Get Consumable Slots` | Player | Slot Snapshot Array | UI 표시 |
 | `Drop Consumable Slot` | Player, Slot Index | Success, Spawn Pickup Request | 선택 소모품 월드 드롭 |
 
 무기는 인벤토리에서 직접 버리는 노드가 없다. 새 무기 획득 또는 진화만 무기 교체를 만든다.
+
+### 6.7 등록 스킬·쿨다운·UI 조회 노드
+
+| 노드 | 입력 | 출력 | 동작 |
+|---|---|---|---|
+| `Get Registered Skill UI Data` | Player | UI Snapshot 배열 | Registered Skill Handle, Item Instance ID, Skill ID, 입력 태그, 아이콘, 비용, 쿨다운 상태 반환 |
+| `Get Skill Cooldown State` | Registered Skill Handle | Ready, Remaining, Total, Ratio | 동일 Skill ID 충돌 없이 정확한 등록 스킬 조회 |
+| `Reset Skill Cooldown` | Registered Skill Handle | Success | 남은 쿨다운을 0으로 변경 |
+| `Modify Skill Cooldown` | Registered Skill Handle, Delta Seconds | Success, New Remaining | 음수 감소, 양수 증가 |
+| `Get Loadout Inventory` | Player | 무기/액티브/패시브 Snapshot | Runtime UObject를 직접 수정하지 않는 UI 데이터 반환 |
+| `Get Loadout Item Display Data` | Item Instance ID | Display Data, Found | 아이콘·설명·자동 생성 스탯·스킬·UI 상태 반환 |
+
+`SkillId`는 한 Definition 내부의 의미 식별자이고 실제 등록 스킬은 `FARRegisteredSkillHandle`로 구분한다. 쿨다운 노드는 Owner+SkillId만으로 대상을 찾지 않는다.
 
 ---
 
@@ -433,7 +463,7 @@ HUD는 Damage Resolver, Stats Component의 내부 Modifier 배열, 아이템 Run
 ### `WBP_EvolutionSelection`
 
 **입력:** `Request Weapon Evolution`의 Candidate Definitions.  
-**출력:** 사용자가 선택한 Definition ID를 `Commit Weapon Evolution`에 전달. 후보가 하나면 자동 확정 가능하며, 후보가 없으면 UI를 열지 않는다.
+**출력:** 사용자가 선택한 후보 Primary Asset ID와 Evolution Token을 `Commit Weapon Evolution`에 전달. 후보가 하나면 자동 확정 가능하며, 후보가 없으면 UI를 열지 않는다.
 
 ---
 

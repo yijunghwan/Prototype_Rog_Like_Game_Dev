@@ -1,3 +1,3 @@
 # UI
 
-HUD·인벤토리가 구독할 읽기 전용 데이터 구조체와 UI 편의 API 선언을 둡니다. UMG Widget 자체는 Content 폴더에 둡니다.
+화면 종류와 HUD·인벤토리가 구독할 읽기 전용 UI 타입을 둡니다. 화면 점유·입력 전환은 `UARUIManagerComponent`가 담당하고, UMG Widget과 실제 디자인은 Content 폴더에 둡니다.
