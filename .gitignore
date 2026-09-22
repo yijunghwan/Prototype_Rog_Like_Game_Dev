@@ -1,0 +1,32 @@
+# Unreal generated directories
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE-generated files
+.vs/
+.idea/
+.vscode/
+*.VC.db
+*.VC.opendb
+*.suo
+*.opensdf
+*.sdf
+*.sln
+*.slnx
+*.xcodeproj
+*.xcworkspace
+
+# Generated build products inside plugins
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# Operating-system and editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.temp
+*.log
+
