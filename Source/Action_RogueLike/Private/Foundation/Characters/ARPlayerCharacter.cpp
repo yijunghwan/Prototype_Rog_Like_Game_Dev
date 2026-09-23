@@ -7,12 +7,14 @@
 #include "Foundation/Components/ARActionComponent.h"
 #include "Foundation/Components/ARCameraFollowComponent.h"
 #include "Foundation/Components/ARConsumableComponent.h"
+#include "Foundation/Components/ARHealthComponent.h"
 #include "Foundation/Components/ARInteractionComponent.h"
 #include "Foundation/Components/ARUIManagerComponent.h"
 #include "Foundation/Components/ARManaComponent.h"
 #include "Foundation/Components/ARLoadoutComponent.h"
 #include "Foundation/Components/ARMovementControlComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
+#include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Player/ARPlayerController.h"
 
@@ -40,8 +42,24 @@ AARPlayerCharacter::AARPlayerCharacter()
 void AARPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	PostHitDamageDelegateHandle = GetHealthComponent()->OnDamageAppliedNative.AddUObject(
+		this, &AARPlayerCharacter::HandlePlayerDamageApplied);
 	CameraFollowComponent->SetCameraAnchor(CameraAnchor);
 	CameraFollowComponent->SnapToTarget();
+}
+
+void AARPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (GetHealthComponent())
+	{
+		GetHealthComponent()->OnDamageAppliedNative.Remove(PostHitDamageDelegateHandle);
+	}
+	if (PostHitInvulnerabilityHandle.IsValid() && GetStatsComponent())
+	{
+		GetStatsComponent()->RemoveStatModifier(PostHitInvulnerabilityHandle);
+		PostHitInvulnerabilityHandle = FARStatModifierHandle();
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AARPlayerCharacter::Tick(float DeltaSeconds)
@@ -68,6 +86,14 @@ void AARPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		{
 			EnhancedInput->BindAction(InteractAction, ETriggerEvent::Started, this, &AARPlayerCharacter::HandleInteractPressed);
 		}
+		for (const FARSkillInputBinding& Binding : SkillInputBindings)
+		{
+			if (Binding.InputAction && Binding.InputTag.IsValid())
+			{
+				EnhancedInput->BindAction(Binding.InputAction, ETriggerEvent::Started, this,
+					&AARPlayerCharacter::HandleSkillPressed, Binding.InputTag);
+			}
+		}
 		if (InventoryAction)
 		{
 			EnhancedInput->BindAction(InventoryAction, ETriggerEvent::Started, this, &AARPlayerCharacter::HandleInventoryPressed);
@@ -84,6 +110,36 @@ void AARPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 			}
 		}
 	}
+}
+
+bool AARPlayerCharacter::SetAimWorldLocation(FVector WorldLocation)
+{
+	if (WorldLocation.ContainsNaN())
+	{
+		return false;
+	}
+	WorldLocation.Z = GetActorLocation().Z;
+	const FVector Direction = WorldLocation - GetActorLocation();
+	if (Direction.IsNearlyZero())
+	{
+		return false;
+	}
+	SetAimDirection(Direction);
+	const bool bChanged = !bHasAimWorldLocation || !WorldLocation.Equals(AimWorldLocation, 0.01f);
+	AimWorldLocation = WorldLocation;
+	bHasAimWorldLocation = true;
+	if (bChanged)
+	{
+		OnAimWorldLocationChanged.Broadcast(this, AimWorldLocation);
+	}
+	return true;
+}
+
+void AARPlayerCharacter::ClearAimWorldLocation()
+{
+	bHasAimWorldLocation = false;
+	AimWorldLocation = FVector::ZeroVector;
+	OnAimWorldLocationChanged.Broadcast(this, AimWorldLocation);
 }
 
 void AARPlayerCharacter::SetGameplayInputBlocked(bool bBlocked)
@@ -174,6 +230,15 @@ void AARPlayerCharacter::HandleInteractPressed(const FInputActionValue& Value)
 	}
 }
 
+void AARPlayerCharacter::HandleSkillPressed(const FInputActionValue& Value, FGameplayTag InputTag)
+{
+	if (!bGameplayInputBlocked && LoadoutComponent && InputTag.IsValid())
+	{
+		FARSkillGroupHandle GroupHandle;
+		LoadoutComponent->HandleSkillInput(InputTag, GroupHandle);
+	}
+}
+
 void AARPlayerCharacter::HandleConsumablePressed(const FInputActionValue& Value, int32 SlotIndex)
 {
 	if (!bGameplayInputBlocked && ConsumableComponent)
@@ -214,8 +279,43 @@ void AARPlayerCharacter::UpdateAimFromCursor()
 		FVector CursorPoint;
 		if (PlayerController->ProjectMouseToGameplayPlane(GetActorLocation().Z, CursorPoint))
 		{
-			SetAimDirection(CursorPoint - GetActorLocation());
+			SetAimWorldLocation(CursorPoint);
 		}
+	}
+}
+
+void AARPlayerCharacter::HandlePlayerDamageApplied(AActor* Target, const FARCombatDamageResult& Result)
+{
+	if (Target != this || Result.FinalDamage <= 0 || Result.bKilledTarget || PostHitInvulnerabilityDuration <= 0.0f
+		|| Result.HitContext.Delivery != EARDamageDelivery::Direct || Result.HitContext.Attribute == EARDamageAttribute::Void)
+	{
+		return;
+	}
+
+	UARStatsComponent* Stats = GetStatsComponent();
+	if (!Stats)
+	{
+		return;
+	}
+	if (PostHitInvulnerabilityHandle.IsValid())
+	{
+		Stats->RemoveStatModifier(PostHitInvulnerabilityHandle);
+	}
+
+	FARStatModifierSpec Spec;
+	Spec.StatType = EARStatType::OverallDamageReduction;
+	Spec.Operation = EARStatModifierOperation::Flat;
+	Spec.Value = 0.0f;
+	Spec.Duration = PostHitInvulnerabilityDuration;
+	Spec.Source.Category = EARModifierSourceCategory::Other;
+	Spec.Source.SourceId = TEXT("System.PlayerPostHitInvulnerability");
+	Spec.Source.DisplayName = NSLOCTEXT("ARPlayer", "PostHitInvulnerability", "피격 후 무적");
+	Spec.bGuaranteeInvulnerability = true;
+	bool bApplied = false;
+	PostHitInvulnerabilityHandle = Stats->AddStatModifier(Spec, bApplied);
+	if (!bApplied)
+	{
+		PostHitInvulnerabilityHandle = FARStatModifierHandle();
 	}
 }
 

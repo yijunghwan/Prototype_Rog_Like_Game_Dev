@@ -86,6 +86,7 @@ bool UARHealthComponent::ApplyResolvedDamage(FARCombatDamageResult& InOutResult)
 	}
 
 	OnDamageApplied.Broadcast(GetOwner(), InOutResult);
+	OnDamageAppliedNative.Broadcast(GetOwner(), InOutResult);
 	if (InOutResult.bKilledTarget)
 	{
 		bDead = true;

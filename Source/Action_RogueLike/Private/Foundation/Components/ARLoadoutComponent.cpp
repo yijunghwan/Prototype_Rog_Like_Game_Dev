@@ -5,6 +5,7 @@
 #include "Foundation/Components/ARManaComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
 #include "Foundation/Components/ARStatsComponent.h"
+#include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Items/ARLoadoutItemDefinition.h"
 #include "Foundation/Items/ARLoadoutItemInstance.h"
@@ -514,21 +515,58 @@ FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 {
 	FARWeaponEvolutionResult Result;
 	const UARWeaponDefinition* Weapon = EquippedWeapon ? Cast<UARWeaponDefinition>(EquippedWeapon->GetItemDefinition()) : nullptr;
-	if (!Weapon || Weapon->NextEvolutionCandidates.IsEmpty())
+	if (!Weapon || Weapon->EvolutionGroupId.IsNone() || Weapon->NextEvolutionCandidates.IsEmpty())
 	{
 		Result.Status.Result = EARRequestResult::InvalidDefinition;
 		return Result;
 	}
+
+	TSet<FSoftObjectPath> UniquePaths;
+	for (const TSoftObjectPtr<UARWeaponDefinition>& CandidateReference : Weapon->NextEvolutionCandidates)
+	{
+		UARWeaponDefinition* Candidate = CandidateReference.LoadSynchronous();
+		FARRequestStatus CandidateStatus;
+		if (!ValidateEvolutionCandidate(Weapon, Candidate, CandidateStatus))
+		{
+			UE_LOG(LogARItems, Warning,
+				TEXT("Ignoring invalid evolution candidate '%s' for weapon '%s'. Candidates must use the same group and the next stage."),
+				*GetNameSafe(Candidate), *GetNameSafe(Weapon));
+			continue;
+		}
+		const FSoftObjectPath CandidatePath(Candidate);
+		if (!UniquePaths.Contains(CandidatePath))
+		{
+			UniquePaths.Add(CandidatePath);
+			Result.Candidates.Add(Candidate);
+		}
+	}
+	if (Result.Candidates.IsEmpty())
+	{
+		Result.Status.Result = EARRequestResult::InvalidDefinition;
+		return Result;
+	}
+
 	Result.Token.Id = FGuid::NewGuid();
-	Result.Candidates = Weapon->NextEvolutionCandidates;
 	FARPendingEvolution Pending;
 	Pending.Revision = LoadoutRevision;
 	Pending.WeaponInstanceId = EquippedWeapon->GetInstanceId();
-	for (const TSoftObjectPtr<UARWeaponDefinition>& Candidate : Weapon->NextEvolutionCandidates)
+	for (const TSoftObjectPtr<UARWeaponDefinition>& Candidate : Result.Candidates)
 	{
 		Pending.CandidatePaths.Add(Candidate.ToSoftObjectPath());
 	}
 	PendingEvolutions.Add(Result.Token.Id, MoveTemp(Pending));
+
+	if (Result.Candidates.Num() == 1)
+	{
+		FARRequestStatus CommitStatus;
+		UARWeaponDefinition* Candidate = Result.Candidates[0].LoadSynchronous();
+		Result.EvolvedInstance = CommitWeaponEvolution(Result.Token, Candidate, CommitStatus);
+		Result.Token = FAREvolutionToken();
+		Result.Status = CommitStatus;
+		return Result;
+	}
+
+	Result.bRequiresSelection = true;
 	Result.Status.Result = EARRequestResult::Success;
 	return Result;
 }
@@ -546,6 +584,11 @@ UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionT
 	if (!Candidate || !Pending.CandidatePaths.Contains(FSoftObjectPath(Candidate)))
 	{
 		Status.Result = EARRequestResult::InvalidDefinition;
+		return nullptr;
+	}
+	const UARWeaponDefinition* Current = Cast<UARWeaponDefinition>(EquippedWeapon->GetItemDefinition());
+	if (!ValidateEvolutionCandidate(Current, Candidate, Status))
+	{
 		return nullptr;
 	}
 	UARLoadoutItemInstance* NewInstance = CreateAndRegisterInstance(Candidate, Status);
@@ -569,6 +612,19 @@ bool UARLoadoutComponent::ValidateDefinition(const UARLoadoutItemDefinition* Def
 		Status.Result = EARRequestResult::InvalidDefinition;
 		return false;
 	}
+	FGameplayTag ExpectedItemType;
+	switch (Definition->GetItemKind())
+	{
+	case EARLoadoutItemKind::Weapon: ExpectedItemType = ARGameplayTags::Item_Type_Weapon; break;
+	case EARLoadoutItemKind::ActiveRelic: ExpectedItemType = ARGameplayTags::Item_Type_ActiveRelic; break;
+	case EARLoadoutItemKind::PassiveRelic: ExpectedItemType = ARGameplayTags::Item_Type_PassiveRelic; break;
+	default: break;
+	}
+	if (!ExpectedItemType.IsValid() || Definition->ItemTypeTag != ExpectedItemType)
+	{
+		Status.Result = EARRequestResult::InvalidDefinition;
+		return false;
+	}
 	TSet<FName> SkillIds;
 	for (const FARSkillDefinition& Skill : Definition->SkillDefinitions)
 	{
@@ -585,6 +641,21 @@ bool UARLoadoutComponent::ValidateDefinition(const UARLoadoutItemDefinition* Def
 	}
 	Status.Result = EARRequestResult::Success;
 	return true;
+}
+
+bool UARLoadoutComponent::ValidateEvolutionCandidate(
+	const UARWeaponDefinition* Current,
+	const UARWeaponDefinition* Candidate,
+	FARRequestStatus& Status) const
+{
+	if (!Current || !Candidate || Current == Candidate || Current->EvolutionGroupId.IsNone()
+		|| Candidate->EvolutionGroupId != Current->EvolutionGroupId
+		|| Candidate->EvolutionStage != Current->EvolutionStage + 1)
+	{
+		Status.Result = EARRequestResult::InvalidDefinition;
+		return false;
+	}
+	return ValidateDefinition(Candidate, Status);
 }
 
 UARLoadoutItemInstance* UARLoadoutComponent::CreateAndRegisterInstance(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status)

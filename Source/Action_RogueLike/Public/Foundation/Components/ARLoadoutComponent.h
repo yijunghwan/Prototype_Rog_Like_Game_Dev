@@ -128,6 +128,7 @@ public:
 
 private:
 	bool ValidateDefinition(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status) const;
+	bool ValidateEvolutionCandidate(const UARWeaponDefinition* Current, const UARWeaponDefinition* Candidate, FARRequestStatus& Status) const;
 	UARLoadoutItemInstance* CreateAndRegisterInstance(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status);
 	void UnregisterAndReleaseInstance(UARLoadoutItemInstance* Instance, EARItemRemovalReason Reason);
 	void RegisterSkills(UARLoadoutItemInstance* Instance);

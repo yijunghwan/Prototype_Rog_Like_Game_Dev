@@ -673,6 +673,8 @@ bool FARActionFullCleanupTest::RunTest(const FString& Parameters)
 	const FARActionHandle Handle = Action->TryStartAction(Request, StartStatus);
 	TestTrue(TEXT("Action starts"), StartStatus.IsSuccess() && Handle.IsValid());
 	TestFalse(TEXT("Action-owned movement lock blocks basic movement"), Movement->CanBasicMove());
+	TestTrue(TEXT("An active owned action may request forced movement"),
+		Movement->RequestActionVelocity(Handle, FVector::ForwardVector, 300.0f));
 
 	FARStatModifierSpec Modifier;
 	Modifier.StatType = EARStatType::AttackPower;
@@ -697,6 +699,8 @@ bool FARActionFullCleanupTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Cancellation removes action-owned super armor"), Stagger->IsSuperArmorActive());
 	TestTrue(TEXT("Cancellation releases the movement lock"), Movement->CanBasicMove());
 	TestTrue(TEXT("Cancellation destroys the registered hitbox actor"), HitboxActor->IsActorBeingDestroyed());
+	TestFalse(TEXT("A cancelled action handle cannot request more forced movement"),
+		Movement->RequestActionVelocity(Handle, FVector::ForwardVector, 300.0f));
 	return true;
 }
 
@@ -714,16 +718,32 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 	Player->GetManaComponent()->BeginPlay();
 	Player->GetStaminaComponent()->BeginPlay();
 	Player->GetActionComponent()->BeginPlay();
+	Player->GetStatusEffectComponent()->BeginPlay();
 	Player->GetLoadoutComponent()->BeginPlay();
 	Player->GetConsumableComponent()->BeginPlay();
 	UARUIManagerComponent* UI = Player->GetUIManagerComponent();
 	UI->BeginPlay();
+	TestTrue(TEXT("Player aim accepts a valid gameplay-plane point"),
+		Player->SetAimWorldLocation(FVector(100.0f, 50.0f, 1000.0f)));
+
+	UARStatusEffectDefinition* HUDStatusDefinition = NewObject<UARStatusEffectDefinition>();
+	HUDStatusDefinition->DefinitionTag = ARGameplayTags::Status_Stun;
+	HUDStatusDefinition->StatusTag = ARGameplayTags::Status_Stun;
+	HUDStatusDefinition->BaseDuration = 5.0f;
+	FARStatusEffectRequest HUDStatusRequest;
+	HUDStatusRequest.Definition = HUDStatusDefinition;
+	const FARStatusEffectResult HUDStatusResult = Player->GetStatusEffectComponent()->ApplyStatusEffect(HUDStatusRequest);
+	TestEqual(TEXT("HUD test status applies"), HUDStatusResult.Result, EARRequestResult::Success);
 
 	const FARPlayerHUDSnapshot Snapshot = UI->GetHUDSnapshot();
 	TestEqual(TEXT("HUD snapshot includes current health"), Snapshot.Health.Current, 100.0f);
 	TestEqual(TEXT("HUD snapshot includes current mana"), Snapshot.Mana.Current, 100.0f);
 	TestEqual(TEXT("HUD snapshot includes current stamina"), Snapshot.Stamina.Current, 100.0f);
 	TestEqual(TEXT("HUD snapshot exposes the default consumable slot count"), Snapshot.Consumables.Num(), 3);
+	TestTrue(TEXT("HUD snapshot exposes a valid aim-world point"), Snapshot.bHasAimWorldLocation);
+	TestTrue(TEXT("HUD aim point is projected onto the player plane"),
+		Snapshot.AimWorldLocation.Equals(FVector(100.0f, 50.0f, Player->GetActorLocation().Z), 0.01f));
+	TestEqual(TEXT("HUD snapshot includes active status effects"), Snapshot.StatusEffects.Num(), 1);
 	const TArray<FARFinalStatView> StatViews = Player->GetStatsComponent()->GetAllFinalStatViews();
 	TestEqual(TEXT("Character sheet exposes every public stat in enum order"),
 		StatViews.Num(), static_cast<int32>(EARStatType::Count));
@@ -773,6 +793,121 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 		Player->GetConsumableComponent()->GetConsumableSlotDisplayData(ConsumableAcquire.SlotIndex, OwnedConsumableData));
 	TestEqual(TEXT("Owned consumable display keeps its slot index"), OwnedConsumableData.SlotIndex, ConsumableAcquire.SlotIndex);
 	TestTrue(TEXT("Owned consumable display includes its runtime instance id"), OwnedConsumableData.InstanceId.IsValid());
+	TestTrue(TEXT("Status can be removed after it was exposed to the HUD"),
+		Player->GetStatusEffectComponent()->RemoveStatusEffect(HUDStatusResult.Handle));
+	TestEqual(TEXT("HUD snapshot no longer exposes the removed status"), UI->GetHUDSnapshot().StatusEffects.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARPlayerPostHitInvulnerabilityTest,
+	"AR.Foundation.Player.PostHitInvulnerability",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARPlayerPostHitInvulnerabilityTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARBaseEnemy* Enemy = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	TestNotNull(TEXT("Enemy spawned"), Enemy);
+	TestNotNull(TEXT("Player spawned"), Player);
+	Enemy->GetStatsComponent()->SetBaseStat(EARStatType::MaxHealth, 100.0f);
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::MaxHealth, 100.0f);
+	Enemy->DispatchBeginPlay();
+	Player->DispatchBeginPlay();
+	TestTrue(TEXT("Player entered BeginPlay"), Player->HasActorBegunPlay());
+	TestTrue(TEXT("Player listens for applied damage"), Player->GetHealthComponent()->OnDamageAppliedNative.IsBound());
+	TestTrue(TEXT("Player has a positive post-hit invulnerability duration"),
+		Player->GetPostHitInvulnerabilityDuration() > 0.0f);
+
+	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
+	TestNotNull(TEXT("Combat subsystem exists"), Combat);
+	FARCombatDamageRequest Request;
+	Request.Attacker = Enemy;
+	Request.Target = Player;
+	Request.BaseDamage = 10.0f;
+	Request.bGuaranteedHit = true;
+	Request.bCanCrit = false;
+	Request.bApplyAmplification = false;
+	Request.bIgnoreDefense = true;
+
+	const FARCombatDamageResult FirstHit = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("First direct hit is applied"), FirstHit.Outcome, EARDamageOutcome::Applied);
+	TestFalse(TEXT("First hit does not kill the player"), FirstHit.bKilledTarget);
+	TestEqual(TEXT("First hit is direct damage"), FirstHit.HitContext.Delivery, EARDamageDelivery::Direct);
+	TestEqual(TEXT("First hit is physical damage"), FirstHit.HitContext.Attribute, EARDamageAttribute::Physical);
+	TestEqual(TEXT("First hit removes health"), Player->GetHealthComponent()->GetCurrentHealth(), 90.0f);
+	TestTrue(TEXT("A surviving direct hit grants managed invulnerability"),
+		Player->GetStatsComponent()->HasGuaranteedInvulnerability());
+
+	const FARCombatDamageResult BlockedHit = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("A normal hit during post-hit invulnerability is blocked"), BlockedHit.Outcome, EARDamageOutcome::Blocked);
+	TestEqual(TEXT("Blocked hit does not remove more health"), Player->GetHealthComponent()->GetCurrentHealth(), 90.0f);
+
+	Request.Attribute = EARDamageAttribute::Void;
+	const FARCombatDamageResult VoidHit = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("Void damage bypasses post-hit invulnerability"), VoidHit.Outcome, EARDamageOutcome::Applied);
+	TestEqual(TEXT("Void damage reaches health"), Player->GetHealthComponent()->GetCurrentHealth(), 80.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARWeaponEvolutionRulesTest,
+	"AR.Foundation.Items.WeaponEvolutionRules",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARWeaponEvolutionRulesTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	TestNotNull(TEXT("Player spawned"), Player);
+	ARFoundationTests::BeginPlayerSkillSystems(Player);
+	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
+
+	auto MakeWeapon = [](const TCHAR* Name, int32 Stage, FName Group)
+	{
+		UARWeaponDefinition* Definition = NewObject<UARWeaponDefinition>(GetTransientPackage(), FName(Name));
+		Definition->DefinitionTag = ARGameplayTags::Item_Type_Weapon;
+		Definition->ItemTypeTag = ARGameplayTags::Item_Type_Weapon;
+		Definition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+		Definition->EvolutionGroupId = Group;
+		Definition->EvolutionStage = Stage;
+		return Definition;
+	};
+
+	const FName EvolutionGroup(TEXT("Test.Caliburn"));
+	UARWeaponDefinition* Stage1 = MakeWeapon(TEXT("TestWeaponStage1"), 1, EvolutionGroup);
+	UARWeaponDefinition* Stage2 = MakeWeapon(TEXT("TestWeaponStage2"), 2, EvolutionGroup);
+	UARWeaponDefinition* Stage3A = MakeWeapon(TEXT("TestWeaponStage3A"), 3, EvolutionGroup);
+	UARWeaponDefinition* Stage3B = MakeWeapon(TEXT("TestWeaponStage3B"), 3, EvolutionGroup);
+	UARWeaponDefinition* WrongGroup = MakeWeapon(TEXT("TestWeaponWrongGroup"), 3, TEXT("Test.Other"));
+	Stage1->NextEvolutionCandidates.Add(Stage2);
+	Stage2->NextEvolutionCandidates.Add(Stage3A);
+	Stage2->NextEvolutionCandidates.Add(WrongGroup);
+	Stage2->NextEvolutionCandidates.Add(Stage3B);
+
+	const FARLoadoutAcquisitionResult Acquire = Loadout->BeginLoadoutAcquisition(Stage1);
+	FARRequestStatus AcquireStatus;
+	UARLoadoutItemInstance* InitialInstance = Loadout->CommitLoadoutAcquisition(Acquire.Token, AcquireStatus);
+	TestTrue(TEXT("Stage-one weapon is equipped"), Acquire.Status.IsSuccess() && AcquireStatus.IsSuccess() && InitialInstance);
+
+	const FARWeaponEvolutionResult Automatic = Loadout->RequestWeaponEvolution();
+	TestTrue(TEXT("A single valid next stage evolves immediately"), Automatic.Status.IsSuccess());
+	TestFalse(TEXT("Single-candidate evolution does not require a selection UI"), Automatic.bRequiresSelection);
+	TestNotNull(TEXT("Automatic evolution returns the new runtime instance"), Automatic.EvolvedInstance.Get());
+	TestTrue(TEXT("Stage two is now equipped"),
+		Loadout->GetEquippedWeapon() && Loadout->GetEquippedWeapon()->GetItemDefinition() == Stage2);
+
+	AddExpectedError(TEXT("Ignoring invalid evolution candidate"), EAutomationExpectedErrorFlags::Contains, 1);
+	const FARWeaponEvolutionResult Selection = Loadout->RequestWeaponEvolution();
+	TestTrue(TEXT("Multiple valid candidates produce a selection request"), Selection.Status.IsSuccess());
+	TestTrue(TEXT("Multiple candidates require selection"), Selection.bRequiresSelection);
+	TestTrue(TEXT("Selection request returns a valid token"), Selection.Token.IsValid());
+	TestEqual(TEXT("Wrong-group candidates are rejected before UI presentation"), Selection.Candidates.Num(), 2);
+
+	FARRequestStatus EvolutionStatus;
+	UARLoadoutItemInstance* FinalInstance = Loadout->CommitWeaponEvolution(Selection.Token, Stage3B, EvolutionStatus);
+	TestTrue(TEXT("A listed stage-three candidate can be committed"), EvolutionStatus.IsSuccess() && FinalInstance);
+	TestTrue(TEXT("Selected stage three is equipped"),
+		Loadout->GetEquippedWeapon() && Loadout->GetEquippedWeapon()->GetItemDefinition() == Stage3B);
 	return true;
 }
 

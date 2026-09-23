@@ -9,6 +9,7 @@
 
 class UTexture2D;
 class UARLoadoutItemDefinition;
+class UARLoadoutItemInstance;
 class AARLoadoutItemPickup;
 
 UENUM(BlueprintType)
@@ -181,4 +182,8 @@ struct ACTION_ROGUELIKE_API FARWeaponEvolutionResult
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARRequestStatus Status;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FAREvolutionToken Token;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<TSoftObjectPtr<class UARWeaponDefinition>> Candidates;
+	/** False when the only valid candidate was committed immediately. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bRequiresSelection = false;
+	/** Set only for a successful single-candidate automatic evolution. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARLoadoutItemInstance> EvolvedInstance = nullptr;
 };

@@ -452,7 +452,7 @@ OnHit에서 만든 별도 피해는 재귀 방지를 위해 `bApplyOnHitEffects 
 | `On HUD Snapshot Changed` | `FARPlayerHUDSnapshot` | 위 변경 통로를 하나로 받아 현재 HUD 전체 갱신 |
 
 HUD는 Damage Resolver, Stats Component의 내부 Modifier 배열, 아이템 Runtime BP를 직접 수정하지 않는다.
-Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 만들고, 그 뒤에는 `On HUD Snapshot Changed`를 구독한다. Snapshot에는 체력·보호막·MP·스태미나·조준 방향·현재 무기·액티브 유물·등록 스킬·소모품 슬롯이 포함된다. 쿨다운 원형 애니메이션은 Snapshot에 든 시작 상태를 바탕으로 Widget이 표시 시간만 진행하며, 시스템 Component를 매 Tick 순회하지 않는다.
+Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 만들고, 그 뒤에는 `On HUD Snapshot Changed`를 구독한다. Snapshot에는 체력·보호막·MP·스태미나·조준 방향과 유효한 조준 월드 좌표·현재 무기·액티브 유물·등록 스킬·소모품 슬롯·현재 상태이상이 포함된다. 쿨다운 원형 애니메이션은 Snapshot에 든 시작 상태를 바탕으로 Widget이 표시 시간만 진행하며, 시스템 Component를 매 Tick 순회하지 않는다.
 
 ### `WBP_Inventory`
 

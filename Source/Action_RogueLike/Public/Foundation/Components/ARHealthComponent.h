@@ -40,6 +40,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FARHealthChangedSignature, AActor*
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FARShieldChangedSignature, AActor*, Target, float, CurrentShield, float, Delta, FARShieldHandle, Handle, EARResourceChangeReason, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARDamageAppliedSignature, AActor*, Target, const FARCombatDamageResult&, Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARDeathSignature, AActor*, Target, const FARCombatDamageResult&, KillingDamage);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FARDamageAppliedNativeSignature, AActor*, const FARCombatDamageResult&);
 
 UCLASS(ClassGroup=(ARFoundation), meta=(BlueprintSpawnableComponent))
 class ACTION_ROGUELIKE_API UARHealthComponent : public UActorComponent
@@ -96,6 +97,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARShieldChangedSignature OnShieldChanged;
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARDamageAppliedSignature OnDamageApplied;
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARDeathSignature OnDeath;
+	/** C++-only observer used for deterministic core-system reactions. */
+	FARDamageAppliedNativeSignature OnDamageAppliedNative;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Health")
 	bool bStartAtFullHealth = true;

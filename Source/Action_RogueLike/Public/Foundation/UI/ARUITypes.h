@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Foundation/Items/ARConsumableTypes.h"
 #include "Foundation/Items/ARItemTypes.h"
+#include "Foundation/Status/ARStatusEffectTypes.h"
 #include "ARUITypes.generated.h"
 
 UENUM(BlueprintType)
@@ -38,9 +39,12 @@ struct ACTION_ROGUELIKE_API FARPlayerHUDSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARHUDResourceValue Mana;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARHUDResourceValue Stamina;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FVector AimDirection = FVector::ForwardVector;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bHasAimWorldLocation = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FVector AimWorldLocation = FVector::ZeroVector;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bHasEquippedWeapon = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARLoadoutItemSnapshot EquippedWeapon;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARLoadoutItemSnapshot> ActiveRelics;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARRegisteredSkillUIData> Skills;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARConsumableSlotSnapshot> Consumables;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARStatusEffectView> StatusEffects;
 };

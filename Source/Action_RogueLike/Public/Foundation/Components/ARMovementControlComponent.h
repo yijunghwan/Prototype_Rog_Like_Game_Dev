@@ -7,6 +7,7 @@
 #include "ARMovementControlComponent.generated.h"
 
 class ACharacter;
+class UARActionComponent;
 
 USTRUCT()
 struct FARActiveMovementLock
@@ -60,10 +61,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Movement") FARMovementLockChangedSignature OnMovementLockChanged;
 
 private:
+	bool IsActiveOwnedAction(FARActionHandle ActionHandle) const;
 	void RefreshMovementMode(bool bCouldMoveAtAll);
 
 	UPROPERTY(Transient) TObjectPtr<ACharacter> CharacterOwner;
 	UPROPERTY(Transient) TObjectPtr<UCharacterMovementComponent> CharacterMovement;
+	UPROPERTY(Transient) TObjectPtr<UARActionComponent> ActionComponent;
 	UPROPERTY(Transient) TArray<FARActiveMovementLock> ActiveLocks;
 	EMovementMode SavedMovementMode = MOVE_Walking;
 	uint8 SavedCustomMovementMode = 0;

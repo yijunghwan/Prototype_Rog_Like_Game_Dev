@@ -18,6 +18,12 @@ void UARActionComponent::BeginPlay()
 	MovementComponent = GetOwner() ? GetOwner()->FindComponentByClass<UARMovementControlComponent>() : nullptr;
 }
 
+void UARActionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	CancelAllActions(EARActionCancelReason::Manual);
+	Super::EndPlay(EndPlayReason);
+}
+
 FARRequestStatus UARActionComponent::CanStartAction(const FARActionRequest& Request) const
 {
 	FARRequestStatus Status;

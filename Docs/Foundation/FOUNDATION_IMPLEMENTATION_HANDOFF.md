@@ -2,7 +2,7 @@
 
 **기록일:** 2026-09-23  
 **프로젝트:** Unreal Engine 5.8 / Paper2D / 32×32 기본 캐릭터·타일 기반 탑뷰 액션 로그라이크
-**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 19/19 성공
+**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 21/21 성공
 
 이 문서는 다음 작업에서 “Foundation 구현 이어서 진행해줘”라고 요청했을 때 바로 이어가기 위한 현재 상태 기록이다. 방향 문서는 아래 세 문서를 기준으로 유지한다.
 
@@ -30,6 +30,7 @@
   - 인벤토리 캐릭터 시트용 `GetAllFinalStatViews`(전체 스탯 이름·최종값·계산 내역)
 - `UARHealthComponent`
   - 체력, 회복, 피해, 사망 이벤트
+  - Blueprint용 피해 이벤트와 C++ 핵심 규칙용 네이티브 피해 이벤트를 함께 제공
   - 보호막 후입선출 소비, 영구·시간 제한 보호막, 필터 제거
 - `UARStaminaComponent`
   - 성공한 소비 후 회복 대기시간 갱신, 초당 회복
@@ -71,9 +72,12 @@
   - Action Handle 등록, 대상당 1회/매 Overlap 정책, Action 종료 시 자동 제거
 - `UARMovementControlComponent`
   - 공통 기본 이동, Action 이동, 이동 잠금, 즉시 정지
+  - Action 이동은 해당 Component가 소유한 현재 활성 Handle만 허용
 - `AARBaseCharacter`, `AARBaseEnemy`, `AARPlayerCharacter`
   - 공통 전투 컴포넌트 구성
-  - WASD 이동, 마우스 조준, 스태미나 기반 구르기, 구르기 중 보장 회피
+  - WASD 이동, 월드 좌표 마우스 조준, Input Action→Input Tag 스킬 연결
+  - 스태미나 기반 구르기와 구르기 중 보장 회피
+  - 직접·비공허 피해 후 Details 설정 시간 동안 일반 무적
 - `UARCameraFollowComponent`
   - 정사영 탑뷰 카메라, 거리 기반 추적 가속과 최대 지연 제한
 
@@ -88,6 +92,7 @@
   - 무기 1개, 액티브 유물 2개, 패시브 유물 무제한
   - Revision 기반 Begin/Commit 획득 토큰과 오래된 요청 거부
   - 무기 교체, 유물 폐기 요청, 무기 진화 후보·Commit
+  - 같은 진화 그룹의 정확한 다음 단계만 허용하며, 후보 1개는 즉시 진화하고 복수 후보는 선택 Token 반환
   - Definition의 스킬 자동 등록·해제
   - 같은 Input Tag 스킬을 우선순위 그룹별로 검사
   - 같은 우선순위 그룹은 쿨다운·MP·스태미나를 원자적으로 검사·소비
@@ -159,10 +164,12 @@ AR.Foundation.Items.ConsumableSlotReduction Success
 AR.Foundation.Items.LoadoutAcquisitionRevision Success
 AR.Foundation.Items.LoadoutDropAtomic    Success
 AR.Foundation.Items.SkillPriorityTransaction Success
+AR.Foundation.Items.WeaponEvolutionRules Success
+AR.Foundation.Player.PostHitInvulnerability Success
 AR.Foundation.Resource.AtomicTransaction Success
 AR.Foundation.Status.TenacityAndRefresh  Success
 AR.Foundation.UI.SnapshotAndInputBlocking Success
-합계: 19 성공 / 0 실패 / 0 경고
+합계: 21 성공 / 0 실패 / 0 경고
 ```
 
 ## 3. 다음 작업에서 가장 먼저 할 일
@@ -184,7 +191,7 @@ AR.Foundation.UI.SnapshotAndInputBlocking Success
 
 ## 4. 현재 알려진 주의점
 
-- 현재 C++는 빌드되며 Damage/DOT·Action·Stagger/Groggy·Status·Loadout/Consumable·UI 핵심 규칙 19개가 자동 검증된다.
+- 현재 C++는 빌드되며 Damage/DOT·Action·Stagger/Groggy·Status·Loadout/Consumable·UI 핵심 규칙 21개가 자동 검증된다.
 - 전투 대상 인터페이스는 Blueprint에서 새로 구현하지 않는다. `AARBaseCharacter`의 Blueprint 자식을 만들어 상속된 팀·생존 판정을 사용한다.
 - 유물·소모품 수동 폐기는 픽업 Spawn 성공 뒤에만 인스턴스를 제거한다. 슬롯 감소 Spawn 실패 시 초과 슬롯에 보존하고 재시도한다.
 - 실제 Input Action, Mapping Context, Data Asset, Runtime BP, Widget, Test Map은 아직 생성하지 않았다. C++ 입력 포인터가 비어 있으면 해당 기능은 실행되지 않는다.
@@ -196,8 +203,38 @@ AR.Foundation.UI.SnapshotAndInputBlocking Success
 
 현재 Foundation 전체 구현 완성도는 **10단계 중 5단계**로 평가한다.
 
-- C++ 기반 규칙과 핵심 API: 약 7~8단계
-- 테스트·안전성: 약 7단계
+- C++ 기반 규칙과 핵심 API: 약 8~9단계
+- 테스트·안전성: 약 8단계
 - 실제 Blueprint/에셋 연결과 플레이 가능한 프로토타입: 약 2~3단계
 
 즉 핵심 뼈대와 주요 트랜잭션 테스트는 존재하지만, 실제 콘텐츠 에셋을 연결해 한 판을 플레이하고 팀원이 사용할 수 있다고 말하려면 Editor 에셋, HUD/인벤토리, Test Map 검증이 더 필요하다.
+
+---
+
+## 6. 2026-09-23 C++ Foundation 마감 체크포인트
+
+계획된 C++ Foundation 범위의 마지막 안전성 보강을 완료했다.
+
+### 이번 변경에 이미 들어간 내용
+
+- 플레이어의 `Input Action -> Gameplay Input Tag` 스킬 입력 바인딩 배열
+- 마우스 조준의 월드 좌표 저장·변경 이벤트와 HUD Snapshot 노출
+- HUD Snapshot의 현재 상태이상 목록 노출
+- 직접·비공허 피격 후 디테일 값만큼 관리형 무적을 부여하는 플레이어 처리기
+- 종료된/다른 객체의 Action Handle로 강제 이동을 호출하지 못하도록 검증
+- Action Component 종료 시 액션 소유 수정치·슈퍼아머·이동 잠금·히트박스 정리
+- 무기 진화 후보의 그룹/단계/정의 검증
+- 유효 후보 1개는 즉시 진화, 2개 이상은 선택 요청으로 반환
+- Loadout Definition의 실제 Item Type Tag 검증
+- 위 규칙의 자동화 테스트 추가
+
+### 최종 검증 상태
+
+```text
+Action_RogueLikeEditor Win64 Development: 빌드 성공
+AR.Foundation 자동화 테스트: 21 성공 / 0 실패 / 0 경고
+```
+
+피격 후 무적은 Blueprint용 동적 피해 이벤트와 분리된 C++ 네이티브 피해 이벤트를 사용한다. 일반 직접 피해가 생존한 플레이어에게 적용된 뒤 관리형 무적을 부여하며, DOT와 공허 피해는 이를 부여하지 않는다. 공허 피해는 활성 일반 무적도 우회한다.
+
+이제 다음 작업의 시작점은 C++ 추가가 아니라 Editor의 Input Action/IMC, Definition Data Asset, Runtime BP, Widget, Test Map 연결이다.

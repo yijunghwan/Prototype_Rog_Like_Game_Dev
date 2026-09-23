@@ -57,7 +57,8 @@ private:
 	UFUNCTION() void HandleRegisteredSkillsChanged();
 	UFUNCTION() void HandleItemUIStateChanged(FGuid ItemInstanceId, const FARItemUIState& State, bool bRemoved);
 	UFUNCTION() void HandleConsumableSlotsChanged(const TArray<FARConsumableSlotSnapshot>& Slots);
-	UFUNCTION() void HandleAimDirectionChanged(AARBaseCharacter* Character, FVector AimDirection);
+	UFUNCTION() void HandleAimWorldLocationChanged(AARPlayerCharacter* Player, FVector WorldLocation);
+	UFUNCTION() void HandleStatusEffectChanged(AActor* Target, const FARStatusEffectView& Status);
 
 	UPROPERTY(Transient) TObjectPtr<AARPlayerCharacter> PlayerOwner;
 	UPROPERTY(Transient) TObjectPtr<UObject> CurrentContext;

@@ -6,6 +6,7 @@
 #include "Foundation/Components/ARLoadoutComponent.h"
 #include "Foundation/Components/ARManaComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
+#include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Player/ARPlayerController.h"
 
 UARUIManagerComponent::UARUIManagerComponent()
@@ -43,7 +44,13 @@ void UARUIManagerComponent::BeginPlay()
 	}
 	if (PlayerOwner)
 	{
-		PlayerOwner->OnAimDirectionChanged.AddDynamic(this, &UARUIManagerComponent::HandleAimDirectionChanged);
+		PlayerOwner->OnAimWorldLocationChanged.AddDynamic(this, &UARUIManagerComponent::HandleAimWorldLocationChanged);
+		if (PlayerOwner->GetStatusEffectComponent())
+		{
+			PlayerOwner->GetStatusEffectComponent()->OnStatusAdded.AddDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
+			PlayerOwner->GetStatusEffectComponent()->OnStatusUpdated.AddDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
+			PlayerOwner->GetStatusEffectComponent()->OnStatusRemoved.AddDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
+		}
 	}
 }
 
@@ -75,7 +82,13 @@ void UARUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	if (PlayerOwner)
 	{
-		PlayerOwner->OnAimDirectionChanged.RemoveDynamic(this, &UARUIManagerComponent::HandleAimDirectionChanged);
+		PlayerOwner->OnAimWorldLocationChanged.RemoveDynamic(this, &UARUIManagerComponent::HandleAimWorldLocationChanged);
+		if (PlayerOwner->GetStatusEffectComponent())
+		{
+			PlayerOwner->GetStatusEffectComponent()->OnStatusAdded.RemoveDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
+			PlayerOwner->GetStatusEffectComponent()->OnStatusUpdated.RemoveDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
+			PlayerOwner->GetStatusEffectComponent()->OnStatusRemoved.RemoveDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
+		}
 	}
 	CloseCurrentScreen();
 	Super::EndPlay(EndPlayReason);
@@ -108,6 +121,8 @@ FARPlayerHUDSnapshot UARUIManagerComponent::GetHUDSnapshot() const
 		Snapshot.Stamina.Ratio = Stamina->GetRatio();
 	}
 	Snapshot.AimDirection = PlayerOwner->GetAimDirection();
+	Snapshot.bHasAimWorldLocation = PlayerOwner->HasAimWorldLocation();
+	Snapshot.AimWorldLocation = PlayerOwner->GetAimWorldLocation();
 	if (const UARLoadoutComponent* Loadout = PlayerOwner->GetLoadoutComponent())
 	{
 		for (const FARLoadoutItemSnapshot& Item : Loadout->GetLoadoutInventory())
@@ -127,6 +142,10 @@ FARPlayerHUDSnapshot UARUIManagerComponent::GetHUDSnapshot() const
 	if (const UARConsumableComponent* Consumables = PlayerOwner->GetConsumableComponent())
 	{
 		Snapshot.Consumables = Consumables->GetConsumableSlots();
+	}
+	if (const UARStatusEffectComponent* StatusEffects = PlayerOwner->GetStatusEffectComponent())
+	{
+		Snapshot.StatusEffects = StatusEffects->GetActiveStatusEffects();
 	}
 	return Snapshot;
 }
@@ -237,7 +256,12 @@ void UARUIManagerComponent::HandleConsumableSlotsChanged(const TArray<FARConsuma
 	BroadcastHUDSnapshot();
 }
 
-void UARUIManagerComponent::HandleAimDirectionChanged(AARBaseCharacter* Character, FVector AimDirection)
+void UARUIManagerComponent::HandleAimWorldLocationChanged(AARPlayerCharacter* Player, FVector WorldLocation)
+{
+	BroadcastHUDSnapshot();
+}
+
+void UARUIManagerComponent::HandleStatusEffectChanged(AActor* Target, const FARStatusEffectView& Status)
 {
 	BroadcastHUDSnapshot();
 }

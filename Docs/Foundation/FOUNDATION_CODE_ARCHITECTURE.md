@@ -410,11 +410,12 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 |---|---|
 | `RequestBasicMove(Direction)` | 플레이어/AI 기본 이동 요청 |
 | `RequestActionMove(ActionHandle, Spec)` | 돌진/백스텝 같은 Action 소유 이동 |
+| `RequestActionVelocity(ActionHandle, Direction, Speed)` | Action 소유 강제 속도 이동 |
 | `AcquireMovementLock(SourceId, LockType)` | Root/Stun/Action 이유별 잠금 Handle 생성 |
 | `ReleaseMovementLock(Handle)` | 정확한 잠금 해제 |
 | `CanBasicMove`, `CanMoveAtAll` | 기본 이동 / 전체 이동 가능 여부 |
 
-액션 소유 잠금은 Action 종료/취소에서 자동 해제한다. 적 개발자는 장시간 `SetActorLocation`이나 독립 Timeline으로 이동하지 않는다.
+Action 이동 요청은 Handle의 Owner가 이 캐릭터의 Action Component이고 현재 활성 상태일 때만 실행한다. 종료·취소·다른 캐릭터의 Handle은 거부한다. 액션 소유 잠금은 Action 종료/취소에서 자동 해제한다. 적 개발자는 장시간 `SetActorLocation`이나 독립 Timeline으로 이동하지 않는다.
 
 ### `UARActionComponent`
 
@@ -453,7 +454,7 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 | `DiscardLoadoutItem(InstanceId)` | 월드 픽업 Spawn이 성공한 뒤에만 액티브/패시브 제거, 무기는 거부 |
 | `GetEquippedWeapon`, `GetActiveRelics`, `GetPassiveRelics` | UI용 읽기 전용 스냅샷 |
 | `HandleSkillInput(InputTag)` | 등록 스킬 후보를 수집해 Action Component의 Skill Group 실행 요청으로 전달 |
-| `RequestWeaponEvolution`, `CommitWeaponEvolution` | 진화 후보/새 무기 Instance 교체 |
+| `RequestWeaponEvolution`, `CommitWeaponEvolution` | 같은 그룹의 정확한 다음 단계 후보 검증. 1개면 즉시 교체, 2개 이상이면 선택 Token 반환 |
 
 Loadout Component는 등록·소유권과 후보 열거의 유일한 소유자이고, Action Component는 우선순위 그룹 검사, 자원 예약·소비, 쿨다운 Commit, 참가 Action 생명주기의 유일한 소유자다. 같은 Input Tag의 스킬은 `InputPriority` 오름차순으로 검사한다. 같은 우선순위는 하나의 원자 그룹이며, 정적 쿨다운/MP/스태미나와 `CanExecuteItemSkill`을 모두 통과한 그룹만 함께 실행한다. 각 등록 스킬은 `FARRegisteredSkillHandle`로 식별하며 `SkillId` 단독으로 쿨다운을 찾지 않는다.
 
