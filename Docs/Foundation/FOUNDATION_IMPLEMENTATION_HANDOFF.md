@@ -1,8 +1,8 @@
 # Foundation 구현 인수인계 기록
 
 **기록일:** 2026-09-23  
-**프로젝트:** Unreal Engine 5.8 / Paper2D / 64×64 도트 기반 탑뷰 액션 로그라이크  
-**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 5/5 성공
+**프로젝트:** Unreal Engine 5.8 / Paper2D / 32×32 기본 캐릭터·타일 기반 탑뷰 액션 로그라이크
+**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 15/15 성공
 
 이 문서는 다음 작업에서 “Foundation 구현 이어서 진행해줘”라고 요청했을 때 바로 이어가기 위한 현재 상태 기록이다. 방향 문서는 아래 세 문서를 기준으로 유지한다.
 
@@ -114,6 +114,12 @@
   - Controller의 Game/UI 입력 모드 전환
   - 사망 시 열린 화면과 Loadout 대기 요청 정리
 - 인벤토리·뒤로가기·상호작용·소모품 슬롯용 Enhanced Input 연결 지점
+- `GetLoadoutItemDisplayData`
+  - 인벤토리 Widget이 런타임 객체 내부를 직접 해석하지 않도록 이름·설명·아이콘·제공 스탯·스킬·현재 UI 상태를 복사한 표시 구조체 반환
+  - Definition의 고정 스탯 수정치를 지역화 가능한 표시 Text로 자동 변환
+- `IARCombatTargetInterface`
+  - C++ 캐릭터 기반에서만 구현하고 Blueprint 자식은 상속해 사용
+  - 추상 부모의 `BlueprintNativeEvent`가 구체 자식에서 기본값을 반환하던 문제를 제거
 
 ## 2. 현재 검증 결과
 
@@ -128,46 +134,49 @@ Result: Succeeded
 
 ```text
 AR.Foundation.Combat.DamageFormula       Success
+AR.Foundation.Combat.DotCatchUp          Success
+AR.Foundation.Combat.DotRefresh          Success
 AR.Foundation.Combat.EvasionAndMinimum   Success
 AR.Foundation.Combat.VoidRules           Success
 AR.Foundation.Stats.IndependentReduction Success
 AR.Foundation.Stats.ModifierFormula      Success
-합계: 5 성공 / 0 실패 / 0 경고
+AR.Foundation.Action.OwnedCleanup        Success
+AR.Foundation.Combat.StaggerGroggyRules  Success
+AR.Foundation.Items.ConsumableDropAtomic Success
+AR.Foundation.Items.ConsumableSlotReduction Success
+AR.Foundation.Items.LoadoutAcquisitionRevision Success
+AR.Foundation.Items.LoadoutDropAtomic    Success
+AR.Foundation.Items.SkillPriorityTransaction Success
+AR.Foundation.Status.TenacityAndRefresh  Success
+합계: 15 성공 / 0 실패 / 0 경고
 ```
 
 ## 3. 다음 작업에서 가장 먼저 할 일
 
-1. **신규 계층 자동화 테스트 추가**
-   - Action 시작·취소·소유 자원 정리
-   - Loadout 슬롯, Revision 토큰, 스킬 우선순위 그룹과 원자 비용
-   - Consumable 획득·사용·슬롯 감소
-   - Status, Stagger/Groggy, DOT 갱신과 Catch-up
-2. **드롭 원자성 보강**
-   - 현재 유물·소모품 폐기는 Drop Request를 만든 뒤 Instance를 해제한다.
-   - Pickup Spawn 실패 때 아이템을 잃지 않도록 `Begin Drop → Spawn 검증 → Commit Drop` 또는 공용 World Drop Service로 교체한다.
-   - 슬롯 감소 자동 드롭도 동일한 보장 경로를 써야 한다.
-3. **Asset Manager 설정**
-   - `ARLoadoutItem`, `ARConsumable`, `ARStatusEffect` Primary Asset Type과 `/Game/Foundation/Data` 스캔 경로 등록
-4. **누락된 Blueprint 편의 계층과 UI 읽기 데이터**
-   - 아이템 제공 스탯 표시용 포맷 데이터
-   - Drop/Pickup Spawn 공용 노드
+1. **누락된 Blueprint 편의 계층과 UI 이벤트 점검**
+   - 상점·진화 후보처럼 아직 소유하지 않은 Definition용 표시 데이터 생성 노드
    - HUD가 Tick 조회 없이 구독할 통합 Snapshot/이벤트 점검
-5. **Editor에서 콘텐츠 에셋 생성**
+2. **추가 자동화 테스트**
+   - 보호막 후입선출·시간 만료
+   - 행동 취소 시 이동 잠금·슈퍼아머·히트박스 정리
+   - UI 화면 점유와 입력 차단
+3. **Editor에서 콘텐츠 에셋 생성**
    - `IA_Move`, `IA_Roll`, `IA_Interact`, `IA_Inventory`, `IA_UIBack`, 소모품 슬롯 IA와 `IMC_Player`
    - `BP_ARPlayer`, `BP_ARBaseEnemy`, 공용 Hitbox/Pickup BP
    - 테스트용 Weapon/Relic/Consumable/Status Definition과 Runtime BP
    - `WBP_HUD`, `WBP_Inventory`, `WBP_EvolutionSelection`
    - Foundation Test Map
-6. Test Map 검증 후에만 기존 TopDown 기본 GameMode/Map을 Foundation 쪽으로 교체한다.
-7. 기반 사용법이 실제 BP에서 검증되면 `FOUNDATION_ENEMY_CONTENT_GUIDE.md`와 아이템 제작 가이드를 작성한다.
+4. Test Map 검증 후에만 기존 TopDown 기본 GameMode/Map을 Foundation 쪽으로 교체한다.
+5. 기반 사용법이 실제 BP에서 검증되면 `FOUNDATION_ENEMY_CONTENT_GUIDE.md`와 아이템 제작 가이드를 작성한다.
 
 ## 4. 현재 알려진 주의점
 
-- 현재 C++는 빌드되지만 Loadout·Consumable·Interaction·UI 계층은 아직 자동화 테스트가 없다.
-- 유물/소모품 수동 폐기와 슬롯 감소 드롭은 Pickup 생성 실패 롤백이 아직 없다. 다음 작업의 최우선 설계 부채다.
+- 현재 C++는 빌드되며 Damage/DOT·Action·Stagger/Groggy·Status·Loadout/Consumable 핵심 규칙 15개가 자동 검증된다.
+- 전투 대상 인터페이스는 Blueprint에서 새로 구현하지 않는다. `AARBaseCharacter`의 Blueprint 자식을 만들어 상속된 팀·생존 판정을 사용한다.
+- 유물·소모품 수동 폐기는 픽업 Spawn 성공 뒤에만 인스턴스를 제거한다. 슬롯 감소 Spawn 실패 시 초과 슬롯에 보존하고 재시도한다.
 - 실제 Input Action, Mapping Context, Data Asset, Runtime BP, Widget, Test Map은 아직 생성하지 않았다. C++ 입력 포인터가 비어 있으면 해당 기능은 실행되지 않는다.
 - 기존 `/Game/TopDown` 기본 맵과 GameMode를 의도적으로 유지하고 있다. Foundation Test Map이 확인되기 전에는 변경하지 않는다.
-- 월드 드롭 이벤트를 처리할 Blueprint/서비스가 없는 상태에서 소모품 최대 슬롯을 줄이면 초과 소모품의 드롭 요청만 발생한다. 실제 플레이 테스트 전 반드시 공용 드롭 처리기를 연결해야 한다.
+- 월드 드롭은 `UARWorldItemDropSubsystem`이 처리한다. 실제 프로젝트에서는 컴포넌트의 Pickup Class를 외형 BP 자식으로 지정해야 한다.
 - 실제 플레이 화면, Paper2D 픽셀 스케일, 애니메이션, UI 디자인은 검증 전이다.
 
 ## 5. 완성도 판단
@@ -175,7 +184,7 @@ AR.Foundation.Stats.ModifierFormula      Success
 현재 Foundation 전체 구현 완성도는 **10단계 중 5단계**로 평가한다.
 
 - C++ 기반 규칙과 핵심 API: 약 6~7단계
-- 테스트·안전성: 약 4단계
+- 테스트·안전성: 약 5~6단계
 - 실제 Blueprint/에셋 연결과 플레이 가능한 프로토타입: 약 2~3단계
 
-즉 핵심 뼈대는 상당 부분 존재하지만, 실제 콘텐츠 에셋을 연결해 한 판을 플레이하고 팀원이 사용할 수 있다고 말하려면 자동화 테스트, 드롭 원자성, Editor 에셋, HUD/인벤토리, Test Map 검증이 더 필요하다.
+즉 핵심 뼈대와 주요 트랜잭션 테스트는 존재하지만, 실제 콘텐츠 에셋을 연결해 한 판을 플레이하고 팀원이 사용할 수 있다고 말하려면 Editor 에셋, HUD/인벤토리, Test Map 검증이 더 필요하다.

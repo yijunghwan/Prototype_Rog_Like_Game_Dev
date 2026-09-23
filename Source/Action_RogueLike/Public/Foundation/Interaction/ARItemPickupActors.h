@@ -38,7 +38,13 @@ public:
 	virtual bool CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const override;
 	virtual FARRequestStatus Interact_Implementation(AARPlayerCharacter* Interactor) override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<UARLoadoutItemDefinition> ItemDefinition;
+	void AssignItemDefinition(const UARLoadoutItemDefinition* Definition);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<const UARLoadoutItemDefinition> ItemDefinition;
+
+protected:
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Pickup", meta=(DisplayName="On Pickup Definition Assigned"))
+	void ReceiveItemDefinitionAssigned();
 };
 
 UCLASS(Blueprintable)
@@ -50,5 +56,11 @@ public:
 	virtual bool CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const override;
 	virtual FARRequestStatus Interact_Implementation(AARPlayerCharacter* Interactor) override;
 
+	void AssignConsumableDefinition(UARConsumableDefinition* Definition);
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<UARConsumableDefinition> ConsumableDefinition;
+
+protected:
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Pickup", meta=(DisplayName="On Pickup Definition Assigned"))
+	void ReceiveConsumableDefinitionAssigned();
 };

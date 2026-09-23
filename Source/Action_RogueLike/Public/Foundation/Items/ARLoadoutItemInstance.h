@@ -10,7 +10,8 @@ class UARLoadoutItemDefinition;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FARItemUIStateChangedSignature, FGuid, ItemInstanceId, const FARItemUIState&, State, bool, bRemoved);
 
-UCLASS(Abstract, Blueprintable, BlueprintType)
+/** Concrete base is valid for data-only weapons/relics that only use Definition stat modifiers. */
+UCLASS(Blueprintable, BlueprintType)
 class ACTION_ROGUELIKE_API UARLoadoutItemInstance : public UObject
 {
 	GENERATED_BODY()

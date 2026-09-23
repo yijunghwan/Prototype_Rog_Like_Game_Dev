@@ -3,12 +3,15 @@
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Core/ARLogChannels.h"
+#include "Foundation/Interaction/ARItemPickupActors.h"
+#include "Foundation/Interaction/ARWorldItemDropSubsystem.h"
 #include "Foundation/Items/ARConsumableDefinition.h"
 #include "Foundation/Items/ARConsumableInstance.h"
 
 UARConsumableComponent::UARConsumableComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	DroppedConsumablePickupClass = AARConsumablePickup::StaticClass();
 }
 
 void UARConsumableComponent::BeginPlay()
@@ -49,7 +52,15 @@ FARConsumableAcquisitionResult UARConsumableComponent::TryAcquireConsumable(UARC
 	{
 		return Result;
 	}
-	const int32 SlotIndex = Slots.IndexOfByPredicate([](const UARConsumableInstance* Instance) { return Instance == nullptr; });
+	int32 SlotIndex = INDEX_NONE;
+	for (int32 Index = 0; Index < FMath::Min(DesiredSlotCount, Slots.Num()); ++Index)
+	{
+		if (!Slots[Index])
+		{
+			SlotIndex = Index;
+			break;
+		}
+	}
 	if (SlotIndex == INDEX_NONE)
 	{
 		Result.Status.Result = EARRequestResult::SlotFull;
@@ -85,7 +96,7 @@ FARRequestStatus UARConsumableComponent::TryUseConsumableSlot(int32 SlotIndex, U
 		Status.Result = EARRequestResult::Blocked;
 		return Status;
 	}
-	if (!Slots.IsValidIndex(SlotIndex) || !Slots[SlotIndex])
+	if (!Slots.IsValidIndex(SlotIndex) || SlotIndex >= DesiredSlotCount || !Slots[SlotIndex])
 	{
 		Status.Result = EARRequestResult::InvalidHandle;
 		return Status;
@@ -114,9 +125,11 @@ FARRequestStatus UARConsumableComponent::DropConsumableSlot(int32 SlotIndex, FAR
 		Status.Result = EARRequestResult::InvalidHandle;
 		return Status;
 	}
-	DropRequest.Definition = Slots[SlotIndex]->GetConsumableDefinition();
-	DropRequest.SuggestedLocation = GetOwner()->GetActorLocation();
-	DropRequest.PreviousSlotIndex = SlotIndex;
+	if (!TrySpawnDropForSlot(SlotIndex, false, DropRequest))
+	{
+		Status.Result = EARRequestResult::Rejected;
+		return Status;
+	}
 	RemoveSlotInstance(SlotIndex, EARConsumableRemovalReason::Dropped);
 	Status.Result = EARRequestResult::Success;
 	BroadcastSlotsChanged();
@@ -131,6 +144,11 @@ void UARConsumableComponent::SetBaseMaxConsumableSlots(int32 NewSlotCount)
 	}
 }
 
+void UARConsumableComponent::RetryPendingOverflowDrops()
+{
+	SynchronizeSlotCount();
+}
+
 TArray<FARConsumableSlotSnapshot> UARConsumableComponent::GetConsumableSlots() const
 {
 	TArray<FARConsumableSlotSnapshot> Result;
@@ -140,6 +158,7 @@ TArray<FARConsumableSlotSnapshot> UARConsumableComponent::GetConsumableSlots() c
 		FARConsumableSlotSnapshot& Snapshot = Result.AddDefaulted_GetRef();
 		Snapshot.SlotIndex = Index;
 		Snapshot.bOccupied = Slots[Index] != nullptr;
+		Snapshot.bOverflowSlot = Index >= DesiredSlotCount;
 		if (Slots[Index])
 		{
 			Snapshot.InstanceId = Slots[Index]->GetInstanceId();
@@ -168,30 +187,39 @@ bool UARConsumableComponent::ValidateDefinition(const UARConsumableDefinition* D
 
 void UARConsumableComponent::SynchronizeSlotCount()
 {
-	const int32 DesiredCount = StatsComponent
+	DesiredSlotCount = StatsComponent
 		? FMath::Max(0, FMath::FloorToInt(StatsComponent->GetFinalStat(EARStatType::MaxConsumableSlots)))
 		: 0;
-	if (DesiredCount == Slots.Num())
+	if (DesiredSlotCount == Slots.Num())
 	{
 		return;
 	}
-	if (DesiredCount < Slots.Num())
+	if (DesiredSlotCount < Slots.Num())
 	{
-		for (int32 Index = Slots.Num() - 1; Index >= DesiredCount; --Index)
+		int32 RequiredStorageCount = DesiredSlotCount;
+		for (int32 Index = Slots.Num() - 1; Index >= DesiredSlotCount; --Index)
 		{
 			if (Slots[Index])
 			{
 				FARConsumableDropRequest DropRequest;
-				DropRequest.Definition = Slots[Index]->GetConsumableDefinition();
-				DropRequest.SuggestedLocation = GetOwner()->GetActorLocation();
-				DropRequest.PreviousSlotIndex = Index;
-				DropRequest.bCausedBySlotReduction = true;
-				RemoveSlotInstance(Index, EARConsumableRemovalReason::SlotReduced);
-				OnConsumableDropRequested.Broadcast(DropRequest);
+				if (TrySpawnDropForSlot(Index, true, DropRequest))
+				{
+					RemoveSlotInstance(Index, EARConsumableRemovalReason::SlotReduced);
+					OnConsumableDropRequested.Broadcast(DropRequest);
+				}
+				else
+				{
+					RequiredStorageCount = FMath::Max(RequiredStorageCount, Index + 1);
+					UE_LOG(LogARItems, Error, TEXT("Consumable overflow drop failed at slot %d. Item retained for retry."), Index);
+				}
 			}
 		}
+		Slots.SetNum(RequiredStorageCount);
 	}
-	Slots.SetNum(DesiredCount);
+	else
+	{
+		Slots.SetNum(DesiredSlotCount);
+	}
 	BroadcastSlotsChanged();
 }
 
@@ -208,6 +236,29 @@ void UARConsumableComponent::RemoveSlotInstance(int32 SlotIndex, EARConsumableRe
 	}
 	Slots[SlotIndex]->UnregisterFromSlot(Reason);
 	Slots[SlotIndex] = nullptr;
+}
+
+bool UARConsumableComponent::TrySpawnDropForSlot(int32 SlotIndex, bool bCausedBySlotReduction, FARConsumableDropRequest& DropRequest)
+{
+	DropRequest = FARConsumableDropRequest();
+	if (!Slots.IsValidIndex(SlotIndex) || !Slots[SlotIndex] || !GetOwner())
+	{
+		return false;
+	}
+	DropRequest.Definition = Slots[SlotIndex]->GetConsumableDefinition();
+	DropRequest.SuggestedLocation = GetOwner()->GetActorLocation() + GetOwner()->GetActorForwardVector() * DropForwardDistance;
+	DropRequest.PreviousSlotIndex = SlotIndex;
+	DropRequest.bCausedBySlotReduction = bCausedBySlotReduction;
+	UARWorldItemDropSubsystem* DropSubsystem = GetWorld() ? GetWorld()->GetSubsystem<UARWorldItemDropSubsystem>() : nullptr;
+	AARConsumablePickup* SpawnedPickup = nullptr;
+	if (!DropSubsystem || !DropSubsystem->TrySpawnConsumablePickup(
+		DropRequest.Definition, DropRequest.SuggestedLocation, DroppedConsumablePickupClass, GetOwner(), SpawnedPickup))
+	{
+		return false;
+	}
+	DropRequest.SpawnedPickup = SpawnedPickup;
+	DropRequest.SuggestedLocation = SpawnedPickup->GetActorLocation();
+	return true;
 }
 
 void UARConsumableComponent::HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue)

@@ -9,6 +9,7 @@
 
 class UTexture2D;
 class UARLoadoutItemDefinition;
+class AARLoadoutItemPickup;
 
 UENUM(BlueprintType)
 enum class EARLoadoutItemKind : uint8
@@ -98,11 +99,47 @@ struct ACTION_ROGUELIKE_API FARRegisteredSkillUIData
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FName SkillId = NAME_None;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag InputTag;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText Description;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> SourceDefinition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 HUDSortOrder = 0;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARResourceCost ResourceCost;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float CooldownRemaining = 0.0f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float CooldownTotal = 0.0f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bReady = true;
+};
+
+/** A localized, UI-safe view of one permanent stat modifier supplied by an item definition. */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARProvidedStatDisplayData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARStatType StatType = EARStatType::AttackPower;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARStatModifierOperation Operation = EARStatModifierOperation::Flat;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float Value = 0.0f;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText StatName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayText;
+};
+
+/** Immutable inventory detail data. Widgets consume this instead of reaching into runtime item objects. */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARLoadoutItemDisplayData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag DefinitionTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag ItemTypeTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARLoadoutItemKind Kind = EARLoadoutItemKind::PassiveRelic;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText ShortDescription;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DetailedDescription;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARProvidedStatDisplayData> ProvidedStats;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARSkillDefinition> Skills;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARItemUIState> UIStates;
 };
 
 USTRUCT(BlueprintType)
@@ -133,6 +170,7 @@ struct ACTION_ROGUELIKE_API FARLoadoutDropRequest
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> Definition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FVector SuggestedLocation = FVector::ZeroVector;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<AARLoadoutItemPickup> SpawnedPickup = nullptr;
 };
 
 USTRUCT(BlueprintType)

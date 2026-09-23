@@ -428,10 +428,10 @@ bool UARCombatSubsystem::TryGetCombatTeam(const AActor* Actor, EARCombatTeam& Ou
 	{
 		return false;
 	}
-	if (Actor->GetClass()->ImplementsInterface(UARCombatTargetInterface::StaticClass()))
+	if (const IARCombatTargetInterface* CombatTarget = Cast<IARCombatTargetInterface>(Actor))
 	{
-		OutTeam = IARCombatTargetInterface::Execute_GetCombatTeam(const_cast<AActor*>(Actor));
-		bOutCanBeTarget = IARCombatTargetInterface::Execute_CanBeCombatTarget(const_cast<AActor*>(Actor));
+		OutTeam = CombatTarget->GetCombatTeam();
+		bOutCanBeTarget = CombatTarget->CanBeCombatTarget();
 		return true;
 	}
 	if (const UARCombatSourceComponent* Source = Actor->FindComponentByClass<UARCombatSourceComponent>())

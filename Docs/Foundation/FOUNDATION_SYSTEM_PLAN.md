@@ -486,9 +486,11 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 ### 탑뷰 카메라
 
-이 프로젝트의 화면 표현은 **64×64 도트 그래픽과 Paper2D**를 기준으로 한다. 따라서 기본 카메라는 원근이 아닌 **정사영(Orthographic) 탑뷰 카메라**를 사용한다. 고정된 탑뷰 회전과 `Ortho Width`를 유지하며, 플레이어를 목표점으로 부드럽게 추적한다. 프로토타입 초기에는 조준 방향 오프셋을 사용하지 않고 플레이어 중심을 유지한다.
+이 프로젝트의 화면 표현은 **32×32 기본 캐릭터·타일 도트 그래픽과 Paper2D**를 기준으로 한다. 무기 궤적과 대형 스킬 이펙트는 더 큰 캔버스를 허용한다. 기본 카메라는 원근이 아닌 **정사영(Orthographic) 탑뷰 카메라**를 사용한다. 고정된 탑뷰 회전과 `Ortho Width`를 유지하며, 플레이어를 목표점으로 부드럽게 추적한다. 프로토타입 초기에는 조준 방향 오프셋을 사용하지 않고 플레이어 중심을 유지한다.
 
 캐릭터·적의 시각 표현은 Paper2D 스프라이트/플립북으로 구성한다. 픽셀 아트가 흐려지거나 화면 이동 중 흔들려 보이지 않도록, 스프라이트 텍스처는 Nearest 필터링을 사용하고 카메라 `Ortho Width`와 목표 해상도는 정수 배율을 유지하도록 별도로 조정한다. 이것은 연출 규칙이 아니라 전체 콘텐츠가 따라야 할 렌더링 기준이다.
+
+월드는 32×32픽셀 TileMap을 방 모듈 단위로 조립한다. 초기 `PixelsPerUnrealUnit=0.5`이므로 타일 한 칸은 64 UU다. 캐릭터는 `XY` 평면에서 실수 좌표로 연속 이동하며 타일에 스냅하지 않는다. `Z`는 높이·표시 계층에 사용한다. 방 크기·문·출입구 연결점은 64 UU 격자 배수로 정렬하고, 개별 타일마다 Actor를 만들지 않는다.
 
 ```text
 플레이어와 카메라 목표점이 가까움
@@ -890,7 +892,7 @@ HUD 위젯은 아이템 종류별로 서로 다르다. 무기의 상태는 무�
           실제 적용 중인 수정치 목록
 ```
 
-무기는 인벤토리에서 우클릭 폐기할 수 없다. 새 무기를 획득할 때만 기존 무기를 즉시 교체·소멸한다. 액티브·패시브 유물은 우클릭으로 확인 메뉴를 열어 폐기를 선택할 수 있다. 확인되면 Player Component가 런타임 인스턴스를 해제하고, 그 Definition을 가진 `BP_LoadoutItemPickup`을 플레이어 근처의 유효한 맵 위치에 생성한다. 이후 다시 획득하면 언제나 새 런타임 인스턴스가 생성되므로 쿨다운·스택·임시 상태는 초기화된다. 실제 장착·폐기 검증과 픽업 생성은 UI가 아니라 Player Component와 월드 획득 시스템이 처리한다.
+무기는 인벤토리에서 우클릭 폐기할 수 없다. 새 무기를 획득할 때만 기존 무기를 즉시 교체·소멸한다. 액티브·패시브 유물은 우클릭으로 확인 메뉴를 열어 폐기를 선택할 수 있다. 확인되면 월드 획득 시스템이 같은 Definition의 `BP_LoadoutItemPickup` 생성을 먼저 확정하고, 성공한 경우에만 Player Component가 런타임 인스턴스를 해제한다. Spawn 실패 시 장착 상태를 그대로 보존한다. 이후 다시 획득하면 언제나 새 런타임 인스턴스가 생성되므로 쿨다운·스택·임시 상태는 초기화된다. 실제 장착·폐기 검증과 픽업 생성은 UI가 아니라 Player Component와 월드 획득 시스템이 처리한다.
 
 LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름·짧은 설명·상세 문단·스킬 설명은 정의 데이터에서 읽고, `제공 스탯`은 DefaultStatModifiers를 사람이 읽을 수 있는 `스탯 이름 / 고정·합연산·곱연산 방식 / 수치` 목록으로 자동 변환해 출력한다. 런타임 인스턴스가 실제 적용 중인 수정치는 별도 목록으로 제공하며, 조건부·고유 효과는 DescriptionSections의 설명문으로 표시한다.
 
@@ -1220,9 +1222,9 @@ DOT 틱이 경직·그로기 피해를 주어야 하면 `FARDamageOverTimeSpec`�
 | `Get Skill Cooldown State` | `RegisteredSkillHandle` | 준비 여부, 남은 시간, 전체 쿨다운, 진행 비율 반환. HUD 표시용. |
 | `Reset Skill Cooldown` | `RegisteredSkillHandle` | 해당 등록 스킬 쿨다운을 즉시 0으로 만들고 성공 여부 반환. |
 | `Modify Skill Cooldown` | `RegisteredSkillHandle`, 변경 시간 | 음수면 남은 쿨다운 감소, 양수면 증가. 변경 후 남은 시간과 성공 여부 반환. |
-| `Get Registered Skill UI Data` | 플레이어 | 등록된 각 스킬의 `RegisteredSkillHandle`, `SkillId`, 소유 Item InstanceId, 이름·아이콘·설명, 입력 태그와 실제 키 표기, 출처, HUD 정렬, 비용, 쿨다운 상태를 배열로 반환. |
+| `Get Registered Skill UI Data` | 플레이어 | 등록된 각 스킬의 `RegisteredSkillHandle`, `SkillId`, 소유 Item InstanceId, 이름·아이콘·설명, 입력 태그, 출처 Definition, HUD 정렬, 비용, 쿨다운 상태를 배열로 반환. 실제 키 표기는 UI가 활성 IMC에서 별도로 해석한다. |
 | `Get Loadout Inventory` | 플레이어 | 현재 무기, 액티브 유물, 패시브 유물 런타임 객체 목록을 UI에 반환. |
-| `Get Loadout Item Display Data` | 런타임 Item Instance | 이미지·이름·설명·자동 생성 제공 스탯·스킬 설명·현재 상태 UI 정보를 UI 전달 구조체로 반환. |
+| `Get Loadout Item Display Data` | 플레이어 Loadout, Item InstanceId | 이미지·이름·설명·자동 생성 제공 스탯·스킬 설명·현재 상태 UI 정보를 복사한 UI 전달 구조체와 Found 여부를 반환. |
 | `Request Discard Loadout Item` | 플레이어, Item InstanceId | 인벤토리 UI에서 선택한 액티브·패시브 유물의 폐기 요청. 성공 시 런타임 객체를 해제하고 플레이어 근처에 같은 Definition의 월드 픽업을 생성한다. 무기 요청은 거부한다. |
 | `Begin Loadout Acquisition` | 플레이어, Item Definition, 획득 출처 | 장착 가능 여부만 검사하고 획득 요청 핸들과 결과를 반환. |
 | `Commit Loadout Acquisition` | 획득 요청 핸들 | 실제 등록을 원자 처리하고 결과·새 Item Instance를 반환. 무기는 기존 장착 무기를 즉시 교체·소멸하며, 액티브 유물 슬롯이 모두 찬 경우에는 Commit할 수 없다. |

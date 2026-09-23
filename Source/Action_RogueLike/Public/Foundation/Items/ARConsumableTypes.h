@@ -5,6 +5,7 @@
 #include "ARConsumableTypes.generated.h"
 
 class UARConsumableDefinition;
+class AARConsumablePickup;
 
 UENUM(BlueprintType)
 enum class EARConsumableRemovalReason : uint8
@@ -25,6 +26,7 @@ struct ACTION_ROGUELIKE_API FARConsumableSlotSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bOccupied = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARConsumableDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bOverflowSlot = false;
 };
 
 USTRUCT(BlueprintType)
@@ -46,4 +48,5 @@ struct ACTION_ROGUELIKE_API FARConsumableDropRequest
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FVector SuggestedLocation = FVector::ZeroVector;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 PreviousSlotIndex = INDEX_NONE;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bCausedBySlotReduction = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<AARConsumablePickup> SpawnedPickup = nullptr;
 };

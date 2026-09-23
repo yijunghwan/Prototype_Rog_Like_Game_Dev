@@ -11,7 +11,7 @@
 
 기존 계획서는 **게임 규칙이 무엇인가**를 정의한다. 이 문서는 그 규칙을 구현할 때 어떤 클래스가 무엇을 소유하고, 블루프린트가 어떤 공개 함수를 호출해야 하는지를 정의한다. 기존 문서의 간단한 `Source/Foundation` 폴더 그림은 방향 설명으로 남기되, 실제 파일 구조는 이 문서를 기준으로 한다.
 
-- Unreal 월드를 사용하되 화면 표현은 **Paper2D, 64×64 도트 그래픽, 정사영(Orthographic) 탑뷰**다.
+- Unreal 월드를 사용하되 화면 표현은 **Paper2D, 32×32 기본 캐릭터·타일 도트 그래픽, 정사영(Orthographic) 탑뷰**다. 무기 궤적·대형 마법·폭발은 32×32 캔버스에 제한하지 않는다.
 - 초기 Foundation은 **싱글플레이 전용**이며 Replication/RPC를 구현하지 않는다.
 - 초기에는 게임 모듈 `Action_RogueLike` 하나 안에서 구현한다. 실제로 분리 필요성이 생기기 전에는 Foundation 플러그인이나 별도 모듈을 만들지 않는다.
 - C++는 최종 판정과 상태를 소유한다. Blueprint는 공격 형태, 히트박스, 투사체, 플립북, VFX/SFX, 개별 조건을 만든다.
@@ -184,7 +184,15 @@ Action_RogueLike/
 | `ArtSource/` | Aseprite/PSD 원본, 생성 직후 PNG, 레퍼런스, 작업 중 시트 | 언리얼이 임포트하지 않는 원본 작업 보관소 |
 | `Content/Game/` | 임포트된 Texture, Paper Sprite, Paper Flipbook, Material, 실제 UI 아이콘 | 언리얼이 참조하고 패키징하는 게임 에셋 |
 
-각 프레임이 64×64이라는 뜻이지, 모든 이미지 파일이 64×64이어야 한다는 뜻은 아니다. 예를 들어 8프레임 걷기 애니메이션은 `512×64` PNG 스프라이트 시트 하나로 저장하고, 언리얼에서 Texture → Paper Sprite들 → Flipbook 순으로 만든다. 같은 캐릭터/무기/유물이 쓰는 시트·스프라이트·플립북은 해당 콘텐츠의 `Art` 폴더 안에 함께 둔다.
+기본 캐릭터 프레임과 월드 타일이 32×32이라는 뜻이지, 모든 이미지 파일이 32×32이어야 한다는 뜻은 아니다. 예를 들어 8프레임 걷기 애니메이션은 `256×32` PNG 스프라이트 시트 하나로 저장하고, 언리얼에서 Texture → Paper Sprite들 → Flipbook 순으로 만든다. 긴 무기, 검 궤적, 폭발, 대형 마법은 별도 Sprite/Flipbook 레이어와 더 큰 캔버스를 허용한다. 같은 캐릭터/무기/유물이 쓰는 시트·스프라이트·플립북은 해당 콘텐츠의 `Art` 폴더 안에 함께 둔다.
+
+초기 픽셀·타일 좌표 규격은 다음으로 고정한다.
+
+- 원본 타일과 기본 캐릭터 프레임은 32×32 픽셀이다.
+- 초기 `PixelsPerUnrealUnit`은 `0.5`로 두므로 32픽셀 타일 한 칸은 `64×64 UU`다.
+- 게임플레이 이동 평면은 `XY`, 높이·표시 계층은 `Z`다. 기본 방향은 `W=+X`, `S=-X`, `D=+Y`, `A=-Y`다.
+- 캐릭터는 타일 한 칸씩 스냅하지 않고 XY 실수 좌표로 연속 이동한다. 타일 좌표가 필요할 때만 `Floor((WorldPosition - MapOrigin) / 64)`로 변환한다.
+- 방은 개별 타일 Actor의 집합이 아니라 Paper TileMap과 단순 충돌을 가진 방 모듈로 제작한다. 방 크기와 출입구 위치는 64 UU 격자 배수에 맞춘다.
 
 전 프로젝트가 함께 쓰는 팔레트, 공용 머티리얼, 공통 충격/피격 FX만 `Content/Game/ArtShared`에 둔다. 재사용 가능성이 막연하다는 이유로 모든 Texture를 Shared에 넣지 않는다.
 
@@ -251,11 +259,11 @@ Item.Type.Weapon / ActiveRelic / PassiveRelic / Consumable
 | `OnCharacterDeath` | 캐릭터 BP가 연출을 구독하는 이벤트 |
 | `GetAimDirection()` | 현재 월드 조준 방향 읽기 |
 
-`IARCombatTargetInterface`를 구현한다. 피해 계산은 구체 클래스 캐스팅 대신 인터페이스와 Component로 대상 유효성을 확인한다.
+`IARCombatTargetInterface`를 네이티브로 구현한다. Blueprint에서 인터페이스를 새로 구현하지 않고 `AARBaseCharacter`의 BP 자식을 사용한다. 피해 계산은 인터페이스와 Component로 대상 유효성을 확인한다.
 
 ### `AARPlayerCharacter`
 
-Player 전용 Component는 `UARStaminaComponent`, `UARManaComponent`, `UARLoadoutComponent`, `UARConsumableComponent`, `UARCameraFollowComponent`다. 고정 배치용 `USpringArmComponent`와 `UCameraComponent`도 이 클래스에 두고 Camera Projection은 Orthographic으로 설정한다. 스프링암은 배치용일 뿐 충돌 보정은 기본 비활성화한다.
+Player 전용 Component는 `UARStaminaComponent`, `UARManaComponent`, `UARLoadoutComponent`, `UARConsumableComponent`, `UARCameraFollowComponent`다. 절대 월드 위치를 사용하는 `CameraAnchor` Scene Component와 `UCameraComponent`를 두고 Camera Projection은 Orthographic으로 설정한다. 카메라 지연·가속은 `UARCameraFollowComponent`가 담당한다.
 
 | 함수 | 책임 |
 |---|---|
@@ -291,8 +299,8 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 
 - 게임플레이 이동 평면은 `XY`, 높이와 표시 우선순위는 `Z`다.
 - Sprite/Flipbook은 정사영 카메라를 향하도록 공통 BP 부모에서 회전을 고정한다.
-- 원본 프레임은 64×64이며 Texture는 Nearest, Mipmap 비활성, UI가 아닌 Sprite용 압축 설정을 사용한다.
-- `PixelsPerUnrealUnit`, 목표 내부 해상도, 기준 `OrthoWidth`는 `PixelScaleProfile` 데이터로 한 곳에서 관리한다. 초기 수치는 Test Map에서 1픽셀 이동 안정성을 검증한 뒤 확정한다.
+- 원본 기본 프레임·타일은 32×32이며 Texture는 Nearest, Mipmap 비활성, UI가 아닌 Sprite용 압축 설정을 사용한다.
+- `PixelsPerUnrealUnit=0.5`, 타일 한 칸 `64 UU`를 초기 기준으로 사용한다. 목표 내부 해상도와 기준 `OrthoWidth`는 `PixelScaleProfile` 데이터로 한 곳에서 관리하고 Test Map에서 1픽셀 이동 안정성을 검증한다.
 - 충돌은 Sprite의 불투명 픽셀을 사용하지 않고 Capsule/Box/Circle 같은 단순 Shape와 Query 전용 Hitbox를 사용한다.
 - 표시 순서는 Z 계층과 Translucency Sort 규약으로 통일하고 개별 Sprite가 임의의 큰 Sort Priority를 사용하지 않는다.
 
@@ -443,7 +451,7 @@ Stun은 Action 취소와 실제 이동 잠금을, Root는 이동/구르기 잠�
 | `BeginLoadoutAcquisition(Definition)` | 획득 가능/교체 필요 여부와 UI용 결과 |
 | `CommitLoadoutAcquisition(Token)` | 검증된 요청을 Instance 생성/장착으로 확정 |
 | `CancelLoadoutAcquisition(Token)` | 선택 UI 취소 |
-| `DiscardLoadoutItem(InstanceId)` | 액티브/패시브 제거 뒤 픽업 생성 요청, 무기는 거부 |
+| `DiscardLoadoutItem(InstanceId)` | 월드 픽업 Spawn이 성공한 뒤에만 액티브/패시브 제거, 무기는 거부 |
 | `GetEquippedWeapon`, `GetActiveRelics`, `GetPassiveRelics` | UI용 읽기 전용 스냅샷 |
 | `HandleSkillInput(InputTag)` | 등록 스킬 후보를 수집해 Action Component의 Skill Group 실행 요청으로 전달 |
 | `RequestWeaponEvolution`, `CommitWeaponEvolution` | 진화 후보/새 무기 Instance 교체 |
@@ -453,6 +461,8 @@ Loadout Component는 등록·소유권과 후보 열거의 유일한 소유자�
 ### `UARConsumableComponent`과 `UARCombatSourceComponent`
 
 `UARConsumableComponent`는 가변 슬롯, 한 칸 하나, 중복 허용, 즉발 사용, 슬롯 감소 시 초과 소모품 드롭을 관리한다. 공개 함수는 `TryAcquireConsumable`, `TryUseConsumableSlot`, `GetConsumableSlots`, `SetMaxConsumableSlots`, `DropConsumableSlot`이다. 소모품은 Action을 만들지 않는다.
+
+수동 폐기와 슬롯 감소는 `UARWorldItemDropSubsystem`을 통해 픽업을 먼저 Spawn한다. Spawn 성공 뒤에만 Runtime Instance를 해제한다. 슬롯 감소 중 Spawn이 실패하면 해당 소모품은 `bOverflowSlot`로 내부 보존하며 `RetryPendingOverflowDrops`로 다시 시도하므로 아이템이 소실되지 않는다.
 
 `UARCombatSourceComponent`는 가시 함정·낙석·장판 같은 World Actor에 Environment 팀, 피해 출처 ID, 로그 이름을 제공한다. 환경은 공격자일 수 있지만 Combat Target은 아니다.
 
@@ -548,7 +558,7 @@ UARLoadoutItemDefinition (추상 UPrimaryDataAsset)
 UARConsumableDefinition (UPrimaryDataAsset)
 ```
 
-Definition의 공통 필드는 Asset Manager가 제공하는 `PrimaryAssetId`, 게임 규칙용 `DefinitionTag`, Item Type Tag, 표시 이름, 짧은/상세 설명, UI 아이콘, 기본 스탯 수정치, Skill Definitions, Runtime Behavior Class, UI State Display Definitions이다. `PrimaryAssetId`는 로드·저장, `DefinitionTag`는 규칙·검색, `FText` 이름은 표시 전용으로 역할을 분리한다. Weapon Definition에만 진화 그룹/단계/다음 후보 정보를 둔다. 사용하지 않는 빈 필드는 공통 부모에 넣지 않는다. Project Asset Manager 설정에 Item/Status Primary Asset Type과 스캔 경로를 등록한다.
+Definition의 공통 필드는 Asset Manager가 제공하는 `PrimaryAssetId`, 게임 규칙용 `DefinitionTag`, Item Type Tag, 표시 이름, 짧은/상세 설명, UI 아이콘, 기본 스탯 수정치, Skill Definitions, Runtime Behavior Class, UI State Display Definitions이다. `PrimaryAssetId`는 로드·저장, `DefinitionTag`는 규칙·검색, `FText` 이름은 표시 전용으로 역할을 분리한다. Weapon Definition에만 진화 그룹/단계/다음 후보 정보를 둔다. 사용하지 않는 빈 필드는 공통 부모에 넣지 않는다. Project Asset Manager에는 `ARLoadoutItem`, `ARConsumable`, `ARStatusEffect` 타입과 `/Game/Game/...` 스캔 경로가 등록되어 있다.
 
 ### Runtime Instance 계층
 

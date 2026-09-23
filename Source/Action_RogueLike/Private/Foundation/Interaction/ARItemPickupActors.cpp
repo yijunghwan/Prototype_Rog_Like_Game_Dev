@@ -55,6 +55,12 @@ bool AARLoadoutItemPickup::CanInteract_Implementation(AARPlayerCharacter* Intera
 	return true;
 }
 
+void AARLoadoutItemPickup::AssignItemDefinition(const UARLoadoutItemDefinition* Definition)
+{
+	ItemDefinition = Definition;
+	ReceiveItemDefinitionAssigned();
+}
+
 FARRequestStatus AARLoadoutItemPickup::Interact_Implementation(AARPlayerCharacter* Interactor)
 {
 	FARRequestStatus Status;
@@ -83,6 +89,12 @@ bool AARConsumablePickup::CanInteract_Implementation(AARPlayerCharacter* Interac
 		return false;
 	}
 	return true;
+}
+
+void AARConsumablePickup::AssignConsumableDefinition(UARConsumableDefinition* Definition)
+{
+	ConsumableDefinition = Definition;
+	ReceiveConsumableDefinitionAssigned();
 }
 
 FARRequestStatus AARConsumablePickup::Interact_Implementation(AARPlayerCharacter* Interactor)

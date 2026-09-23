@@ -9,6 +9,7 @@ class AARPlayerCharacter;
 class UARConsumableDefinition;
 class UARConsumableInstance;
 class UARStatsComponent;
+class AARConsumablePickup;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARConsumableSlotsChangedSignature, const TArray<FARConsumableSlotSnapshot>&, Slots);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARConsumableDropRequestedSignature, const FARConsumableDropRequest&, DropRequest);
@@ -36,24 +37,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Consumable")
 	void SetBaseMaxConsumableSlots(int32 NewSlotCount);
 
+	UFUNCTION(BlueprintCallable, Category="AR|Consumable")
+	void RetryPendingOverflowDrops();
+
 	UFUNCTION(BlueprintPure, Category="AR|Consumable")
 	TArray<FARConsumableSlotSnapshot> GetConsumableSlots() const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Consumable")
-	int32 GetMaxConsumableSlots() const { return Slots.Num(); }
+	int32 GetMaxConsumableSlots() const { return DesiredSlotCount; }
 
 	UPROPERTY(BlueprintAssignable, Category="AR|Consumable") FARConsumableSlotsChangedSignature OnConsumableSlotsChanged;
 	UPROPERTY(BlueprintAssignable, Category="AR|Consumable") FARConsumableDropRequestedSignature OnConsumableDropRequested;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Consumable|Drop") TSubclassOf<AARConsumablePickup> DroppedConsumablePickupClass;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Consumable|Drop", meta=(ClampMin="0.0")) float DropForwardDistance = 96.0f;
 
 private:
 	bool ValidateDefinition(const UARConsumableDefinition* Definition, FARRequestStatus& Status) const;
 	void SynchronizeSlotCount();
 	void BroadcastSlotsChanged();
 	void RemoveSlotInstance(int32 SlotIndex, EARConsumableRemovalReason Reason);
+	bool TrySpawnDropForSlot(int32 SlotIndex, bool bCausedBySlotReduction, FARConsumableDropRequest& DropRequest);
 
 	UFUNCTION() void HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue);
 
 	UPROPERTY(Transient) TObjectPtr<AARPlayerCharacter> PlayerOwner;
 	UPROPERTY(Transient) TObjectPtr<UARStatsComponent> StatsComponent;
 	UPROPERTY(Transient) TArray<TObjectPtr<UARConsumableInstance>> Slots;
+	int32 DesiredSlotCount = 0;
 };

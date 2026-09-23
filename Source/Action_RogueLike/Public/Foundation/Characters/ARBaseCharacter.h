@@ -27,8 +27,8 @@ public:
 	AARBaseCharacter();
 
 	virtual void BeginPlay() override;
-	virtual EARCombatTeam GetCombatTeam_Implementation() const override { return CombatTeam; }
-	virtual bool CanBeCombatTarget_Implementation() const override;
+	virtual EARCombatTeam GetCombatTeam() const override { return CombatTeam; }
+	virtual bool CanBeCombatTarget() const override;
 
 	UFUNCTION(BlueprintPure, Category="AR|Character") FVector GetAimDirection() const { return AimDirection; }
 	UFUNCTION(BlueprintCallable, Category="AR|Character") void SetAimDirection(FVector NewAimDirection);
@@ -67,4 +67,3 @@ private:
 	UPROPERTY(Transient) FARMovementLockHandle DeathMovementLock;
 	EARMovementLockType CurrentStatusLockType = EARMovementLockType::BasicMovementOnly;
 };
-

@@ -42,7 +42,7 @@ void AARBaseCharacter::BeginPlay()
 	StatusEffectComponent->OnStatusRemoved.AddDynamic(this, &AARBaseCharacter::HandleStatusRemoved);
 }
 
-bool AARBaseCharacter::CanBeCombatTarget_Implementation() const
+bool AARBaseCharacter::CanBeCombatTarget() const
 {
 	return HealthComponent && !HealthComponent->IsDead();
 }
@@ -138,4 +138,3 @@ void AARBaseCharacter::RefreshStatusMovementLock()
 		MovementControlComponent->StopMovementImmediately();
 	}
 }
-

@@ -8,10 +8,50 @@
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Items/ARLoadoutItemDefinition.h"
 #include "Foundation/Items/ARLoadoutItemInstance.h"
+#include "Foundation/Interaction/ARItemPickupActors.h"
+#include "Foundation/Interaction/ARWorldItemDropSubsystem.h"
+
+#define LOCTEXT_NAMESPACE "ARLoadoutDisplay"
+
+namespace
+{
+	FARProvidedStatDisplayData MakeProvidedStatDisplayData(const FARStatModifierSpec& Spec)
+	{
+		FARProvidedStatDisplayData Entry;
+		Entry.StatType = Spec.StatType;
+		Entry.Operation = Spec.Operation;
+		Entry.Value = Spec.Value;
+		if (const UEnum* StatEnum = StaticEnum<EARStatType>())
+		{
+			Entry.StatName = StatEnum->GetDisplayNameTextByValue(static_cast<int64>(Spec.StatType));
+		}
+		const FText Number = FText::AsNumber(Spec.Value);
+		switch (Spec.Operation)
+		{
+		case EARStatModifierOperation::Flat:
+			Entry.DisplayText = FText::Format(LOCTEXT("FlatStat", "{0}: {1}"), Entry.StatName, Number);
+			break;
+		case EARStatModifierOperation::AdditivePercent:
+			Entry.DisplayText = FText::Format(LOCTEXT("AdditiveStat", "{0}: {1}% (additive)"), Entry.StatName, Number);
+			break;
+		case EARStatModifierOperation::Multiplicative:
+			Entry.DisplayText = FText::Format(LOCTEXT("MultiplicativeStat", "{0}: x{1}"), Entry.StatName, Number);
+			break;
+		case EARStatModifierOperation::IndependentDamageReduction:
+			Entry.DisplayText = FText::Format(LOCTEXT("IndependentReductionStat", "{0}: {1}% (independent)"), Entry.StatName, Number);
+			break;
+		default:
+			Entry.DisplayText = FText::Format(LOCTEXT("UnknownStat", "{0}: {1}"), Entry.StatName, Number);
+			break;
+		}
+		return Entry;
+	}
+}
 
 UARLoadoutComponent::UARLoadoutComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	DroppedItemPickupClass = AARLoadoutItemPickup::StaticClass();
 }
 
 void UARLoadoutComponent::BeginPlay()
@@ -154,24 +194,42 @@ bool UARLoadoutComponent::DiscardLoadoutItem(FGuid InstanceId, FARLoadoutDropReq
 		Status.Result = EARRequestResult::Rejected;
 		return false;
 	}
-	auto RemoveFromArray = [this, InstanceId, &DropRequest](TArray<TObjectPtr<UARLoadoutItemInstance>>& Items) -> bool
+	TArray<TObjectPtr<UARLoadoutItemInstance>>* SourceArray = nullptr;
+	int32 ItemIndex = ActiveRelics.IndexOfByPredicate([InstanceId](const UARLoadoutItemInstance* Instance)
 	{
-		const int32 Index = Items.IndexOfByPredicate([InstanceId](const UARLoadoutItemInstance* Instance)
+		return Instance && Instance->GetInstanceId() == InstanceId;
+	});
+	if (ItemIndex != INDEX_NONE)
+	{
+		SourceArray = &ActiveRelics;
+	}
+	else
+	{
+		ItemIndex = PassiveRelics.IndexOfByPredicate([InstanceId](const UARLoadoutItemInstance* Instance)
 		{
 			return Instance && Instance->GetInstanceId() == InstanceId;
 		});
-		if (Index == INDEX_NONE) return false;
-		UARLoadoutItemInstance* Instance = Items[Index];
-		DropRequest.Definition = Instance->GetItemDefinition();
-		DropRequest.SuggestedLocation = GetOwner()->GetActorLocation();
-		Items.RemoveAt(Index);
-		UnregisterAndReleaseInstance(Instance, EARItemRemovalReason::Discarded);
-		return true;
-	};
-	if (!RemoveFromArray(ActiveRelics) && !RemoveFromArray(PassiveRelics))
+		if (ItemIndex != INDEX_NONE) SourceArray = &PassiveRelics;
+	}
+	if (!SourceArray)
 	{
 		return false;
 	}
+	UARLoadoutItemInstance* Instance = (*SourceArray)[ItemIndex];
+	DropRequest.Definition = Instance->GetItemDefinition();
+	DropRequest.SuggestedLocation = GetOwner()->GetActorLocation() + GetOwner()->GetActorForwardVector() * DropForwardDistance;
+	UARWorldItemDropSubsystem* DropSubsystem = GetWorld() ? GetWorld()->GetSubsystem<UARWorldItemDropSubsystem>() : nullptr;
+	AARLoadoutItemPickup* SpawnedPickup = nullptr;
+	if (!DropSubsystem || !DropSubsystem->TrySpawnLoadoutPickup(
+		DropRequest.Definition, DropRequest.SuggestedLocation, DroppedItemPickupClass, GetOwner(), SpawnedPickup))
+	{
+		Status.Result = EARRequestResult::Rejected;
+		return false;
+	}
+	DropRequest.SpawnedPickup = SpawnedPickup;
+	DropRequest.SuggestedLocation = SpawnedPickup->GetActorLocation();
+	SourceArray->RemoveAt(ItemIndex);
+	UnregisterAndReleaseInstance(Instance, EARItemRemovalReason::Discarded);
 	NotifyLoadoutChanged();
 	Status.Result = EARRequestResult::Success;
 	return true;
@@ -188,7 +246,7 @@ FARRequestStatus UARLoadoutComponent::HandleSkillInput(FGameplayTag InputTag, FA
 	}
 	for (const TPair<FGuid, FARActiveSkillGroupRecord>& Pair : ActiveSkillGroups)
 	{
-		if (Pair.Value.InputTag != InputTag)
+		if (Pair.Value.InputTag == InputTag)
 		{
 			Status.Result = EARRequestResult::Blocked;
 			return Status;
@@ -292,9 +350,8 @@ FARRequestStatus UARLoadoutComponent::HandleSkillInput(FGameplayTag InputTag, FA
 	}
 
 	GroupHandle.Id = FGuid::NewGuid();
-	FARActiveSkillGroupRecord& Group = ActiveSkillGroups.Add(GroupHandle.Id);
-	Group.InputTag = InputTag;
-	const float CooldownReduction = StatsComponent ? StatsComponent->GetFinalStat(EARStatType::CooldownReduction) : 0.0f;
+	TArray<FARActionHandle> StartedHandles;
+	StartedHandles.Reserve(Accepted.Num());
 	for (FARRegisteredSkillRecord* Skill : Accepted)
 	{
 		FARActionRequest ActionRequest = Skill->Definition.ActionRequest;
@@ -304,19 +361,30 @@ FARRequestStatus UARLoadoutComponent::HandleSkillInput(FGameplayTag InputTag, FA
 		const FARActionHandle ActionHandle = ActionComponent->TryStartAction(ActionRequest, ActionStatus);
 		if (!ActionHandle.IsValid())
 		{
-			UE_LOG(LogARAction, Error, TEXT("Skill transaction precheck passed but action commit failed for %s."), *Skill->Definition.SkillId.ToString());
-			continue;
+			for (const FARActionHandle& StartedHandle : StartedHandles)
+			{
+				ActionComponent->CancelAction(StartedHandle, EARActionCancelReason::Manual);
+			}
+			if (ReservedMana > 0.0f) ManaComponent->Restore(ReservedMana, CostSource);
+			if (ReservedStamina > 0.0f) StaminaComponent->Restore(ReservedStamina, CostSource);
+			UE_LOG(LogARAction, Error, TEXT("Skill transaction rolled back because action commit failed for %s."), *Skill->Definition.SkillId.ToString());
+			GroupHandle = FARSkillGroupHandle();
+			Status.Result = EARRequestResult::Rejected;
+			return Status;
 		}
-		Group.ActionHandles.Add(ActionHandle);
+		StartedHandles.Add(ActionHandle);
+	}
+
+	FARActiveSkillGroupRecord& Group = ActiveSkillGroups.Add(GroupHandle.Id);
+	Group.InputTag = InputTag;
+	Group.ActionHandles = StartedHandles;
+	const float CooldownReduction = StatsComponent ? StatsComponent->GetFinalStat(EARStatType::CooldownReduction) : 0.0f;
+	for (int32 Index = 0; Index < Accepted.Num(); ++Index)
+	{
+		FARRegisteredSkillRecord* Skill = Accepted[Index];
 		Skill->CooldownTotal = FMath::Max(Skill->Definition.MinimumCooldown, Skill->Definition.BaseCooldown * (1.0f - FMath::Clamp(CooldownReduction, 0.0f, 100.0f) / 100.0f));
 		Skill->CooldownEndsAt = GetNow() + Skill->CooldownTotal;
-		Skill->Instance->ExecuteItemSkill(Skill->Definition.SkillId, ActionHandle);
-	}
-	if (Group.ActionHandles.IsEmpty())
-	{
-		ActiveSkillGroups.Remove(GroupHandle.Id);
-		Status.Result = EARRequestResult::Rejected;
-		return Status;
+		Skill->Instance->ExecuteItemSkill(Skill->Definition.SkillId, StartedHandles[Index]);
 	}
 	OnRegisteredSkillsChanged.Broadcast();
 	Status.Result = EARRequestResult::Success;
@@ -335,12 +403,23 @@ TArray<FARRegisteredSkillUIData> UARLoadoutComponent::GetRegisteredSkillUIData()
 		UI.SkillId = Skill.Definition.SkillId;
 		UI.InputTag = Skill.Definition.InputTag;
 		UI.DisplayName = Skill.Definition.SkillDisplayName;
+		UI.Description = Skill.Definition.SkillDescription;
 		UI.Icon = Skill.Definition.SkillIcon;
+		UI.SourceDefinition = Skill.Instance->GetItemDefinition();
+		UI.HUDSortOrder = Skill.Definition.HUDSortOrder;
 		UI.ResourceCost = Skill.Definition.ResourceCost;
 		UI.CooldownTotal = Skill.CooldownTotal;
 		UI.CooldownRemaining = FMath::Max(0.0f, static_cast<float>(Skill.CooldownEndsAt - GetNow()));
 		UI.bReady = UI.CooldownRemaining <= 0.0f;
 	}
+	Result.Sort([](const FARRegisteredSkillUIData& A, const FARRegisteredSkillUIData& B)
+	{
+		if (A.HUDSortOrder != B.HUDSortOrder)
+		{
+			return A.HUDSortOrder < B.HUDSortOrder;
+		}
+		return A.SkillId.LexicalLess(B.SkillId);
+	});
 	return Result;
 }
 
@@ -390,6 +469,35 @@ TArray<FARLoadoutItemSnapshot> UARLoadoutComponent::GetLoadoutInventory() const
 	for (const UARLoadoutItemInstance* Item : ActiveRelics) Result.Add(MakeSnapshot(Item));
 	for (const UARLoadoutItemInstance* Item : PassiveRelics) Result.Add(MakeSnapshot(Item));
 	return Result;
+}
+
+bool UARLoadoutComponent::GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadoutItemDisplayData& DisplayData) const
+{
+	DisplayData = FARLoadoutItemDisplayData();
+	const UARLoadoutItemInstance* Instance = FindItemInstance(InstanceId);
+	const UARLoadoutItemDefinition* Definition = Instance ? Instance->GetItemDefinition() : nullptr;
+	if (!Instance || !Definition)
+	{
+		return false;
+	}
+
+	DisplayData.InstanceId = Instance->GetInstanceId();
+	DisplayData.Definition = Definition;
+	DisplayData.DefinitionTag = Definition->DefinitionTag;
+	DisplayData.ItemTypeTag = Definition->ItemTypeTag;
+	DisplayData.Kind = Definition->GetItemKind();
+	DisplayData.DisplayName = Definition->DisplayName;
+	DisplayData.ShortDescription = Definition->ShortDescription;
+	DisplayData.DetailedDescription = Definition->DetailedDescription;
+	DisplayData.Icon = Definition->Icon;
+	DisplayData.Skills = Definition->SkillDefinitions;
+	DisplayData.UIStates = Instance->GetItemUIStates();
+	DisplayData.ProvidedStats.Reserve(Definition->DefaultStatModifiers.Num());
+	for (const FARStatModifierSpec& Spec : Definition->DefaultStatModifiers)
+	{
+		DisplayData.ProvidedStats.Add(MakeProvidedStatDisplayData(Spec));
+	}
+	return true;
 }
 
 FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
@@ -528,6 +636,29 @@ const FARRegisteredSkillRecord* UARLoadoutComponent::FindSkill(FARRegisteredSkil
 	return RegisteredSkills.FindByPredicate([&Handle](const FARRegisteredSkillRecord& Skill) { return Skill.Handle == Handle; });
 }
 
+const UARLoadoutItemInstance* UARLoadoutComponent::FindItemInstance(FGuid InstanceId) const
+{
+	if (EquippedWeapon && EquippedWeapon->GetInstanceId() == InstanceId)
+	{
+		return EquippedWeapon;
+	}
+	if (const TObjectPtr<UARLoadoutItemInstance>* Found = ActiveRelics.FindByPredicate([InstanceId](const UARLoadoutItemInstance* Instance)
+	{
+		return Instance && Instance->GetInstanceId() == InstanceId;
+	}))
+	{
+		return Found->Get();
+	}
+	if (const TObjectPtr<UARLoadoutItemInstance>* Found = PassiveRelics.FindByPredicate([InstanceId](const UARLoadoutItemInstance* Instance)
+	{
+		return Instance && Instance->GetInstanceId() == InstanceId;
+	}))
+	{
+		return Found->Get();
+	}
+	return nullptr;
+}
+
 FARLoadoutItemSnapshot UARLoadoutComponent::MakeSnapshot(const UARLoadoutItemInstance* Instance) const
 {
 	FARLoadoutItemSnapshot Snapshot;
@@ -544,8 +675,8 @@ FARLoadoutItemSnapshot UARLoadoutComponent::MakeSnapshot(const UARLoadoutItemIns
 void UARLoadoutComponent::NotifyLoadoutChanged()
 {
 	++LoadoutRevision;
-	PendingAcquisitions.Reset();
-	PendingEvolutions.Reset();
+	// Keep outstanding tokens until they are committed or explicitly cancelled.
+	// Their captured revision then lets the caller distinguish StaleRequest from an invalid handle.
 	OnLoadoutChanged.Broadcast(LoadoutRevision);
 }
 
@@ -579,3 +710,5 @@ void UARLoadoutComponent::RemoveActionFromSkillGroups(FARActionHandle Handle)
 	}
 	for (const FGuid& GroupId : EmptyGroups) ActiveSkillGroups.Remove(GroupId);
 }
+
+#undef LOCTEXT_NAMESPACE

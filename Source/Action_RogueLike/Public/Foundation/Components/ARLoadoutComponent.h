@@ -13,6 +13,7 @@ class UARStatsComponent;
 class UARLoadoutItemDefinition;
 class UARLoadoutItemInstance;
 class UARWeaponDefinition;
+class AARLoadoutItemPickup;
 
 USTRUCT()
 struct FARRegisteredSkillRecord
@@ -96,6 +97,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="AR|Loadout")
 	TArray<FARLoadoutItemSnapshot> GetLoadoutInventory() const;
 
+	UFUNCTION(BlueprintPure, Category="AR|Loadout|UI")
+	bool GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadoutItemDisplayData& DisplayData) const;
+
 	UFUNCTION(BlueprintPure, Category="AR|Loadout")
 	UARLoadoutItemInstance* GetEquippedWeapon() const { return EquippedWeapon; }
 
@@ -116,6 +120,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Loadout") FARLoadoutItemUIStateChangedSignature OnItemUIStateChanged;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Loadout", meta=(ClampMin="1")) int32 MaxActiveRelics = 2;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Loadout|Drop") TSubclassOf<AARLoadoutItemPickup> DroppedItemPickupClass;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Loadout|Drop", meta=(ClampMin="0.0")) float DropForwardDistance = 96.0f;
 
 private:
 	bool ValidateDefinition(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status) const;
@@ -125,6 +131,7 @@ private:
 	void UnregisterSkills(UARLoadoutItemInstance* Instance);
 	FARRegisteredSkillRecord* FindSkill(FARRegisteredSkillHandle Handle);
 	const FARRegisteredSkillRecord* FindSkill(FARRegisteredSkillHandle Handle) const;
+	const UARLoadoutItemInstance* FindItemInstance(FGuid InstanceId) const;
 	FARLoadoutItemSnapshot MakeSnapshot(const UARLoadoutItemInstance* Instance) const;
 	void NotifyLoadoutChanged();
 	double GetNow() const;

@@ -333,13 +333,13 @@ Action 이벤트는 `On Action Ended(Handle)`, `On Action Cancelled(Handle, Reas
 | `Begin Loadout Acquisition` | Player, Item Definition | Result, Acquisition Token, 교체 필요 여부 | 슬롯/Definition 검사 |
 | `Commit Loadout Acquisition` | Player, Token | Success, Item Instance, Failure Reason | 실제 장착 |
 | `Cancel Loadout Acquisition` | Player, Token | Success | 선택 취소 |
-| `Discard Loadout Item` | Player, Item Instance ID | Success, Spawn Pickup Request | 액티브/패시브만 버림 |
+| `Discard Loadout Item` | Player, Item Instance ID | Success, Spawned Pickup | 월드 픽업 생성 성공 뒤 액티브/패시브 제거 |
 | `Request Weapon Evolution` | Player | Evolution Result, Candidate Definitions | 다음 단계 확인 |
 | `Commit Weapon Evolution` | Player, Evolution Token, Candidate Primary Asset ID | Success, New Weapon Instance | Token 재검증 후 기존 무기 제거 및 새 Instance 등록 |
 | `Try Acquire Consumable` | Player, Consumable Definition | Success, Slot Index, Failure Reason | 빈 슬롯에 새 Instance |
 | `Try Use Consumable Slot` | Player, Slot Index | Success, Failure Reason | 즉발 실행 후 성공 시 슬롯 비움 |
 | `Get Consumable Slots` | Player | Slot Snapshot Array | UI 표시 |
-| `Drop Consumable Slot` | Player, Slot Index | Success, Spawn Pickup Request | 선택 소모품 월드 드롭 |
+| `Drop Consumable Slot` | Player, Slot Index | Success, Spawned Pickup | 픽업 생성 성공 뒤 선택 소모품 제거 |
 
 무기는 인벤토리에서 직접 버리는 노드가 없다. 새 무기 획득 또는 진화만 무기 교체를 만든다.
 
@@ -353,6 +353,8 @@ Action 이벤트는 `On Action Ended(Handle)`, `On Action Cancelled(Handle, Reas
 | `Modify Skill Cooldown` | Registered Skill Handle, Delta Seconds | Success, New Remaining | 음수 감소, 양수 증가 |
 | `Get Loadout Inventory` | Player | 무기/액티브/패시브 Snapshot | Runtime UObject를 직접 수정하지 않는 UI 데이터 반환 |
 | `Get Loadout Item Display Data` | Item Instance ID | Display Data, Found | 아이콘·설명·자동 생성 스탯·스킬·UI 상태 반환 |
+
+`Get Loadout Item Display Data`는 `UARLoadoutComponent`에서 호출한다. 반환된 `ProvidedStats[].DisplayText`는 즉시 목록에 표시할 수 있고, 커스텀 디자인이 필요하면 함께 반환되는 Stat Type·Operation·Value로 Widget에서 다시 표현한다.
 
 `SkillId`는 한 Definition 내부의 의미 식별자이고 실제 등록 스킬은 `FARRegisteredSkillHandle`로 구분한다. 쿨다운 노드는 Owner+SkillId만으로 대상을 찾지 않는다.
 

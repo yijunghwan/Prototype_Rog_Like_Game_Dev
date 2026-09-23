@@ -8,7 +8,8 @@
 class AARPlayerCharacter;
 class UARConsumableDefinition;
 
-UCLASS(Abstract, Blueprintable, BlueprintType)
+/** Concrete base is useful for tests; gameplay consumables normally provide a Blueprint subclass with an effect. */
+UCLASS(Blueprintable, BlueprintType)
 class ACTION_ROGUELIKE_API UARConsumableInstance : public UObject
 {
 	GENERATED_BODY()
