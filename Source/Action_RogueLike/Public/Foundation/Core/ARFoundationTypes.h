@@ -106,7 +106,9 @@ enum class EARResourceType : uint8
 	Shield,
 	Stamina,
 	Mana,
-	Groggy
+	Groggy,
+	/** Used by affordability nodes when no resource is missing. */
+	None
 };
 
 UENUM(BlueprintType)

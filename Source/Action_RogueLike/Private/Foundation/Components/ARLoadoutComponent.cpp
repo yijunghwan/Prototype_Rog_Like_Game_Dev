@@ -473,15 +473,26 @@ TArray<FARLoadoutItemSnapshot> UARLoadoutComponent::GetLoadoutInventory() const
 
 bool UARLoadoutComponent::GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadoutItemDisplayData& DisplayData) const
 {
-	DisplayData = FARLoadoutItemDisplayData();
 	const UARLoadoutItemInstance* Instance = FindItemInstance(InstanceId);
 	const UARLoadoutItemDefinition* Definition = Instance ? Instance->GetItemDefinition() : nullptr;
-	if (!Instance || !Definition)
+	if (!Instance || !GetLoadoutDefinitionDisplayData(Definition, DisplayData))
 	{
+		DisplayData = FARLoadoutItemDisplayData();
 		return false;
 	}
 
 	DisplayData.InstanceId = Instance->GetInstanceId();
+	DisplayData.UIStates = Instance->GetItemUIStates();
+	return true;
+}
+
+bool UARLoadoutComponent::GetLoadoutDefinitionDisplayData(const UARLoadoutItemDefinition* Definition, FARLoadoutItemDisplayData& DisplayData) const
+{
+	DisplayData = FARLoadoutItemDisplayData();
+	if (!Definition)
+	{
+		return false;
+	}
 	DisplayData.Definition = Definition;
 	DisplayData.DefinitionTag = Definition->DefinitionTag;
 	DisplayData.ItemTypeTag = Definition->ItemTypeTag;
@@ -491,7 +502,6 @@ bool UARLoadoutComponent::GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadout
 	DisplayData.DetailedDescription = Definition->DetailedDescription;
 	DisplayData.Icon = Definition->Icon;
 	DisplayData.Skills = Definition->SkillDefinitions;
-	DisplayData.UIStates = Instance->GetItemUIStates();
 	DisplayData.ProvidedStats.Reserve(Definition->DefaultStatModifiers.Num());
 	for (const FARStatModifierSpec& Spec : Definition->DefaultStatModifiers)
 	{

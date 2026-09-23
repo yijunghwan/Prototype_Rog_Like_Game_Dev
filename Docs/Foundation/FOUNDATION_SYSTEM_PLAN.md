@@ -1225,6 +1225,7 @@ DOT 틱이 경직·그로기 피해를 주어야 하면 `FARDamageOverTimeSpec`�
 | `Get Registered Skill UI Data` | 플레이어 | 등록된 각 스킬의 `RegisteredSkillHandle`, `SkillId`, 소유 Item InstanceId, 이름·아이콘·설명, 입력 태그, 출처 Definition, HUD 정렬, 비용, 쿨다운 상태를 배열로 반환. 실제 키 표기는 UI가 활성 IMC에서 별도로 해석한다. |
 | `Get Loadout Inventory` | 플레이어 | 현재 무기, 액티브 유물, 패시브 유물 런타임 객체 목록을 UI에 반환. |
 | `Get Loadout Item Display Data` | 플레이어 Loadout, Item InstanceId | 이미지·이름·설명·자동 생성 제공 스탯·스킬 설명·현재 상태 UI 정보를 복사한 UI 전달 구조체와 Found 여부를 반환. |
+| `Get Loadout Definition Display Data` | 플레이어 Loadout, Item Definition | 아직 획득하지 않은 상점 상품·진화 후보의 이미지·이름·설명·자동 생성 제공 스탯·스킬 정보를 같은 UI 전달 구조체로 반환. InstanceId와 런타임 UI 상태는 비어 있다. |
 | `Request Discard Loadout Item` | 플레이어, Item InstanceId | 인벤토리 UI에서 선택한 액티브·패시브 유물의 폐기 요청. 성공 시 런타임 객체를 해제하고 플레이어 근처에 같은 Definition의 월드 픽업을 생성한다. 무기 요청은 거부한다. |
 | `Begin Loadout Acquisition` | 플레이어, Item Definition, 획득 출처 | 장착 가능 여부만 검사하고 획득 요청 핸들과 결과를 반환. |
 | `Commit Loadout Acquisition` | 획득 요청 핸들 | 실제 등록을 원자 처리하고 결과·새 Item Instance를 반환. 무기는 기존 장착 무기를 즉시 교체·소멸하며, 액티브 유물 슬롯이 모두 찬 경우에는 Commit할 수 없다. |
@@ -1257,8 +1258,9 @@ UI에는 조회 노드보다 변경 이벤트를 제공한다.
 | `OnLoadoutInventoryChanged` | 인벤토리 목록과 상세 패널 |
 | `On Item UI State Changed` | 특정 Item Instance의 스택·충전량·전용 자원 표시 갱신 |
 | `OnLoadoutItemStateChanged` | 선택 객체의 실제 적용 스탯 수정치 및 기타 인벤토리 상세 갱신 |
+| `On HUD Snapshot Changed` | 체력·보호막·MP·스태미나·조준·무기·액티브 유물·스킬·소모품을 묶은 통합 HUD Snapshot |
 
-HUD 위젯은 이 이벤트를 구독해 필요한 때만 갱신한다. 표시용 초기값을 읽는 `Get Health`, `Get Stamina` 같은 단순 노드는 별도로 제공한다.
+HUD 위젯은 생성 시 `Get HUD Snapshot`을 한 번 호출하고 이후 `On HUD Snapshot Changed`를 구독해 필요한 때만 갱신한다. 세부 시스템별 이벤트는 특수 연출이나 부분 갱신이 필요할 때 선택적으로 사용한다. 쿨다운 원형 표시는 Snapshot의 시작 상태를 기준으로 Widget이 표시 시간만 진행하며, 매 Tick마다 Loadout 내부를 순회하지 않는다.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **기록일:** 2026-09-23  
 **프로젝트:** Unreal Engine 5.8 / Paper2D / 32×32 기본 캐릭터·타일 기반 탑뷰 액션 로그라이크
-**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 15/15 성공
+**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 19/19 성공
 
 이 문서는 다음 작업에서 “Foundation 구현 이어서 진행해줘”라고 요청했을 때 바로 이어가기 위한 현재 상태 기록이다. 방향 문서는 아래 세 문서를 기준으로 유지한다.
 
@@ -35,6 +35,9 @@
 - `UARManaComponent`
   - 소비, 회복, 초당 회복
 - 회복·소비·보호막 Blueprint 함수 라이브러리
+  - MP+스태미나 동시 비용은 선검사 후 원자적으로 소비
+  - 첫 자원 소비 직후 콜백으로 두 번째 자원이 부족해진 예외에도 이미 소비한 MP를 복구
+  - 성공 시 `MissingResource=None`을 명시적으로 반환
 
 ### 피해·지속 피해·경직·상태이상
 
@@ -113,10 +116,15 @@
   - UI가 열려도 월드 시간은 유지하고 플레이어 게임 입력만 차단
   - Controller의 Game/UI 입력 모드 전환
   - 사망 시 열린 화면과 Loadout 대기 요청 정리
+  - 체력·보호막·MP·스태미나·조준·무기·액티브 유물·스킬·소모품을 묶은 `FARPlayerHUDSnapshot`
+  - 관련 Component 변경 이벤트를 통합한 `OnHUDSnapshotChanged` 제공
 - 인벤토리·뒤로가기·상호작용·소모품 슬롯용 Enhanced Input 연결 지점
 - `GetLoadoutItemDisplayData`
   - 인벤토리 Widget이 런타임 객체 내부를 직접 해석하지 않도록 이름·설명·아이콘·제공 스탯·스킬·현재 UI 상태를 복사한 표시 구조체 반환
   - Definition의 고정 스탯 수정치를 지역화 가능한 표시 Text로 자동 변환
+- `GetLoadoutDefinitionDisplayData`
+  - 아직 획득하지 않은 상점 상품·무기 진화 후보도 같은 표시 구조체로 변환
+  - 런타임 Instance ID와 UI 상태는 비어 있고 Definition의 정적 정보·스탯·스킬만 반환
 - `IARCombatTargetInterface`
   - C++ 캐릭터 기반에서만 구현하고 Blueprint 자식은 상속해 사용
   - 추상 부모의 `BlueprintNativeEvent`가 구체 자식에서 기본값을 반환하던 문제를 제거
@@ -141,37 +149,39 @@ AR.Foundation.Combat.VoidRules           Success
 AR.Foundation.Stats.IndependentReduction Success
 AR.Foundation.Stats.ModifierFormula      Success
 AR.Foundation.Action.OwnedCleanup        Success
+AR.Foundation.Action.FullCancellationCleanup Success
 AR.Foundation.Combat.StaggerGroggyRules  Success
+AR.Foundation.Health.ShieldLifoAndExpiry Success
 AR.Foundation.Items.ConsumableDropAtomic Success
 AR.Foundation.Items.ConsumableSlotReduction Success
 AR.Foundation.Items.LoadoutAcquisitionRevision Success
 AR.Foundation.Items.LoadoutDropAtomic    Success
 AR.Foundation.Items.SkillPriorityTransaction Success
+AR.Foundation.Resource.AtomicTransaction Success
 AR.Foundation.Status.TenacityAndRefresh  Success
-합계: 15 성공 / 0 실패 / 0 경고
+AR.Foundation.UI.SnapshotAndInputBlocking Success
+합계: 19 성공 / 0 실패 / 0 경고
 ```
 
 ## 3. 다음 작업에서 가장 먼저 할 일
 
-1. **누락된 Blueprint 편의 계층과 UI 이벤트 점검**
-   - 상점·진화 후보처럼 아직 소유하지 않은 Definition용 표시 데이터 생성 노드
-   - HUD가 Tick 조회 없이 구독할 통합 Snapshot/이벤트 점검
-2. **추가 자동화 테스트**
-   - 보호막 후입선출·시간 만료
-   - 행동 취소 시 이동 잠금·슈퍼아머·히트박스 정리
-   - UI 화면 점유와 입력 차단
-3. **Editor에서 콘텐츠 에셋 생성**
+1. **Editor에서 최소 연결 에셋 생성**
    - `IA_Move`, `IA_Roll`, `IA_Interact`, `IA_Inventory`, `IA_UIBack`, 소모품 슬롯 IA와 `IMC_Player`
    - `BP_ARPlayer`, `BP_ARBaseEnemy`, 공용 Hitbox/Pickup BP
    - 테스트용 Weapon/Relic/Consumable/Status Definition과 Runtime BP
    - `WBP_HUD`, `WBP_Inventory`, `WBP_EvolutionSelection`
    - Foundation Test Map
+2. **HUD/인벤토리 Blueprint 연결 검증**
+   - HUD 생성 시 `GetHUDSnapshot`으로 초기화하고 이후 `OnHUDSnapshotChanged`만 구독
+   - 인벤토리 보유품은 `GetLoadoutItemDisplayData`, 상점·진화 후보는 `GetLoadoutDefinitionDisplayData` 사용
+3. **통합 플레이 테스트**
+   - 피해·DOT·경직·취소·획득·버리기·진화·소모품을 Test Map에서 한 흐름으로 검증
 4. Test Map 검증 후에만 기존 TopDown 기본 GameMode/Map을 Foundation 쪽으로 교체한다.
 5. 기반 사용법이 실제 BP에서 검증되면 `FOUNDATION_ENEMY_CONTENT_GUIDE.md`와 아이템 제작 가이드를 작성한다.
 
 ## 4. 현재 알려진 주의점
 
-- 현재 C++는 빌드되며 Damage/DOT·Action·Stagger/Groggy·Status·Loadout/Consumable 핵심 규칙 15개가 자동 검증된다.
+- 현재 C++는 빌드되며 Damage/DOT·Action·Stagger/Groggy·Status·Loadout/Consumable·UI 핵심 규칙 19개가 자동 검증된다.
 - 전투 대상 인터페이스는 Blueprint에서 새로 구현하지 않는다. `AARBaseCharacter`의 Blueprint 자식을 만들어 상속된 팀·생존 판정을 사용한다.
 - 유물·소모품 수동 폐기는 픽업 Spawn 성공 뒤에만 인스턴스를 제거한다. 슬롯 감소 Spawn 실패 시 초과 슬롯에 보존하고 재시도한다.
 - 실제 Input Action, Mapping Context, Data Asset, Runtime BP, Widget, Test Map은 아직 생성하지 않았다. C++ 입력 포인터가 비어 있으면 해당 기능은 실행되지 않는다.
@@ -183,8 +193,8 @@ AR.Foundation.Status.TenacityAndRefresh  Success
 
 현재 Foundation 전체 구현 완성도는 **10단계 중 5단계**로 평가한다.
 
-- C++ 기반 규칙과 핵심 API: 약 6~7단계
-- 테스트·안전성: 약 5~6단계
+- C++ 기반 규칙과 핵심 API: 약 7~8단계
+- 테스트·안전성: 약 7단계
 - 실제 Blueprint/에셋 연결과 플레이 가능한 프로토타입: 약 2~3단계
 
 즉 핵심 뼈대와 주요 트랜잭션 테스트는 존재하지만, 실제 콘텐츠 에셋을 연결해 한 판을 플레이하고 팀원이 사용할 수 있다고 말하려면 Editor 에셋, HUD/인벤토리, Test Map 검증이 더 필요하다.

@@ -7,7 +7,7 @@
 
 namespace
 {
-	constexpr ECollisionChannel ARInteractableChannel = ECC_GameTraceChannel3;
+	constexpr ECollisionChannel ARInteractionTraceChannel = ECC_GameTraceChannel3;
 }
 
 UARInteractionComponent::UARInteractionComponent()
@@ -76,7 +76,7 @@ void UARInteractionComponent::RefreshInteractionCandidate()
 	}
 	TArray<FOverlapResult> Overlaps;
 	FCollisionObjectQueryParams ObjectQuery;
-	ObjectQuery.AddObjectTypesToQuery(ARInteractableChannel);
+	ObjectQuery.AddObjectTypesToQuery(ARInteractionTraceChannel);
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ARInteractionScan), false, PlayerOwner);
 	GetWorld()->OverlapMultiByObjectType(
 		Overlaps,

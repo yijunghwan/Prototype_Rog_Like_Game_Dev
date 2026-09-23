@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
 #include "Foundation/Actions/ARActionTypes.h"
+#include "Foundation/Blueprint/ARResourceBlueprintLibrary.h"
 #include "Foundation/Characters/ARBaseEnemy.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Combat/ARCombatSubsystem.h"
@@ -14,10 +15,12 @@
 #include "Foundation/Components/ARHealthComponent.h"
 #include "Foundation/Components/ARLoadoutComponent.h"
 #include "Foundation/Components/ARManaComponent.h"
+#include "Foundation/Components/ARMovementControlComponent.h"
 #include "Foundation/Components/ARStaggerComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
 #include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Components/ARStatusEffectComponent.h"
+#include "Foundation/Components/ARUIManagerComponent.h"
 #include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Items/ARConsumableDefinition.h"
 #include "Foundation/Items/ARConsumableInstance.h"
@@ -548,6 +551,205 @@ bool FARDotRefreshTest::RunTest(const FString& Parameters)
 	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
 	TestEqual(TEXT("Refresh resets duration and first tick timing"), Target->GetHealthComponent()->GetCurrentHealth(), 940.0f);
 	TestEqual(TEXT("Refreshed DOT eventually completes"), Combat->GetActiveDamageOverTimeCount(Target), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARShieldLifoAndExpiryTest,
+	"AR.Foundation.Health.ShieldLifoAndExpiry",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARShieldLifoAndExpiryTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	TestNotNull(TEXT("Player spawned"), Player);
+	ARFoundationTests::BeginCombatActor(Player, 100.0f);
+	UARHealthComponent* Health = Player->GetHealthComponent();
+
+	FARShieldSpec OlderShield;
+	OlderShield.Amount = 30.0f;
+	OlderShield.Duration = -1.0f;
+	bool bApplied = false;
+	const FARShieldHandle OlderHandle = Health->ApplyShield(OlderShield, bApplied);
+	TestTrue(TEXT("Older permanent shield applies"), bApplied && OlderHandle.IsValid());
+
+	FARShieldSpec NewerShield;
+	NewerShield.Amount = 20.0f;
+	NewerShield.Duration = -1.0f;
+	const FARShieldHandle NewerHandle = Health->ApplyShield(NewerShield, bApplied);
+	TestTrue(TEXT("Newer permanent shield applies"), bApplied && NewerHandle.IsValid());
+	TestEqual(TEXT("Both shields add together"), Health->GetCurrentShield(), 50.0f);
+
+	FARCombatDamageResult Damage;
+	Damage.Outcome = EARDamageOutcome::Applied;
+	Damage.FailureReason = EARRequestResult::Success;
+	Damage.FinalDamage = 25;
+	Damage.ShieldDamage = 25;
+	Damage.HealthDamage = 0;
+	TestTrue(TEXT("Resolved shield damage applies"), Health->ApplyResolvedDamage(Damage));
+	TestEqual(TEXT("Shield damage leaves the expected total"), Health->GetCurrentShield(), 25.0f);
+
+	float RemovedAmount = 0.0f;
+	TestFalse(TEXT("Newest shield was consumed first and no longer exists"), Health->RemoveShield(NewerHandle, RemovedAmount));
+	TestTrue(TEXT("Older shield retains the remaining amount"), Health->RemoveShield(OlderHandle, RemovedAmount));
+	TestEqual(TEXT("Five damage spills into the older shield"), RemovedAmount, 25.0f);
+
+	FARShieldSpec TimedShield;
+	TimedShield.Amount = 10.0f;
+	TimedShield.Duration = 0.5f;
+	const FARShieldHandle TimedHandle = Health->ApplyShield(TimedShield, bApplied);
+	TestTrue(TEXT("Timed shield applies"), bApplied && TimedHandle.IsValid());
+	TestEqual(TEXT("Timed shield is initially visible"), Health->GetCurrentShield(), 10.0f);
+	for (int32 Step = 0; Step < 3; ++Step)
+	{
+		TestWorld.World->Tick(LEVELTICK_All, 0.25f);
+		Health->TickComponent(0.25f, LEVELTICK_All, nullptr);
+	}
+	TestEqual(TEXT("Timed shield expires after its duration"), Health->GetCurrentShield(), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARResourceTransactionTest,
+	"AR.Foundation.Resource.AtomicTransaction",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARResourceTransactionTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	TestNotNull(TEXT("Player spawned"), Player);
+	Player->GetStatsComponent()->BeginPlay();
+	Player->GetManaComponent()->BeginPlay();
+	Player->GetStaminaComponent()->BeginPlay();
+
+	FARResourceCost Cost;
+	Cost.Mana = 20.0f;
+	Cost.Stamina = 30.0f;
+	FARSourceInfo Source;
+	Source.SourceId = TEXT("Test.ResourceTransaction");
+	float NewMana = 0.0f;
+	float NewStamina = 0.0f;
+	EARResourceType MissingResource = EARResourceType::Health;
+	TestTrue(TEXT("Affordable mana and stamina are consumed together"),
+		UARResourceBlueprintLibrary::TryConsumeResources(Player, Cost, Source, NewMana, NewStamina, MissingResource));
+	TestEqual(TEXT("Successful transaction returns the remaining mana"), NewMana, 80.0f);
+	TestEqual(TEXT("Successful transaction returns the remaining stamina"), NewStamina, 70.0f);
+	TestEqual(TEXT("Successful transaction reports no missing resource"), MissingResource, EARResourceType::None);
+
+	Cost.Mana = 81.0f;
+	Cost.Stamina = 10.0f;
+	TestFalse(TEXT("Unaffordable group is rejected before either resource changes"),
+		UARResourceBlueprintLibrary::TryConsumeResources(Player, Cost, Source, NewMana, NewStamina, MissingResource));
+	TestEqual(TEXT("Rejected transaction identifies mana"), MissingResource, EARResourceType::Mana);
+	TestEqual(TEXT("Rejected transaction preserves mana"), Player->GetManaComponent()->GetCurrent(), 80.0f);
+	TestEqual(TEXT("Rejected transaction preserves stamina"), Player->GetStaminaComponent()->GetCurrent(), 70.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARActionFullCleanupTest,
+	"AR.Foundation.Action.FullCancellationCleanup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARActionFullCleanupTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	TestNotNull(TEXT("Player spawned"), Player);
+	UARStatsComponent* Stats = Player->GetStatsComponent();
+	UARMovementControlComponent* Movement = Player->GetMovementControlComponent();
+	UARStaggerComponent* Stagger = Player->GetStaggerComponent();
+	UARActionComponent* Action = Player->GetActionComponent();
+	Stats->SetBaseStat(EARStatType::AttackPower, 100.0f);
+	Stats->BeginPlay();
+	Movement->BeginPlay();
+	Stagger->BeginPlay();
+	Action->BeginPlay();
+
+	FARActionRequest Request;
+	Request.ActionTag = ARGameplayTags::Action_Roll;
+	Request.bBlockBasicMovementWhileActive = true;
+	Request.CancelRules.bCancelOnStagger = true;
+	FARRequestStatus StartStatus;
+	const FARActionHandle Handle = Action->TryStartAction(Request, StartStatus);
+	TestTrue(TEXT("Action starts"), StartStatus.IsSuccess() && Handle.IsValid());
+	TestFalse(TEXT("Action-owned movement lock blocks basic movement"), Movement->CanBasicMove());
+
+	FARStatModifierSpec Modifier;
+	Modifier.StatType = EARStatType::AttackPower;
+	Modifier.Operation = EARStatModifierOperation::Flat;
+	Modifier.Value = 50.0f;
+	Modifier.Duration = -1.0f;
+	bool bModifierApplied = false;
+	Action->ApplyActionStatModifier(Handle, Modifier, bModifierApplied);
+	TestTrue(TEXT("Action-owned stat modifier applies"), bModifierApplied);
+
+	FARSuperArmorSpec Armor;
+	Armor.Duration = -1.0f;
+	bool bArmorApplied = false;
+	Action->ApplyActionSuperArmor(Handle, Armor, bArmorApplied);
+	TestTrue(TEXT("Action-owned super armor applies"), bArmorApplied && Stagger->IsSuperArmorActive());
+
+	AActor* HitboxActor = TestWorld.World->SpawnActor<AActor>();
+	TestTrue(TEXT("Action accepts an owned hitbox actor"), Action->RegisterActionHitbox(Handle, HitboxActor));
+	TestEqual(TEXT("Stagger reason cancels the action"), Action->CancelActionsByReason(EARActionCancelReason::Stagger), 1);
+	TestFalse(TEXT("Cancelled action is no longer active"), Action->IsActionActive(Handle));
+	TestEqual(TEXT("Cancellation removes the temporary stat modifier"), Stats->GetFinalStat(EARStatType::AttackPower), 100.0f);
+	TestFalse(TEXT("Cancellation removes action-owned super armor"), Stagger->IsSuperArmorActive());
+	TestTrue(TEXT("Cancellation releases the movement lock"), Movement->CanBasicMove());
+	TestTrue(TEXT("Cancellation destroys the registered hitbox actor"), HitboxActor->IsActorBeingDestroyed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARPlayerUISnapshotAndBlockingTest,
+	"AR.Foundation.UI.SnapshotAndInputBlocking",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	TestNotNull(TEXT("Player spawned"), Player);
+	Player->GetStatsComponent()->BeginPlay();
+	Player->GetHealthComponent()->BeginPlay();
+	Player->GetManaComponent()->BeginPlay();
+	Player->GetStaminaComponent()->BeginPlay();
+	Player->GetActionComponent()->BeginPlay();
+	Player->GetLoadoutComponent()->BeginPlay();
+	Player->GetConsumableComponent()->BeginPlay();
+	UARUIManagerComponent* UI = Player->GetUIManagerComponent();
+	UI->BeginPlay();
+
+	const FARPlayerHUDSnapshot Snapshot = UI->GetHUDSnapshot();
+	TestEqual(TEXT("HUD snapshot includes current health"), Snapshot.Health.Current, 100.0f);
+	TestEqual(TEXT("HUD snapshot includes current mana"), Snapshot.Mana.Current, 100.0f);
+	TestEqual(TEXT("HUD snapshot includes current stamina"), Snapshot.Stamina.Current, 100.0f);
+	TestEqual(TEXT("HUD snapshot exposes the default consumable slot count"), Snapshot.Consumables.Num(), 3);
+
+	const FARRequestStatus OpenStatus = UI->OpenScreen(EARUIScreen::Inventory);
+	TestTrue(TEXT("Inventory screen opens"), OpenStatus.IsSuccess());
+	TestTrue(TEXT("Opening a screen blocks gameplay input"), Player->IsGameplayInputBlocked());
+	TestEqual(TEXT("Only one screen may be open"), UI->OpenScreen(EARUIScreen::Shop).Result, EARRequestResult::Blocked);
+	TestEqual(TEXT("Blocked request does not replace the current screen"), UI->GetCurrentScreen(), EARUIScreen::Inventory);
+	TestTrue(TEXT("Current screen closes"), UI->CloseCurrentScreen());
+	TestFalse(TEXT("Closing the screen restores gameplay input"), Player->IsGameplayInputBlocked());
+
+	UARPassiveRelicDefinition* UnownedDefinition = NewObject<UARPassiveRelicDefinition>();
+	UnownedDefinition->DefinitionTag = ARGameplayTags::Item_Type_PassiveRelic;
+	UnownedDefinition->ItemTypeTag = ARGameplayTags::Item_Type_PassiveRelic;
+	UnownedDefinition->DisplayName = FText::FromString(TEXT("Unowned preview relic"));
+	FARStatModifierSpec ProvidedStat;
+	ProvidedStat.StatType = EARStatType::AttackPower;
+	ProvidedStat.Operation = EARStatModifierOperation::Flat;
+	ProvidedStat.Value = 5.0f;
+	UnownedDefinition->DefaultStatModifiers.Add(ProvidedStat);
+	UnownedDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(
+		TEXT("PreviewSkill"), ARGameplayTags::Input_Skill_1, 0, 0.0f));
+	FARLoadoutItemDisplayData PreviewData;
+	TestTrue(TEXT("Unowned definitions can provide shop or evolution display data"),
+		Player->GetLoadoutComponent()->GetLoadoutDefinitionDisplayData(UnownedDefinition, PreviewData));
+	TestFalse(TEXT("Definition preview has no runtime instance id"), PreviewData.InstanceId.IsValid());
+	TestEqual(TEXT("Definition preview includes provided stats"), PreviewData.ProvidedStats.Num(), 1);
+	TestEqual(TEXT("Definition preview includes declared skills"), PreviewData.Skills.Num(), 1);
 	return true;
 }
 

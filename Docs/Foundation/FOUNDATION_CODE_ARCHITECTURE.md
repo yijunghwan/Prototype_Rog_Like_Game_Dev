@@ -135,8 +135,7 @@ Action_RogueLike/
 │  │  │  ├─ ARInteractionTypes.h
 │  │  │  └─ ARInteractionBlueprintLibrary.h
 │  │  └─ UI/
-│  │     ├─ ARHUDDataTypes.h
-│  │     └─ ARUIBlueprintLibrary.h
+│  │     └─ ARUITypes.h
 │  └─ Private/Foundation/
 │     ├─ Core/ Characters/ Components/ Actions/ Items/ Interaction/ UI/
 │     └─ Combat/
@@ -688,8 +687,11 @@ Widget은 매 프레임 Component를 순회하지 않는다. 아래 이벤트를
 | 상태 아이콘 | `OnStatusAdded/Updated/Removed` |
 | 인벤토리 최종 스탯 | `OnFinalStatChanged`, 열 때 `GetStatBreakdown` |
 | 소모품 슬롯 | `OnConsumableSlotsChanged` |
+| 통합 HUD | 초기 `GetHUDSnapshot`, 이후 `OnHUDSnapshotChanged` |
 
 `FARItemUIState`는 State ID, 표시 방식(게이지/숫자/1~6 소형 스택), 현재값, 최대값, 표시 대상(HUD/상세/양쪽)만 전달한다. Runtime BP는 Widget을 직접 만들지 않는다.
+
+`FARPlayerHUDSnapshot`은 Health/Shield/Mana/Stamina, Aim Direction, 장착 무기, 액티브 유물, 등록 스킬, 소모품 슬롯을 한 번에 복사해 전달한다. `UARUIManagerComponent`가 각 소유 Component 이벤트를 받아 통합 이벤트를 발행하므로 Widget이 여러 시스템의 내부 배열을 직접 순회하지 않는다. 상점·진화처럼 미보유 Definition을 표시할 때는 `GetLoadoutDefinitionDisplayData`, 보유 인스턴스 상세에는 `GetLoadoutItemDisplayData`를 사용한다.
 
 인벤토리와 진화 UI는 동시에 열지 않는다. Player의 `SetGameplayInputBlocked`로 이동·구르기·스킬·소모품·상호작용을 막되 게임은 멈추지 않는다.
 

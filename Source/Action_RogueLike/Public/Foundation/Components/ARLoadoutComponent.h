@@ -100,6 +100,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="AR|Loadout|UI")
 	bool GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadoutItemDisplayData& DisplayData) const;
 
+	UFUNCTION(BlueprintPure, Category="AR|Loadout|UI")
+	bool GetLoadoutDefinitionDisplayData(const UARLoadoutItemDefinition* Definition, FARLoadoutItemDisplayData& DisplayData) const;
+
 	UFUNCTION(BlueprintPure, Category="AR|Loadout")
 	UARLoadoutItemInstance* GetEquippedWeapon() const { return EquippedWeapon; }
 

@@ -36,6 +36,11 @@ bool UARResourceBlueprintLibrary::TryConsumeStamina(AActor* Target, float Amount
 
 bool UARResourceBlueprintLibrary::CanAffordResources(AActor* Target, const FARResourceCost& Cost, EARResourceType& MissingResource)
 {
+	MissingResource = EARResourceType::None;
+	if (!Target)
+	{
+		return false;
+	}
 	if (!FMath::IsFinite(Cost.Mana) || !FMath::IsFinite(Cost.Stamina) || Cost.Mana < 0.0f || Cost.Stamina < 0.0f)
 	{
 		MissingResource = Cost.Mana < 0.0f || !FMath::IsFinite(Cost.Mana) ? EARResourceType::Mana : EARResourceType::Stamina;
@@ -53,7 +58,6 @@ bool UARResourceBlueprintLibrary::CanAffordResources(AActor* Target, const FARRe
 		MissingResource = EARResourceType::Stamina;
 		return false;
 	}
-	MissingResource = EARResourceType::Health;
 	return true;
 }
 
@@ -74,9 +78,18 @@ bool UARResourceBlueprintLibrary::TryConsumeResources(AActor* Target, const FARR
 	}
 	if (Cost.Stamina > 0.0f && !Stamina->TryConsume(Cost.Stamina, Source, NewStamina))
 	{
+		// A resource-changed callback may invalidate the second half of the transaction
+		// after the affordability pre-check. Restore the already spent mana so callers
+		// never observe a partially paid multi-resource cost.
+		if (Cost.Mana > 0.0f)
+		{
+			Mana->Restore(Cost.Mana, Source);
+			NewMana = Mana->GetCurrent();
+		}
 		MissingResource = EARResourceType::Stamina;
 		return false;
 	}
+	MissingResource = EARResourceType::None;
 	return true;
 }
 
@@ -152,6 +165,10 @@ bool UARResourceBlueprintLibrary::GetCurrentResource(AActor* Target, EARResource
 		const UARStaggerComponent* Stagger = Target->FindComponentByClass<UARStaggerComponent>();
 		if (!Stagger) return false;
 		Current = Stagger->GetCurrentGroggy(); Maximum = Stagger->GetMaxGroggy();
+	}
+	else
+	{
+		return false;
 	}
 	Ratio = Maximum > 0.0f ? Current / Maximum : 0.0f;
 	return true;

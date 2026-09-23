@@ -9,7 +9,7 @@
 
 namespace
 {
-	constexpr ECollisionChannel ARInteractableChannel = ECC_GameTraceChannel3;
+	constexpr ECollisionChannel ARPickupInteractableChannel = ECC_GameTraceChannel3;
 }
 
 AARItemPickupBase::AARItemPickupBase()
@@ -19,7 +19,7 @@ AARItemPickupBase::AARItemPickupBase()
 	SetRootComponent(InteractionVolume);
 	InteractionVolume->InitSphereRadius(48.0f);
 	InteractionVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	InteractionVolume->SetCollisionObjectType(ARInteractableChannel);
+	InteractionVolume->SetCollisionObjectType(ARPickupInteractableChannel);
 	InteractionVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
 	InteractionPrompt = NSLOCTEXT("ARInteraction", "PickupPrompt", "획득");
 }

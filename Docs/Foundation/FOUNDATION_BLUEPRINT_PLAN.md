@@ -353,8 +353,9 @@ Action 이벤트는 `On Action Ended(Handle)`, `On Action Cancelled(Handle, Reas
 | `Modify Skill Cooldown` | Registered Skill Handle, Delta Seconds | Success, New Remaining | 음수 감소, 양수 증가 |
 | `Get Loadout Inventory` | Player | 무기/액티브/패시브 Snapshot | Runtime UObject를 직접 수정하지 않는 UI 데이터 반환 |
 | `Get Loadout Item Display Data` | Item Instance ID | Display Data, Found | 아이콘·설명·자동 생성 스탯·스킬·UI 상태 반환 |
+| `Get Loadout Definition Display Data` | Item Definition | Display Data, Found | 미보유 상점 상품·진화 후보의 정적 표시 정보 반환. Instance ID와 런타임 UI 상태는 비어 있음 |
 
-`Get Loadout Item Display Data`는 `UARLoadoutComponent`에서 호출한다. 반환된 `ProvidedStats[].DisplayText`는 즉시 목록에 표시할 수 있고, 커스텀 디자인이 필요하면 함께 반환되는 Stat Type·Operation·Value로 Widget에서 다시 표현한다.
+두 표시 데이터 노드는 `UARLoadoutComponent`에서 호출한다. 보유 아이템은 Instance 기반 노드, 아직 소유하지 않은 상점 상품·진화 후보는 Definition 기반 노드를 사용한다. 반환된 `ProvidedStats[].DisplayText`는 즉시 목록에 표시할 수 있고, 커스텀 디자인이 필요하면 함께 반환되는 Stat Type·Operation·Value로 Widget에서 다시 표현한다.
 
 `SkillId`는 한 Definition 내부의 의미 식별자이고 실제 등록 스킬은 `FARRegisteredSkillHandle`로 구분한다. 쿨다운 노드는 Owner+SkillId만으로 대상을 찾지 않는다.
 
@@ -445,8 +446,10 @@ OnHit에서 만든 별도 피해는 재귀 방지를 위해 `bApplyOnHitEffects 
 | Loadout 변경 | 장착 아이템/스킬 UI Snapshot | 아이콘/키/쿨다운 영역 재구성 |
 | Item UI State 변경 | State ID, Current, Max, Display Type | 게이지/숫자/1~6 스택 갱신 |
 | Status 변경 | Status List | 아이콘 추가/갱신/제거 |
+| `On HUD Snapshot Changed` | `FARPlayerHUDSnapshot` | 위 변경 통로를 하나로 받아 현재 HUD 전체 갱신 |
 
 HUD는 Damage Resolver, Stats Component의 내부 Modifier 배열, 아이템 Runtime BP를 직접 수정하지 않는다.
+Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 만들고, 그 뒤에는 `On HUD Snapshot Changed`를 구독한다. Snapshot에는 체력·보호막·MP·스태미나·조준 방향·현재 무기·액티브 유물·등록 스킬·소모품 슬롯이 포함된다. 쿨다운 원형 애니메이션은 Snapshot에 든 시작 상태를 바탕으로 Widget이 표시 시간만 진행하며, 시스템 Component를 매 Tick 순회하지 않는다.
 
 ### `WBP_Inventory`
 
