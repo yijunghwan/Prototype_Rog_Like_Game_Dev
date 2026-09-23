@@ -198,6 +198,21 @@ FARStatBreakdown UARStatsComponent::GetStatBreakdown(EARStatType StatType) const
 	return Breakdown;
 }
 
+TArray<FARFinalStatView> UARStatsComponent::GetAllFinalStatViews() const
+{
+	TArray<FARFinalStatView> Result;
+	Result.Reserve(static_cast<int32>(EARStatType::Count));
+	const UEnum* StatEnum = StaticEnum<EARStatType>();
+	for (int32 Value = 0; Value < static_cast<int32>(EARStatType::Count); ++Value)
+	{
+		FARFinalStatView& View = Result.AddDefaulted_GetRef();
+		View.StatType = static_cast<EARStatType>(Value);
+		View.DisplayName = StatEnum ? StatEnum->GetDisplayNameTextByValue(Value) : FText::GetEmpty();
+		View.Breakdown = GetStatBreakdown(View.StatType);
+	}
+	return Result;
+}
+
 FARStatModifierQueryResult UARStatsComponent::GetModifiersBySource(EARModifierSourceCategory Category, FName SourceId) const
 {
 	FARStatModifierQueryResult Result;

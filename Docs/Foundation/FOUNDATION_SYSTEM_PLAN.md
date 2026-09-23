@@ -1226,6 +1226,9 @@ DOT 틱이 경직·그로기 피해를 주어야 하면 `FARDamageOverTimeSpec`�
 | `Get Loadout Inventory` | 플레이어 | 현재 무기, 액티브 유물, 패시브 유물 런타임 객체 목록을 UI에 반환. |
 | `Get Loadout Item Display Data` | 플레이어 Loadout, Item InstanceId | 이미지·이름·설명·자동 생성 제공 스탯·스킬 설명·현재 상태 UI 정보를 복사한 UI 전달 구조체와 Found 여부를 반환. |
 | `Get Loadout Definition Display Data` | 플레이어 Loadout, Item Definition | 아직 획득하지 않은 상점 상품·진화 후보의 이미지·이름·설명·자동 생성 제공 스탯·스킬 정보를 같은 UI 전달 구조체로 반환. InstanceId와 런타임 UI 상태는 비어 있다. |
+| `Get Consumable Slot Display Data` | 플레이어 Consumable Component, Slot Index | 보유 소모품의 Slot Index·InstanceId·Definition·이름·설명·아이콘을 UI 구조체로 반환. |
+| `Get Consumable Definition Display Data` | 플레이어 Consumable Component, Definition | 아직 획득하지 않은 상점 후보 소모품의 정적 표시 정보를 반환. |
+| `Get All Final Stat Views` | 대상 | 모든 공개 스탯의 표시 이름과 Base/Flat/Additive/Multiplicative/Final 내역을 enum 순서로 반환. 인벤토리 캐릭터 시트용. |
 | `Request Discard Loadout Item` | 플레이어, Item InstanceId | 인벤토리 UI에서 선택한 액티브·패시브 유물의 폐기 요청. 성공 시 런타임 객체를 해제하고 플레이어 근처에 같은 Definition의 월드 픽업을 생성한다. 무기 요청은 거부한다. |
 | `Begin Loadout Acquisition` | 플레이어, Item Definition, 획득 출처 | 장착 가능 여부만 검사하고 획득 요청 핸들과 결과를 반환. |
 | `Commit Loadout Acquisition` | 획득 요청 핸들 | 실제 등록을 원자 처리하고 결과·새 Item Instance를 반환. 무기는 기존 장착 무기를 즉시 교체·소멸하며, 액티브 유물 슬롯이 모두 찬 경우에는 Commit할 수 없다. |

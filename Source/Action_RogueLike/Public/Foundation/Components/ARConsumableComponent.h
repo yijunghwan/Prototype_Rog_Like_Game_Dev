@@ -43,6 +43,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="AR|Consumable")
 	TArray<FARConsumableSlotSnapshot> GetConsumableSlots() const;
 
+	UFUNCTION(BlueprintPure, Category="AR|Consumable|UI")
+	bool GetConsumableSlotDisplayData(int32 SlotIndex, FARConsumableDisplayData& DisplayData) const;
+
+	UFUNCTION(BlueprintPure, Category="AR|Consumable|UI")
+	bool GetConsumableDefinitionDisplayData(const UARConsumableDefinition* Definition, FARConsumableDisplayData& DisplayData) const;
+
 	UFUNCTION(BlueprintPure, Category="AR|Consumable")
 	int32 GetMaxConsumableSlots() const { return DesiredSlotCount; }
 

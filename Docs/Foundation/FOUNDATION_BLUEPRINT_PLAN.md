@@ -354,6 +354,9 @@ Action 이벤트는 `On Action Ended(Handle)`, `On Action Cancelled(Handle, Reas
 | `Get Loadout Inventory` | Player | 무기/액티브/패시브 Snapshot | Runtime UObject를 직접 수정하지 않는 UI 데이터 반환 |
 | `Get Loadout Item Display Data` | Item Instance ID | Display Data, Found | 아이콘·설명·자동 생성 스탯·스킬·UI 상태 반환 |
 | `Get Loadout Definition Display Data` | Item Definition | Display Data, Found | 미보유 상점 상품·진화 후보의 정적 표시 정보 반환. Instance ID와 런타임 UI 상태는 비어 있음 |
+| `Get Consumable Slot Display Data` | Slot Index | Display Data, Found | 보유 소모품의 슬롯·Instance ID·이름·설명·아이콘 반환 |
+| `Get Consumable Definition Display Data` | Consumable Definition | Display Data, Found | 미보유 상점 소모품의 정적 표시 정보 반환 |
+| `Get All Final Stat Views` | Player | Stat View 배열 | 모든 공개 스탯을 enum 순서로 반환. 이름·Base/Flat/Additive/Multiplicative/Final 계산 내역 포함 |
 
 두 표시 데이터 노드는 `UARLoadoutComponent`에서 호출한다. 보유 아이템은 Instance 기반 노드, 아직 소유하지 않은 상점 상품·진화 후보는 Definition 기반 노드를 사용한다. 반환된 `ProvidedStats[].DisplayText`는 즉시 목록에 표시할 수 있고, 커스텀 디자인이 필요하면 함께 반환되는 Stat Type·Operation·Value로 Widget에서 다시 표현한다.
 
@@ -453,7 +456,7 @@ Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 �
 
 ### `WBP_Inventory`
 
-**입력:** Player/Loadout/Consumable Snapshot, `GetStatBreakdown` 결과.  
+**입력:** Player/Loadout/Consumable Snapshot, `GetAllFinalStatViews` 결과.
 **동작:** 좌측에는 최종 스탯, 우측에는 무기·액티브·패시브·소모품을 표시한다. Hover는 짧은 설명, 선택은 이미지/제공 스탯/상세 설명/스킬 정보를 표시한다.
 
 | 사용자 입력 | 호출 노드 | 결과 |
@@ -464,6 +467,7 @@ Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 �
 | Esc | Player UI 상태 변경 | 선택 해제 후 창 닫기 |
 
 무기에는 버리기 버튼을 표시하지 않는다. UI가 열려 있는 동안 게임은 계속 진행되지만 Player의 게임플레이 입력은 차단한다.
+소모품 보유 슬롯 상세는 `Get Consumable Slot Display Data`, 상점의 미보유 소모품은 `Get Consumable Definition Display Data`를 사용한다.
 
 ### `WBP_EvolutionSelection`
 

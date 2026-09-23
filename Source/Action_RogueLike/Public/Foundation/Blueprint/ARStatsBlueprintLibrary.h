@@ -18,6 +18,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Stats") static bool RemoveOneStatModifierStack(AActor* Target, EARModifierSourceCategory Category, FName SourceId, EARModifierStackRemovalPolicy Policy, FARStatModifierHandle& RemovedHandle);
 	UFUNCTION(BlueprintPure, Category="AR|Stats") static float GetFinalStat(AActor* Target, EARStatType StatType);
 	UFUNCTION(BlueprintPure, Category="AR|Stats") static FARStatBreakdown GetStatBreakdown(AActor* Target, EARStatType StatType);
+	UFUNCTION(BlueprintPure, Category="AR|Stats") static TArray<FARFinalStatView> GetAllFinalStatViews(AActor* Target);
 	UFUNCTION(BlueprintPure, Category="AR|Stats") static FARStatModifierQueryResult GetStatModifiersBySource(AActor* Target, EARModifierSourceCategory Category, FName SourceId);
 };
-

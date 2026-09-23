@@ -724,6 +724,11 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("HUD snapshot includes current mana"), Snapshot.Mana.Current, 100.0f);
 	TestEqual(TEXT("HUD snapshot includes current stamina"), Snapshot.Stamina.Current, 100.0f);
 	TestEqual(TEXT("HUD snapshot exposes the default consumable slot count"), Snapshot.Consumables.Num(), 3);
+	const TArray<FARFinalStatView> StatViews = Player->GetStatsComponent()->GetAllFinalStatViews();
+	TestEqual(TEXT("Character sheet exposes every public stat in enum order"),
+		StatViews.Num(), static_cast<int32>(EARStatType::Count));
+	TestEqual(TEXT("Character sheet includes the default maximum health"),
+		StatViews[static_cast<int32>(EARStatType::MaxHealth)].Breakdown.FinalValue, 100.0f);
 
 	const FARRequestStatus OpenStatus = UI->OpenScreen(EARUIScreen::Inventory);
 	TestTrue(TEXT("Inventory screen opens"), OpenStatus.IsSuccess());
@@ -750,6 +755,24 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Definition preview has no runtime instance id"), PreviewData.InstanceId.IsValid());
 	TestEqual(TEXT("Definition preview includes provided stats"), PreviewData.ProvidedStats.Num(), 1);
 	TestEqual(TEXT("Definition preview includes declared skills"), PreviewData.Skills.Num(), 1);
+
+	UARConsumableDefinition* ConsumableDefinition = NewObject<UARConsumableDefinition>();
+	ConsumableDefinition->DefinitionTag = ARGameplayTags::Item_Type_Consumable;
+	ConsumableDefinition->ItemTypeTag = ARGameplayTags::Item_Type_Consumable;
+	ConsumableDefinition->DisplayName = FText::FromString(TEXT("Preview potion"));
+	ConsumableDefinition->RuntimeBehaviorClass = UARConsumableInstance::StaticClass();
+	FARConsumableDisplayData ConsumablePreview;
+	TestTrue(TEXT("Unowned consumable definition provides shop display data"),
+		Player->GetConsumableComponent()->GetConsumableDefinitionDisplayData(ConsumableDefinition, ConsumablePreview));
+	TestFalse(TEXT("Unowned consumable preview has no runtime instance id"), ConsumablePreview.InstanceId.IsValid());
+	const FARConsumableAcquisitionResult ConsumableAcquire =
+		Player->GetConsumableComponent()->TryAcquireConsumable(ConsumableDefinition);
+	TestTrue(TEXT("Preview consumable can be acquired"), ConsumableAcquire.Status.IsSuccess());
+	FARConsumableDisplayData OwnedConsumableData;
+	TestTrue(TEXT("Owned consumable slot provides runtime display data"),
+		Player->GetConsumableComponent()->GetConsumableSlotDisplayData(ConsumableAcquire.SlotIndex, OwnedConsumableData));
+	TestEqual(TEXT("Owned consumable display keeps its slot index"), OwnedConsumableData.SlotIndex, ConsumableAcquire.SlotIndex);
+	TestTrue(TEXT("Owned consumable display includes its runtime instance id"), OwnedConsumableData.InstanceId.IsValid());
 	return true;
 }
 

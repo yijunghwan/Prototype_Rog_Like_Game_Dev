@@ -51,9 +51,14 @@ FARStatBreakdown UARStatsBlueprintLibrary::GetStatBreakdown(AActor* Target, EARS
 	return FARStatBreakdown();
 }
 
+TArray<FARFinalStatView> UARStatsBlueprintLibrary::GetAllFinalStatViews(AActor* Target)
+{
+	if (const UARStatsComponent* Stats = FindStats(Target)) return Stats->GetAllFinalStatViews();
+	return TArray<FARFinalStatView>();
+}
+
 FARStatModifierQueryResult UARStatsBlueprintLibrary::GetStatModifiersBySource(AActor* Target, EARModifierSourceCategory Category, FName SourceId)
 {
 	if (const UARStatsComponent* Stats = FindStats(Target)) return Stats->GetModifiersBySource(Category, SourceId);
 	return FARStatModifierQueryResult();
 }
-

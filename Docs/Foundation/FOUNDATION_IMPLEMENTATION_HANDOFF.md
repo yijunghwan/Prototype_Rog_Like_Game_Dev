@@ -27,6 +27,7 @@
   - 시간 제한 수정치, 출처별 조회·제거, 중첩 한 개 제거
   - 회피·치명타·강인함·쿨다운 감소 상한과 방어력 최저 0 등 안전 규칙
   - 보장형 일반 무적·회피 토큰
+  - 인벤토리 캐릭터 시트용 `GetAllFinalStatViews`(전체 스탯 이름·최종값·계산 내역)
 - `UARHealthComponent`
   - 체력, 회복, 피해, 사망 이벤트
   - 보호막 후입선출 소비, 영구·시간 제한 보호막, 필터 제거
@@ -101,6 +102,7 @@
   - 슬롯 수 증가·감소 반영
   - 감소 시 높은 슬롯부터 월드 드롭 요청 이벤트
   - 슬롯 Snapshot과 변경 이벤트
+  - 보유 슬롯 및 미보유 상점 후보용 소모품 표시 데이터 API
 
 ### 상호작용·픽업·UI 통로
 
@@ -174,6 +176,7 @@ AR.Foundation.UI.SnapshotAndInputBlocking Success
 2. **HUD/인벤토리 Blueprint 연결 검증**
    - HUD 생성 시 `GetHUDSnapshot`으로 초기화하고 이후 `OnHUDSnapshotChanged`만 구독
    - 인벤토리 보유품은 `GetLoadoutItemDisplayData`, 상점·진화 후보는 `GetLoadoutDefinitionDisplayData` 사용
+   - 캐릭터 스탯 표는 `GetAllFinalStatViews`, 소모품 상세는 Slot/Definition Display Data 노드 사용
 3. **통합 플레이 테스트**
    - 피해·DOT·경직·취소·획득·버리기·진화·소모품을 Test Map에서 한 흐름으로 검증
 4. Test Map 검증 후에만 기존 TopDown 기본 GameMode/Map을 Foundation 쪽으로 교체한다.

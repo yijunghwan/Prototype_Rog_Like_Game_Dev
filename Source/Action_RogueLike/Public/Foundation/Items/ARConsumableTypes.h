@@ -6,6 +6,7 @@
 
 class UARConsumableDefinition;
 class AARConsumablePickup;
+class UTexture2D;
 
 UENUM(BlueprintType)
 enum class EARConsumableRemovalReason : uint8
@@ -27,6 +28,23 @@ struct ACTION_ROGUELIKE_API FARConsumableSlotSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARConsumableDefinition> Definition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bOverflowSlot = false;
+};
+
+/** UI-safe static and runtime identity data for an owned slot or an unowned shop candidate. */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARConsumableDisplayData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 SlotIndex = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARConsumableDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag DefinitionTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag ItemTypeTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText ShortDescription;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DetailedDescription;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;
 };
 
 USTRUCT(BlueprintType)

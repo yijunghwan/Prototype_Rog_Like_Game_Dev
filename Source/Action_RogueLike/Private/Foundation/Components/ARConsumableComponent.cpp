@@ -168,6 +168,36 @@ TArray<FARConsumableSlotSnapshot> UARConsumableComponent::GetConsumableSlots() c
 	return Result;
 }
 
+bool UARConsumableComponent::GetConsumableSlotDisplayData(int32 SlotIndex, FARConsumableDisplayData& DisplayData) const
+{
+	DisplayData = FARConsumableDisplayData();
+	if (!Slots.IsValidIndex(SlotIndex) || !Slots[SlotIndex]
+		|| !GetConsumableDefinitionDisplayData(Slots[SlotIndex]->GetConsumableDefinition(), DisplayData))
+	{
+		return false;
+	}
+	DisplayData.SlotIndex = SlotIndex;
+	DisplayData.InstanceId = Slots[SlotIndex]->GetInstanceId();
+	return true;
+}
+
+bool UARConsumableComponent::GetConsumableDefinitionDisplayData(const UARConsumableDefinition* Definition, FARConsumableDisplayData& DisplayData) const
+{
+	DisplayData = FARConsumableDisplayData();
+	if (!Definition)
+	{
+		return false;
+	}
+	DisplayData.Definition = Definition;
+	DisplayData.DefinitionTag = Definition->DefinitionTag;
+	DisplayData.ItemTypeTag = Definition->ItemTypeTag;
+	DisplayData.DisplayName = Definition->DisplayName;
+	DisplayData.ShortDescription = Definition->ShortDescription;
+	DisplayData.DetailedDescription = Definition->DetailedDescription;
+	DisplayData.Icon = Definition->Icon;
+	return true;
+}
+
 bool UARConsumableComponent::ValidateDefinition(const UARConsumableDefinition* Definition, FARRequestStatus& Status) const
 {
 	if (!PlayerOwner)

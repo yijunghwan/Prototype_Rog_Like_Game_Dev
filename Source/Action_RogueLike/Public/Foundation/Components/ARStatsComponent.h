@@ -44,6 +44,17 @@ struct ACTION_ROGUELIKE_API FARStatBreakdown
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Stat") float FinalValue = 0.0f;
 };
 
+/** Ordered, read-only stat data used by character-sheet and inventory widgets. */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARFinalStatView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Stat") EARStatType StatType = EARStatType::MaxHealth;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Stat") FText DisplayName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Stat") FARStatBreakdown Breakdown;
+};
+
 USTRUCT(BlueprintType)
 struct ACTION_ROGUELIKE_API FARStatModifierQueryResult
 {
@@ -105,6 +116,9 @@ public:
 	FARStatBreakdown GetStatBreakdown(EARStatType StatType) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Stats")
+	TArray<FARFinalStatView> GetAllFinalStatViews() const;
+
+	UFUNCTION(BlueprintPure, Category="AR|Stats")
 	FARStatModifierQueryResult GetModifiersBySource(EARModifierSourceCategory Category, FName SourceId) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Stats")
@@ -157,4 +171,3 @@ private:
 	UPROPERTY(Transient)
 	TMap<EARStatType, float> CachedFinalStats;
 };
-
