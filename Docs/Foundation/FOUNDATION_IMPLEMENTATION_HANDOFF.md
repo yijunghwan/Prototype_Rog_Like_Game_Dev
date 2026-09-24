@@ -2,7 +2,7 @@
 
 **기록일:** 2026-09-23  
 **프로젝트:** Unreal Engine 5.8 / Paper2D / 32×32 기본 캐릭터·타일 기반 탑뷰 액션 로그라이크
-**안정 지점:** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 21/21 성공
+**이전 검증 지점(최신 결과는 아래 보완 기록 참조):** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 21/21 성공
 
 이 문서는 다음 작업에서 “Foundation 구현 이어서 진행해줘”라고 요청했을 때 바로 이어가기 위한 현재 상태 기록이다. 방향 문서는 아래 세 문서를 기준으로 유지한다.
 
@@ -238,3 +238,63 @@ AR.Foundation 자동화 테스트: 21 성공 / 0 실패 / 0 경고
 피격 후 무적은 Blueprint용 동적 피해 이벤트와 분리된 C++ 네이티브 피해 이벤트를 사용한다. 일반 직접 피해가 생존한 플레이어에게 적용된 뒤 관리형 무적을 부여하며, DOT와 공허 피해는 이를 부여하지 않는다. 공허 피해는 활성 일반 무적도 우회한다.
 
 이제 다음 작업의 시작점은 C++ 추가가 아니라 Editor의 Input Action/IMC, Definition Data Asset, Runtime BP, Widget, Test Map 연결이다.
+
+## 2026-09-24 테스트 콘텐츠 제작 전 기반 보완
+
+최신 검증: Action_RogueLikeEditor Win64 Development 빌드 성공, AR.Foundation 자동화 테스트 **24 성공 / 0 실패 / 0 테스트 경고**. 아래 과거의 21개 결과보다 이 기록이 최신이다.
+
+변경 내용:
+
+- ARBaseCharacter: 시작 시 최종 MoveSpeed를 CharacterMovement에 반영하고, 런타임 스탯 변경/버프 해제를 구독해 속도를 갱신한다.
+- ARActionComponent: 사망, 경직, 진행 중 구르기 상태에서 새 행동 요청을 거부한다. 이미 진행 중인 스킬과 새 구르기의 병행/취소 규칙은 유지한다.
+- ARLoadoutComponent: 활성 스킬 그룹이 끝나기 전 다른 입력 그룹도 시작하지 못하게 한다. 동일 입력의 여러 참여 스킬을 한 번에 실행하는 기존 처리는 유지한다.
+- ARPlayerCharacter/UIManager: 수동 입력 잠금과 UI 점유에 의한 차단을 구분한다. 화면을 닫아도 수동 잠금은 풀리지 않는다.
+- ARConsumableComponent: 인벤토리 Widget의 직접 사용 요청은 허용한다. 화면 점유 중 단축키는 계속 막으며 수동 잠금, 다른 화면, 사망 상태에서는 소비하지 않는다.
+- ARPlayerCharacter: 이동 잠금으로 기본 이동이 거부되면 이동 입력을 이유로 현재 행동을 취소하지 않는다.
+
+추가 테스트:
+
+- AR.Foundation.Character.MovementSpeedStatBinding: 초기 속도, 버프 적용/해제, 기본 스탯 변경의 실제 속도 반영.
+- AR.Foundation.Action.StartStateGuards: 구르기 중 새 스킬/중복 구르기, 경직/사망 중 시작 거부, 기존 스킬 유지.
+- AR.Foundation.UI.InventoryConsumableUse: 인벤토리 직접 사용, 입력 차단 유지, 수동 잠금 보존, 다른 화면/사망 시 소비 거부.
+- 기존 Items.SkillPriorityTransaction 테스트도 서로 다른 입력 그룹의 동시 시작을 거부하는 설계에 맞춰 수정했다.
+- Actor의 동적 이벤트가 실제 플레이와 같이 실행되도록 새 테스트는 InitializeActorsForPlay로 테스트 월드를 초기화한다.
+
+검증 산출물은 Saved/Automation/FoundationFixesFinal/index.json 및 Saved/Logs/FoundationFixesFinal.log에 있다. 전체 노드 목록은 FOUNDATION_BLUEPRINT_NODE_CATALOG.md에 정리했다. 공개 BP 함수의 추가/삭제와 기존 핀 변경은 없다.
+
+이번 결과는 C++ 빌드와 자동화 테스트 검증이다. 실제 테스트 맵, 충돌 도형이 있는 히트박스 BP, 무기/유물/소모품 에셋과 Widget의 연결 및 플레이 검증은 다음 콘텐츠 제작 단계에서 진행한다.
+
+## 2026-09-24 기본/마우스 대시 개선
+
+최신 검증: `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 **26 성공 / 0 실패 / 0 테스트 경고**. 이 결과가 위 24개 결과보다 최신이다. 보고서는 `Saved/Automation/DashTestsFinal/index.json`과 `Saved/Logs/DashTestsFinal.log`에 있다.
+
+- 기본 대시는 현재 WASD 입력으로 8방향 이동하고, 입력을 놓으면 마우스 방향으로 이동한다. `IA_Move`의 Accumulation Behavior를 Cumulative로 설정해 동시 입력을 유지한다.
+- `BP_test_Player`의 `Mouse Roll Action`에 새 `IA_Roll_v2`를 연결했다. 별도 `IMC_Player_MouseDash`를 `BP_PlayerController`의 Player Mapping Context에 선택하면 현재 구르기 키가 마우스 전용 대시로 동작한다. 기본 `IMC_Player`과 기존 키 배정은 유지된다.
+- `BP_test_Player` 기본 Roll Duration은 0.20초다. 350uu 기준 목표 속도는 1,750uu/초다. 대시는 RootMotionSource로 실행하며 벽 충돌을 지키고, 정상 종료·취소 시 해당 이동을 정리한다.
+- `Roll Direction Mode = Mouse Only`는 일반 구르기 키까지 마우스 전용으로 바꾸는 BP 설정이다. 미래 옵션 UI에서 이 값을 선택하거나 입력 매핑을 교체할 수 있다.
+- 신규 테스트 `AR.Foundation.Player.DashDirections`와 `AR.Foundation.Player.DashMovementAndCleanup`으로 8방향·마우스 폴백·전용 모드, 거리, 충돌, 취소, 자원 소비를 확인했다.
+
+입력 에셋과 BP 수정 전 복사본은 `Saved/Backups/DashInputBefore`에 보관했다. 키 재설정 옵션 UI 및 설정 저장은 아직 별도로 구현해야 한다.
+
+## 2026-09-24 대시 쿨타임과 카메라 추적 확인
+
+최신 검증: `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 **27 성공 / 0 실패 / 0 테스트 경고**. 보고서는 `Saved/Automation/RollCooldownTests/index.json`과 `Saved/Logs/RollCooldownTests.log`에 있다. 위의 26개 결과보다 최신이다.
+
+- `AARPlayerCharacter::RollCooldown`을 `EditAnywhere`로 추가했다. `BP_test_Player`의 Class Defaults > AR|Roll에서 기본 0.50초를 변경할 수 있으며, 0은 쿨타임 해제다. 별도 BP 에셋 값은 덮어쓰지 않았으므로 현재 테스트 BP는 C++ 기본값을 상속한다.
+- 대시가 정상 종료되거나 취소되어 이동 소스가 정리되면 쿨타임이 시작된다. `IA_Roll`과 `IA_Roll_v2`는 이를 공유한다. 쿨타임 중 재시도는 행동과 스태미나 소비를 일으키지 않는다. `GetRollCooldownRemaining()`은 BP HUD가 남은 초를 읽는 순수 노드다.
+- 새 `AR.Foundation.Player.DashCooldown` 테스트는 정상 종료, 재시도 차단, 시간 경과, 취소, 0초 설정을 확인한다. 기존 대시 테스트는 쿨타임을 0으로 두어 방향/이동 자체의 반복 검증을 유지한다.
+- 기존 카메라는 `UARCameraFollowComponent`가 플레이어 위치 + 높이를 목표로 매 프레임 `VInterpTo` 보간한다. XY 거리가 150uu까지는 반응 계수 5, 그 이후에는 1uu마다 0.025를 더하고 18로 제한한다. 1200uu 이상 벌어지면 즉시 붙는다. 컴포넌트 Details > AR|Camera에서 수치를 변경할 수 있다. 카메라 코드는 이번에 변경하지 않았다.
+
+## 2026-09-24 콘텐츠 제작용 한·영 HTML 레퍼런스
+
+Docs/Foundation/FOUNDATION_REFERENCE_KO_EN.html에 46개 스탯의 한국명·영어명·용도·C++ 기본값, 클래스/컴포넌트 116개 필드와 구조체 244개 필드, Blueprint 함수·구현 이벤트 252개 및 이벤트 디스패처 41개의 이름·용도·입출력을 검색 가능한 표로 정리했다. Details 필드는 에디터 편집 범위와 BP 읽기/쓰기 접근을 구분한다. 적은 AARBaseEnemy에 자체 추가 필드가 없으며 공통 캐릭터/컴포넌트 설정을 상속한다. 환경 함정은 일반 Actor에 UARCombatSourceComponent를 붙이는 구성이므로 함정 고유 범위·주기는 콘텐츠 BP에서 정의한다.
+
+HTML 생성기는 Scripts/generate_foundation_html_reference.py다. 목록과 C++를 바꾸면 생성기를 재실행해야 한다. 브라우저 렌더링, 검색, HTML 파싱을 확인했다. 이 문서의 범위는 프로젝트가 추가한 C++ 노출 항목이며 언리얼 엔진 기본 노드/Details 및 바이너리 BP 그래프 내부의 사용자 정의 변수는 포함하지 않는다.
+
+## 2026-09-24 피격 후 무적 기본 비활성화와 클래스 관계
+
+AARPlayerCharacter의 PostHitInvulnerabilityDuration C++ 기본값을 0.0초로 바꿨다. 기능은 삭제하지 않았으며 Player BP에서 양수로 설정할 때만 발동한다. 기존 AR.Foundation.Player.PostHitInvulnerability 자동화 테스트는 기본값 0에서 연속 직접 타격이 모두 적용되는지 확인하고, 테스트 중 0.35초를 명시해 일반 피해 차단과 공허 피해 우회를 계속 검증한다. Action_RogueLikeEditor Win64 Development 빌드 성공, AR.Foundation 자동화 테스트 27 성공 / 0 실패 / 0 경고. 보고서는 Saved/Automation/PostHitDefault0/index.json과 Saved/Logs/PostHitDefault0.log다. 한·영 HTML 레퍼런스도 기본값 0을 반영해 다시 생성했다.
+
+상속 관계는 APaperCharacter → AARBaseCharacter → AARPlayerCharacter 또는 AARBaseEnemy다. 플레이어와 적은 공통 캐릭터 부모를 공유한다. 환경 공격원은 별도의 캐릭터 자식이 아니라 일반 AActor에 UARCombatSourceComponent를 붙이는 방식이며, 이 컴포넌트가 Environment 팀을 제공한다. 환경 Actor는 캐릭터 공통 스탯·체력·경직 컴포넌트를 자동 상속하지 않는다.
+
+추가 검증: 테스트 플레이어 BP_test_Player의 실제 클래스 기본 객체(CDO)를 로드해 피격 후 무적 값이 0.0초인지 확인했다. AR.Foundation.Player.PostHitInvulnerability 단독 테스트 1 성공 / 0 실패 / 0 테스트 경고이며, Saved/Automation/PostHitDefaultBP/index.json과 Saved/Logs/PostHitDefaultBP.log에 결과가 있다.

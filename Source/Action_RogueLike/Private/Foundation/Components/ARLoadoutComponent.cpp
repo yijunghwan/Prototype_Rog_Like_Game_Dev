@@ -245,13 +245,10 @@ FARRequestStatus UARLoadoutComponent::HandleSkillInput(FGameplayTag InputTag, FA
 		Status.Result = EARRequestResult::Blocked;
 		return Status;
 	}
-	for (const TPair<FGuid, FARActiveSkillGroupRecord>& Pair : ActiveSkillGroups)
+	if (!ActiveSkillGroups.IsEmpty())
 	{
-		if (Pair.Value.InputTag == InputTag)
-		{
-			Status.Result = EARRequestResult::Blocked;
-			return Status;
-		}
+		Status.Result = EARRequestResult::Blocked;
+		return Status;
 	}
 
 	TArray<FARRegisteredSkillRecord*> Candidates;

@@ -696,7 +696,7 @@ Widget은 매 프레임 Component를 순회하지 않는다. 아래 이벤트를
 
 인벤토리 캐릭터 시트는 열 때 `GetAllFinalStatViews`로 전체 스탯의 이름과 Base/Flat/Additive/Multiplicative/Final 내역을 한 번에 받고, 열린 동안 `OnFinalStatChanged`로 바뀐 항목만 갱신한다. 소모품도 보유 슬롯은 `GetConsumableSlotDisplayData`, 상점 후보는 `GetConsumableDefinitionDisplayData`를 사용해 Runtime Instance 내부 접근을 피한다.
 
-인벤토리와 진화 UI는 동시에 열지 않는다. Player의 `SetGameplayInputBlocked`로 이동·구르기·스킬·소모품·상호작용을 막되 게임은 멈추지 않는다.
+인벤토리와 진화 UI는 동시에 열지 않는다. Player의 `IsGameplayInputBlocked`는 수동 잠금과 UI 점유 상태를 합쳐 이동·구르기·스킬·소모품·상호작용 단축키를 막되 게임은 멈추지 않는다. `SetGameplayInputBlocked`는 수동 잠금만 설정하므로 UI를 닫아도 기존 수동 잠금은 유지된다. 인벤토리 Widget의 `TryUseConsumableSlot` 직접 호출은 허용하지만, 수동 잠금·사망·다른 화면 점유 중에는 거부한다.
 
 ---
 
@@ -810,3 +810,17 @@ Widget은 매 프레임 Component를 순회하지 않는다. 아래 이벤트를
 - [ ] 무기/유물 없이도 Foundation Test Map에서 공통 시스템을 검증할 수 있는가?
 
 이 체크리스트를 통과한 뒤 실제 Foundation C++ 구현을 시작한다.
+
+### 2026-09-24 플레이어 대시 구현 보완
+
+`AARPlayerCharacter`는 이동 Input Action의 현재 Axis2D 값을 사용해 `(Y, X, 0)` 월드 방향을 정규화한다. Input Action이 Completed/Canceled되면 캐시를 0으로 지운다. 기본 모드에서 현재 입력이 0이면 `UpdateAimFromCursor` 후의 조준 방향을 사용한다. `EARRollDirectionMode::MouseOnly` 또는 `TryStartRoll(true)`는 이동 입력을 무시한다.
+
+`TryStartRoll`은 UI/이동 차단, 거리·지속시간, 스태미나와 Action 시작 가능 여부를 확인한 뒤 한 번만 비용을 소비한다. 이동은 CharacterMovement의 `FRootMotionSource_ConstantForce`를 0.20초 동안 Override로 적용한다. 일반 이동의 속도 상한과 감속에 의해 느려지지 않지만 CharacterMovement의 Sweep 충돌은 유지된다. RootMotionSource가 끝나거나, Action이 취소·종료되면 ID로 해당 소스를 제거하고 이동을 멈춘다. Roll 액션의 취소 규칙과 행동 소유 회피 보정은 기존 Foundation 경로를 사용한다.
+
+별도 `MouseRollAction`은 `IA_Roll_v2`를 연결하며 일반 `RollAction`과 같은 `TryStartRoll` 경로를 호출한다. 테스트용 `IMC_Player_MouseDash`는 원래 입력 매핑의 구르기 액션만 교체한다. 향후 실제 옵션에서 키 재설정을 제공하려면 Enhanced Input의 매핑 변경과 저장/불러오기를 UI에 연결해야 한다.
+
+### 2026-09-24 플레이어 대시 쿨타임 및 카메라 추적
+
+`AARPlayerCharacter::RollCooldown`은 인스턴스/BP Details에서 변경할 수 있는 상시 플레이어 설정값이며 기본 0.50초다. `TryStartRoll`은 쿨타임이 남으면 행동 시작과 스태미나 소모 전에 거부한다. `ClearRollMovement`는 실제 RootMotionSource가 정리되는 정상 종료 또는 취소 시점에 월드 시간 기준 종료 시각을 기록한다. 따라서 두 Roll 입력 경로가 쿨타임을 공유하고, 취소에도 쿨타임이 적용된다. `GetRollCooldownRemaining`은 UI용 BP 순수 조회 함수다.
+
+`UARCameraFollowComponent`는 PostPhysics Tick에서 플레이어 위치에 `CameraHeight`만큼 Z를 더한 지점을 목표로 삼는다. XY 거리가 `SnapDistance` 이상이면 즉시 이동한다. 그렇지 않으면 `BaseFollowSpeed + max(0, XY거리 - AccelerationStartDistance) * DistanceSpeedMultiplier`를 기본/최대값 사이로 제한한 뒤 `VInterpTo`로 보간한다. 보간 계수는 실제 이동 속도 uu/초가 아니다. BeginPlay에서는 `SnapToTarget`으로 바로 붙인다. 모든 조정값은 컴포넌트의 Details > AR|Camera에 노출된다.

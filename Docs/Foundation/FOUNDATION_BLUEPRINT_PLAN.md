@@ -466,6 +466,8 @@ Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 �
 | 소모품 우클릭 → 버리기 | `Drop Consumable Slot` | 성공 시 슬롯 갱신 |
 | Esc | Player UI 상태 변경 | 선택 해제 후 창 닫기 |
 
+인벤토리에서 위 노드를 직접 호출하는 것은 허용되지만, 화면 점유 중 소모품 단축키는 차단된다. `SetGameplayInputBlocked`로 설정한 수동 잠금은 UI를 닫아도 유지되며, 수동 잠금 또는 사망 상태에서는 인벤토리에서도 소모품을 사용할 수 없다.
+
 무기에는 버리기 버튼을 표시하지 않는다. UI가 열려 있는 동안 게임은 계속 진행되지만 Player의 게임플레이 입력은 차단한다.
 소모품 보유 슬롯 상세는 `Get Consumable Slot Display Data`, 상점의 미보유 소모품은 `Get Consumable Definition Display Data`를 사용한다.
 
@@ -489,3 +491,26 @@ Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 �
 - [ ] UI는 이벤트를 구독하며 Tick에서 시스템 상태를 반복 조회하지 않는가?
 
 이 체크리스트를 만족하는 콘텐츠 BP만 Foundation 호환 콘텐츠로 취급한다.
+
+### 2026-09-24 테스트 플레이어 대시 연결
+
+현재 테스트 플레이어 에셋은 `/Game/Game/Foundation/Test/test_Player/BP_test_Player`이다. `IA_Move`는 Axis2D와 Cumulative 누적을 사용하므로 두 방향키를 동시에 누르면 대각선 입력이 유지된다. `IA_Roll`은 기본 대시 입력으로 등록되어 있다. `BP_test_Player`에는 `Mouse Roll Action = IA_Roll_v2`, `Roll Duration = 0.20`이 설정되어 있다. 기존 키를 바꾸지 않은 `IMC_Player`이 기본 매핑이다.
+
+| 사용 목적 | 설정 |
+|---|---|
+| 기본 대시 | `BP_test_Player`의 `Roll Direction Mode = Movement Or Mouse`, 컨트롤러의 `Player Mapping Context = IMC_Player` |
+| 현재 키를 마우스 전용 대시로 시험 | `BP_PlayerController`의 `Player Mapping Context = IMC_Player_MouseDash`로 교체. 기존 구르기 키가 `IA_Roll_v2`를 호출한다. |
+| 이동키를 무시하도록 일반 구르기 방식 변경 | `BP_test_Player`의 `Roll Direction Mode = Mouse Only`로 변경. 기존 `IA_Roll` 키로 동작한다. |
+| 기본/마우스 전용 키를 동시에 사용 | `IMC_Player`에 `IA_Roll_v2`용 별도 키를 하나 추가한다. `Mouse Roll Action`은 이미 연결되어 있다. |
+
+`IMC_Player_MouseDash`는 이동키와 나머지 매핑을 유지하고 기존 구르기 입력만 `IA_Roll_v2`로 교체한 테스트용 매핑이다. 한 번에 두 매핑을 모두 등록하면 동일한 키의 구르기 입력이 중복되므로 하나만 등록한다. 옵션 화면에서 모드를 선택하거나 키를 저장·재매핑하는 UI는 아직 없다.
+
+### 2026-09-24 대시 쿨타임과 카메라 조정
+
+`BP_test_Player`의 Class Defaults > `AR|Roll`에서 `Roll Cooldown`을 조정한다. 기본값은 0.50초이며 0은 쿨타임 해제다. 대시가 정상적으로 끝나거나 취소될 때부터 시간이 흐른다. `IA_Roll`과 `IA_Roll_v2`는 쿨타임을 공유한다. 쿨타임 중 입력은 스태미나를 소비하지 않는다. HUD에서 남은 시간을 표시할 때는 순수 조회 노드 `Get Roll Cooldown Remaining`을 사용한다.
+
+카메라 반응은 `BP_test_Player`의 `CameraFollowComponent`를 선택해 Details > `AR|Camera`에서 조절한다. `Base Follow Speed` 5는 가까울 때의 기본 보간 반응, `Acceleration Start Distance` 150uu는 거리에 따른 추가 반응이 시작되는 간격, `Distance Speed Multiplier` 0.025는 간격 1uu당 추가되는 반응, `Maximum Follow Speed` 18은 상한이다. `Snap Distance` 1200uu 이상 벌어지면 즉시 붙고, `Camera Height` 2000uu는 추적 지점의 Z 높이다. Follow Speed는 cm/초가 아닌 보간 계수다.
+
+### 2026-09-24 피격 후 무적 기본값 변경
+
+플레이어의 Post Hit Invulnerability Duration 기본값을 0초로 변경했다. 기본 상태에서는 직접 공격을 받아도 후속 공격을 막는 일반 무적이 자동으로 생기지 않는다. 기존 일반 무적 기능은 유지되며, 플레이어 BP의 Class Defaults > AR|Damage에서 양수로 바꾸면 다시 사용할 수 있다. 구르기 중 회피 보장, 아이템의 무적 보정, 한 히트박스의 OncePerTarget 중복 방지는 별개다.

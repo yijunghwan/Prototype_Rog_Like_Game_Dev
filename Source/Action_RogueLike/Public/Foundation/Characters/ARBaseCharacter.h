@@ -27,6 +27,7 @@ public:
 	AARBaseCharacter();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual EARCombatTeam GetCombatTeam() const override { return CombatTeam; }
 	virtual bool CanBeCombatTarget() const override;
 
@@ -44,6 +45,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Character") FARAimDirectionChangedSignature OnAimDirectionChanged;
 
 protected:
+	UFUNCTION() void HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue);
 	UFUNCTION() void HandleCharacterDeath(AActor* Target, const FARCombatDamageResult& KillingDamage);
 	UFUNCTION() void HandleStaggered(AActor* Target, const FARStaggerResult& Result);
 	UFUNCTION() void HandleStaggerStateChanged(AActor* Target, bool bIsStaggered);

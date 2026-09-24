@@ -2,6 +2,8 @@
 
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Components/ARStatsComponent.h"
+#include "Foundation/Components/ARHealthComponent.h"
+#include "Foundation/Components/ARUIManagerComponent.h"
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Interaction/ARItemPickupActors.h"
 #include "Foundation/Interaction/ARWorldItemDropSubsystem.h"
@@ -91,7 +93,19 @@ FARRequestStatus UARConsumableComponent::TryUseConsumableSlot(int32 SlotIndex, U
 {
 	FARRequestStatus Status;
 	UsedDefinition = nullptr;
-	if (!PlayerOwner || PlayerOwner->IsGameplayInputBlocked())
+	if (!PlayerOwner)
+	{
+		Status.Result = EARRequestResult::InvalidOwner;
+		return Status;
+	}
+	if (PlayerOwner->GetHealthComponent()->IsDead())
+	{
+		Status.Result = EARRequestResult::Dead;
+		return Status;
+	}
+	const UARUIManagerComponent* UI = PlayerOwner->GetUIManagerComponent();
+	if (PlayerOwner->IsGameplayInputManuallyBlocked()
+		|| (UI && UI->IsScreenOpen() && UI->GetCurrentScreen() != EARUIScreen::Inventory))
 	{
 		Status.Result = EARRequestResult::Blocked;
 		return Status;

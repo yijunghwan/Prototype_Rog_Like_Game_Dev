@@ -5,6 +5,10 @@
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/RootMotionSource.h"
+#include "InputActionValue.h"
+#include "Components/BoxComponent.h"
 #include "Foundation/Actions/ARActionTypes.h"
 #include "Foundation/Blueprint/ARResourceBlueprintLibrary.h"
 #include "Foundation/Characters/ARBaseEnemy.h"
@@ -127,6 +131,17 @@ namespace ARFoundationTests
 		Spec.DotName = DotName;
 		Spec.StackPolicy = StackPolicy;
 		return Spec;
+	}
+
+	void AdvanceWorld(UWorld* World, float DeltaSeconds)
+	{
+		float Remaining = DeltaSeconds;
+		while (Remaining > KINDA_SMALL_NUMBER)
+		{
+			const float Step = FMath::Min(0.25f, Remaining);
+			World->Tick(LEVELTICK_All, Step);
+			Remaining -= Step;
+		}
 	}
 
 	void AdvanceDotTime(UWorld* World, UARCombatSubsystem* Combat, float DeltaSeconds)
@@ -412,8 +427,13 @@ bool FARSkillPriorityTransactionTest::RunTest(const FString& Parameters)
 
 	FARSkillGroupHandle SecondaryGroup;
 	const FARRequestStatus SecondaryStatus = Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_1, SecondaryGroup);
-	TestTrue(TEXT("A different input group may execute concurrently"), SecondaryStatus.IsSuccess() && SecondaryGroup.IsValid());
-	TestEqual(TEXT("Secondary action is added without disturbing the primary group"), Player->GetActionComponent()->GetActiveActionCount(), 3);
+	TestEqual(TEXT("A different input group cannot interrupt an active group"), SecondaryStatus.Result, EARRequestResult::Blocked);
+	TestFalse(TEXT("Rejected secondary group has no handle"), SecondaryGroup.IsValid());
+	TestEqual(TEXT("Rejected input leaves the primary actions intact"), Player->GetActionComponent()->GetActiveActionCount(), 2);
+	TestEqual(TEXT("Rejected input does not spend mana"), Player->GetManaComponent()->GetCurrent(), 60.0f);
+	Player->GetActionComponent()->CancelAllActions();
+	TestTrue(TEXT("Another group starts after the previous group finishes"),
+		Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_1, SecondaryGroup).IsSuccess());
 	return true;
 }
 
@@ -816,8 +836,16 @@ bool FARPlayerPostHitInvulnerabilityTest::RunTest(const FString& Parameters)
 	Player->DispatchBeginPlay();
 	TestTrue(TEXT("Player entered BeginPlay"), Player->HasActorBegunPlay());
 	TestTrue(TEXT("Player listens for applied damage"), Player->GetHealthComponent()->OnDamageAppliedNative.IsBound());
-	TestTrue(TEXT("Player has a positive post-hit invulnerability duration"),
-		Player->GetPostHitInvulnerabilityDuration() > 0.0f);
+	TestEqual(TEXT("Post-hit invulnerability is disabled by default"),
+		Player->GetPostHitInvulnerabilityDuration(), 0.0f);
+	UClass* TestPlayerBlueprintClass = LoadClass<AARPlayerCharacter>(
+		nullptr, TEXT("/Game/Game/Foundation/Test/test_Player/BP_test_Player.BP_test_Player_C"));
+	TestNotNull(TEXT("Test player Blueprint class loads"), TestPlayerBlueprintClass);
+	if (TestPlayerBlueprintClass)
+	{
+		TestEqual(TEXT("Test player Blueprint also starts with post-hit invulnerability disabled"),
+			TestPlayerBlueprintClass->GetDefaultObject<AARPlayerCharacter>()->GetPostHitInvulnerabilityDuration(), 0.0f);
+	}
 
 	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
 	TestNotNull(TEXT("Combat subsystem exists"), Combat);
@@ -830,23 +858,31 @@ bool FARPlayerPostHitInvulnerabilityTest::RunTest(const FString& Parameters)
 	Request.bApplyAmplification = false;
 	Request.bIgnoreDefense = true;
 
+	const FARCombatDamageResult UnprotectedHit = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("First hit without post-hit invulnerability is applied"), UnprotectedHit.Outcome, EARDamageOutcome::Applied);
+	TestFalse(TEXT("Default zero duration grants no invulnerability"), Player->GetStatsComponent()->HasGuaranteedInvulnerability());
+	const FARCombatDamageResult SecondUnprotectedHit = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("Another direct hit is allowed with zero duration"), SecondUnprotectedHit.Outcome, EARDamageOutcome::Applied);
+	TestEqual(TEXT("Both unprotected hits remove health"), Player->GetHealthComponent()->GetCurrentHealth(), 80.0f);
+
+	Player->PostHitInvulnerabilityDuration = 0.35f;
 	const FARCombatDamageResult FirstHit = Combat->ApplyCombatDamage(Request);
 	TestEqual(TEXT("First direct hit is applied"), FirstHit.Outcome, EARDamageOutcome::Applied);
 	TestFalse(TEXT("First hit does not kill the player"), FirstHit.bKilledTarget);
 	TestEqual(TEXT("First hit is direct damage"), FirstHit.HitContext.Delivery, EARDamageDelivery::Direct);
 	TestEqual(TEXT("First hit is physical damage"), FirstHit.HitContext.Attribute, EARDamageAttribute::Physical);
-	TestEqual(TEXT("First hit removes health"), Player->GetHealthComponent()->GetCurrentHealth(), 90.0f);
+	TestEqual(TEXT("First hit with enabled protection removes health"), Player->GetHealthComponent()->GetCurrentHealth(), 70.0f);
 	TestTrue(TEXT("A surviving direct hit grants managed invulnerability"),
 		Player->GetStatsComponent()->HasGuaranteedInvulnerability());
 
 	const FARCombatDamageResult BlockedHit = Combat->ApplyCombatDamage(Request);
 	TestEqual(TEXT("A normal hit during post-hit invulnerability is blocked"), BlockedHit.Outcome, EARDamageOutcome::Blocked);
-	TestEqual(TEXT("Blocked hit does not remove more health"), Player->GetHealthComponent()->GetCurrentHealth(), 90.0f);
+	TestEqual(TEXT("Blocked hit does not remove more health"), Player->GetHealthComponent()->GetCurrentHealth(), 70.0f);
 
 	Request.Attribute = EARDamageAttribute::Void;
 	const FARCombatDamageResult VoidHit = Combat->ApplyCombatDamage(Request);
 	TestEqual(TEXT("Void damage bypasses post-hit invulnerability"), VoidHit.Outcome, EARDamageOutcome::Applied);
-	TestEqual(TEXT("Void damage reaches health"), Player->GetHealthComponent()->GetCurrentHealth(), 80.0f);
+	TestEqual(TEXT("Void damage reaches health"), Player->GetHealthComponent()->GetCurrentHealth(), 60.0f);
 	return true;
 }
 
@@ -908,6 +944,278 @@ bool FARWeaponEvolutionRulesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("A listed stage-three candidate can be committed"), EvolutionStatus.IsSuccess() && FinalInstance);
 	TestTrue(TEXT("Selected stage three is equipped"),
 		Loadout->GetEquippedWeapon() && Loadout->GetEquippedWeapon()->GetItemDefinition() == Stage3B);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARMovementSpeedStatBindingTest,
+	"AR.Foundation.Character.MovementSpeedStatBinding",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARMovementSpeedStatBindingTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	TestWorld.World->InitializeActorsForPlay(FURL());
+	AARBaseEnemy* Enemy = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	if (!TestNotNull(TEXT("Enemy spawned"), Enemy)) return false;
+	UARStatsComponent* Stats = Enemy->GetStatsComponent();
+	Stats->SetBaseStat(EARStatType::MoveSpeed, 240.0f);
+	Enemy->DispatchBeginPlay();
+	TestEqual(TEXT("Initial stat sets actual movement speed"), Enemy->GetCharacterMovement()->MaxWalkSpeed, 240.0f);
+	FARStatModifierSpec Modifier;
+	Modifier.StatType = EARStatType::MoveSpeed;
+	Modifier.Operation = EARStatModifierOperation::Flat;
+	Modifier.Value = 60.0f;
+	Modifier.Duration = -1.0f;
+	bool bApplied = false;
+	const FARStatModifierHandle Handle = Stats->AddStatModifier(Modifier, bApplied);
+	TestTrue(TEXT("Speed modifier applies"), bApplied);
+	TestEqual(TEXT("Buff changes actual movement speed"), Enemy->GetCharacterMovement()->MaxWalkSpeed, 300.0f);
+	Stats->RemoveStatModifier(Handle);
+	TestEqual(TEXT("Removing the buff restores speed"), Enemy->GetCharacterMovement()->MaxWalkSpeed, 240.0f);
+	Stats->SetBaseStat(EARStatType::MoveSpeed, 180.0f);
+	TestEqual(TEXT("Runtime base changes also update speed"), Enemy->GetCharacterMovement()->MaxWalkSpeed, 180.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARActionStartStateGuardsTest,
+	"AR.Foundation.Action.StartStateGuards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARActionStartStateGuardsTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	TestWorld.World->InitializeActorsForPlay(FURL());
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	Player->DispatchBeginPlay();
+	UARActionComponent* Action = Player->GetActionComponent();
+	FARActionRequest Skill;
+	Skill.ActionTag = ARGameplayTags::Input_Skill_Primary;
+	FARActionRequest Roll;
+	Roll.ActionTag = ARGameplayTags::Action_Roll;
+	Roll.bIsRollAction = true;
+	FARRequestStatus Status;
+	const FARActionHandle SkillHandle = Action->TryStartAction(Skill, Status);
+	TestTrue(TEXT("Skill starts normally"), SkillHandle.IsValid());
+	const FARActionHandle RollHandle = Action->TryStartAction(Roll, Status);
+	TestTrue(TEXT("Roll may coexist with an already running skill"), RollHandle.IsValid());
+	TestTrue(TEXT("Existing skill remains active"), Action->IsActionActive(SkillHandle));
+	TestFalse(TEXT("A new skill cannot start during roll"), Action->TryStartAction(Skill, Status).IsValid());
+	TestEqual(TEXT("Rolling reports blocked"), Status.Result, EARRequestResult::Blocked);
+	TestFalse(TEXT("A second roll cannot start"), Action->TryStartAction(Roll, Status).IsValid());
+	Action->EndAction(RollHandle);
+	TestTrue(TEXT("Skills become available when roll ends"), Action->CanStartAction(Skill).IsSuccess());
+	FARStaggerRequest Stagger;
+	Stagger.HitContext.HitId = FGuid::NewGuid();
+	Stagger.HitContext.Target = Player;
+	Stagger.HitContext.bValidHit = true;
+	Stagger.Template.BaseStaggerDamage = 1000.0f;
+	TestTrue(TEXT("Stagger applies"), Player->GetStaggerComponent()->ApplyStaggerAndGroggyDamage(Stagger).bStaggered);
+	TestFalse(TEXT("New skill is rejected while staggered"), Action->TryStartAction(Skill, Status).IsValid());
+	TestEqual(TEXT("Stagger reports blocked"), Status.Result, EARRequestResult::Blocked);
+	TestFalse(TEXT("Roll is rejected while staggered"), Action->TryStartAction(Roll, Status).IsValid());
+	FARCombatDamageResult Lethal;
+	Lethal.Outcome = EARDamageOutcome::Applied;
+	Lethal.FinalDamage = 10000;
+	Lethal.HealthDamage = 10000;
+	Player->GetHealthComponent()->ApplyResolvedDamage(Lethal);
+	TestTrue(TEXT("Player died"), Player->GetHealthComponent()->IsDead());
+	TestFalse(TEXT("Dead player cannot start a skill"), Action->TryStartAction(Skill, Status).IsValid());
+	TestEqual(TEXT("Death reports dead"), Status.Result, EARRequestResult::Dead);
+	TestFalse(TEXT("Dead player cannot start a roll"), Action->TryStartAction(Roll, Status).IsValid());
+	TestEqual(TEXT("No actions remain after rejected requests"), Action->GetActiveActionCount(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARInventoryConsumableUseTest,
+	"AR.Foundation.UI.InventoryConsumableUse",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARInventoryConsumableUseTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	TestWorld.World->InitializeActorsForPlay(FURL());
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	Player->DispatchBeginPlay();
+	UARConsumableDefinition* Definition = NewObject<UARConsumableDefinition>();
+	Definition->DefinitionTag = ARGameplayTags::Item_Type_Consumable;
+	Definition->ItemTypeTag = ARGameplayTags::Item_Type_Consumable;
+	Definition->RuntimeBehaviorClass = UARConsumableInstance::StaticClass();
+	UARConsumableComponent* Consumables = Player->GetConsumableComponent();
+	UARUIManagerComponent* UI = Player->GetUIManagerComponent();
+	TestTrue(TEXT("Consumable acquired"), Consumables->TryAcquireConsumable(Definition).Status.IsSuccess());
+	UI->OpenScreen(EARUIScreen::Inventory);
+	TestTrue(TEXT("Inventory still blocks gameplay hotkeys"), Player->IsGameplayInputBlocked());
+	UARConsumableDefinition* UsedDefinition = nullptr;
+	TestTrue(TEXT("Inventory can directly use a consumable"), Consumables->TryUseConsumableSlot(0, UsedDefinition).IsSuccess());
+	TestTrue(TEXT("Use returns the definition"), UsedDefinition == Definition);
+	TestFalse(TEXT("Used item is removed"), Consumables->GetConsumableSlots()[0].bOccupied);
+	TestTrue(TEXT("Next consumable acquired"), Consumables->TryAcquireConsumable(Definition).Status.IsSuccess());
+	Player->SetGameplayInputBlocked(true);
+	TestEqual(TEXT("Explicit input lock also blocks inventory use"), Consumables->TryUseConsumableSlot(0, UsedDefinition).Result, EARRequestResult::Blocked);
+	UI->CloseCurrentScreen();
+	TestTrue(TEXT("Closing inventory preserves explicit input lock"), Player->IsGameplayInputBlocked());
+	Player->SetGameplayInputBlocked(false);
+	UI->OpenScreen(EARUIScreen::Menu);
+	TestEqual(TEXT("Other screens do not allow use"), Consumables->TryUseConsumableSlot(0, UsedDefinition).Result, EARRequestResult::Blocked);
+	TestNull(TEXT("Rejected use clears output"), UsedDefinition);
+	TestTrue(TEXT("Rejected use preserves item"), Consumables->GetConsumableSlots()[0].bOccupied);
+	UI->CloseCurrentScreen();
+	TestFalse(TEXT("Closing menu restores gameplay input"), Player->IsGameplayInputBlocked());
+	FARCombatDamageResult Lethal;
+	Lethal.Outcome = EARDamageOutcome::Applied;
+	Lethal.FinalDamage = 10000;
+	Lethal.HealthDamage = 10000;
+	Player->GetHealthComponent()->ApplyResolvedDamage(Lethal);
+	TestEqual(TEXT("Death prevents use even after UI closes"), Consumables->TryUseConsumableSlot(0, UsedDefinition).Result, EARRequestResult::Dead);
+	TestTrue(TEXT("Death rejection preserves item"), Consumables->GetConsumableSlots()[0].bOccupied);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARPlayerDashDirectionsTest,
+	"AR.Foundation.Player.DashDirections",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARPlayerDashDirectionsTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	TestWorld.World->InitializeActorsForPlay(FURL());
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	Player->DispatchBeginPlay();
+	Player->RollCooldown = 0.0f;
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::RollStaminaCost, 0.0f);
+	Player->SetAimDirection(-FVector::ForwardVector);
+	for (const FVector2D Input : {FVector2D(0, 1), FVector2D(1, 1), FVector2D(1, 0), FVector2D(1, -1),
+		FVector2D(0, -1), FVector2D(-1, -1), FVector2D(-1, 0), FVector2D(-1, 1)})
+	{
+		Player->HandleMove(FInputActionValue(Input));
+		TestTrue(TEXT("Directional dash starts"), Player->TryStartRoll());
+		TestTrue(TEXT("WASD including diagonals determines dash direction"),
+			Player->RollDirection.Equals(FVector(Input.Y, Input.X, 0).GetSafeNormal()));
+		TestTrue(TEXT("Diagonal direction is normalized"), FMath::IsNearlyEqual(Player->RollDirection.Size(), 1.0));
+		Player->FinishRoll(false);
+	}
+	Player->HandleMoveReleased(FInputActionValue(FVector2D::ZeroVector));
+	TestTrue(TEXT("Dash after release starts"), Player->TryStartRoll());
+	TestTrue(TEXT("Released WASD falls back to aim"), Player->RollDirection.Equals(-FVector::ForwardVector));
+	Player->FinishRoll(false);
+	Player->HandleMove(FInputActionValue(FVector2D(1, 1)));
+	TestTrue(TEXT("Mouse-only request starts"), Player->TryStartRoll(true));
+	TestTrue(TEXT("V2 ignores held movement"), Player->RollDirection.Equals(-FVector::ForwardVector));
+	Player->HandleMoveReleased(FInputActionValue(FVector2D::ZeroVector));
+	Player->FinishRoll(false);
+	TestTrue(TEXT("Release during dash is remembered"), Player->CurrentMoveInput.IsNearlyZero());
+	Player->RollDirectionMode = EARRollDirectionMode::MouseOnly;
+	Player->HandleMove(FInputActionValue(FVector2D(1, 1)));
+	TestTrue(TEXT("Mouse-only option uses ordinary dash input"), Player->TryStartRoll());
+	TestTrue(TEXT("Option ignores movement"), Player->RollDirection.Equals(-FVector::ForwardVector));
+	Player->FinishRoll(false);
+	Player->SetGameplayInputBlocked(true);
+	TestFalse(TEXT("UI/manual blocking prevents either mode"), Player->TryStartRoll(true));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARPlayerDashMovementTest,
+	"AR.Foundation.Player.DashMovementAndCleanup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARPlayerDashMovementTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	TestWorld.World->InitializeActorsForPlay(FURL());
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	Player->DispatchBeginPlay();
+	Player->RollCooldown = 0.0f;
+	UCharacterMovementComponent* Movement = Player->GetCharacterMovement();
+	Movement->bRunPhysicsWithNoController = true;
+	Movement->SetMovementMode(MOVE_Flying);
+	Movement->MaxFlySpeed = 100.0f;
+	Movement->BrakingDecelerationFlying = 10000.0f;
+	Player->SetAimDirection(FVector::ForwardVector);
+	const FVector Start = Player->GetActorLocation();
+	TestTrue(TEXT("Dash starts"), Player->TryStartRoll(true));
+	TestEqual(TEXT("Dash consumes stamina once"), Player->GetStaminaComponent()->GetCurrent(), 80.0f);
+	TestFalse(TEXT("Repeated dash cannot spend more stamina"), Player->TryStartRoll());
+	TestEqual(TEXT("Rejected repeat preserves stamina"), Player->GetStaminaComponent()->GetCurrent(), 80.0f);
+	for (int32 Index = 0; Index < 10; ++Index) Movement->TickComponent(0.01f, LEVELTICK_All, nullptr);
+	TestTrue(TEXT("Dash travels at configured speed despite slow normal movement and braking"),
+		FMath::IsNearlyEqual(Player->GetActorLocation().X - Start.X, 175.0, 5.0));
+	Player->GetActionComponent()->CancelAction(Player->ActiveRollHandle, EARActionCancelReason::Stagger);
+	TestFalse(TEXT("Cancellation clears active roll immediately"), Player->ActiveRollHandle.IsValid());
+	TestEqual(TEXT("Cancellation releases root motion ownership"), Player->RollRootMotionId, static_cast<uint16>(0));
+	const FVector CancelledAt = Player->GetActorLocation();
+	Movement->TickComponent(0.01f, LEVELTICK_All, nullptr);
+	TestTrue(TEXT("Cancelled dash does not continue moving"), Player->GetActorLocation().Equals(CancelledAt, 0.1));
+	TestFalse(TEXT("Cancellation removes guaranteed evasion"), Player->GetStatsComponent()->HasGuaranteedEvasion());
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::RollStaminaCost, 200.0f);
+	TestFalse(TEXT("Insufficient stamina rejects dash"), Player->TryStartRoll(true));
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::RollStaminaCost, 0.0f);
+	const FVector FullStart = Player->GetActorLocation();
+	TestTrue(TEXT("Full dash starts"), Player->TryStartRoll(true));
+	for (int32 Index = 0; Index < 22; ++Index)
+	{
+		Movement->TickComponent(0.01f, LEVELTICK_All, nullptr);
+		Player->UpdateRoll(0.01f);
+	}
+	TestTrue(TEXT("Full dash covers configured distance"), FMath::IsNearlyEqual(Player->GetActorLocation().X - FullStart.X, 350.0, 5.0));
+	TestFalse(TEXT("Completed motion ends its action"), Player->ActiveRollHandle.IsValid());
+	TestTrue(TEXT("Completion releases basic movement lock"), Player->GetMovementControlComponent()->CanBasicMove());
+	TestFalse(TEXT("Completion removes guaranteed evasion"), Player->GetStatsComponent()->HasGuaranteedEvasion());
+	AActor* Wall = TestWorld.World->SpawnActor<AActor>();
+	UBoxComponent* Box = NewObject<UBoxComponent>(Wall);
+	Wall->SetRootComponent(Box);
+	Wall->AddInstanceComponent(Box);
+	Box->SetBoxExtent(FVector(10, 200, 200));
+	Box->SetCollisionProfileName(TEXT("BlockAll"));
+	Box->RegisterComponent();
+	const FVector WallStart = Player->GetActorLocation();
+	Wall->SetActorLocation(WallStart + FVector(100, 0, 0));
+	TestTrue(TEXT("Dash toward wall starts"), Player->TryStartRoll(true));
+	for (int32 Index = 0; Index < 22; ++Index)
+	{
+		Movement->TickComponent(0.01f, LEVELTICK_All, nullptr);
+		Player->UpdateRoll(0.01f);
+	}
+	TestTrue(TEXT("Dash respects blocking collision"), Player->GetActorLocation().X < WallStart.X + 90.0);
+	TestFalse(TEXT("Blocked dash still finishes"), Player->ActiveRollHandle.IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARPlayerDashCooldownTest,
+	"AR.Foundation.Player.DashCooldown",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARPlayerDashCooldownTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	TestWorld.World->InitializeActorsForPlay(FURL());
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	Player->DispatchBeginPlay();
+	Player->SetAimDirection(FVector::ForwardVector);
+	TestEqual(TEXT("No cooldown before first dash"), Player->GetRollCooldownRemaining(), 0.0f);
+	TestTrue(TEXT("First dash starts"), Player->TryStartRoll(true));
+	Player->FinishRoll(false);
+	TestTrue(TEXT("Cooldown begins after dash ends"), FMath::IsNearlyEqual(Player->GetRollCooldownRemaining(), 0.50f, 0.01f));
+	const float StaminaAfterFirst = Player->GetStaminaComponent()->GetCurrent();
+	TestFalse(TEXT("Immediate retry is blocked"), Player->TryStartRoll());
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.25f);
+	TestTrue(TEXT("Cooldown counts down"), FMath::IsNearlyEqual(Player->GetRollCooldownRemaining(), 0.25f, 0.03f));
+	TestFalse(TEXT("Retry during cooldown remains blocked"), Player->TryStartRoll(true));
+	TestEqual(TEXT("Blocked retries do not spend stamina"), Player->GetStaminaComponent()->GetCurrent(), StaminaAfterFirst);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.30f);
+	TestEqual(TEXT("Cooldown finishes"), Player->GetRollCooldownRemaining(), 0.0f);
+	TestTrue(TEXT("Dash works again after cooldown"), Player->TryStartRoll());
+	Player->FinishRoll(true);
+	TestTrue(TEXT("Cancelled dash also starts cooldown"), Player->GetRollCooldownRemaining() > 0.0f);
+	Player->RollCooldown = 0.0f;
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.51f);
+	TestTrue(TEXT("Zero cooldown allows another dash"), Player->TryStartRoll(true));
+	Player->FinishRoll(false);
+	TestEqual(TEXT("Zero cooldown leaves no wait"), Player->GetRollCooldownRemaining(), 0.0f);
 	return true;
 }
 

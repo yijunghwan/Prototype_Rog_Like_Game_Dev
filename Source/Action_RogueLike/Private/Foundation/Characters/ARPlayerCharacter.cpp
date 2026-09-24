@@ -3,6 +3,9 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SceneComponent.h"
 #include "EnhancedInputComponent.h"
+#include "EnhancedPlayerInput.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/RootMotionSource.h"
 #include "InputActionValue.h"
 #include "Foundation/Components/ARActionComponent.h"
 #include "Foundation/Components/ARCameraFollowComponent.h"
@@ -42,6 +45,8 @@ AARPlayerCharacter::AARPlayerCharacter()
 void AARPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	GetActionComponent()->OnActionEnded.AddDynamic(this, &AARPlayerCharacter::HandleRollActionEnded);
+	GetActionComponent()->OnActionCancelled.AddDynamic(this, &AARPlayerCharacter::HandleRollActionCancelled);
 	PostHitDamageDelegateHandle = GetHealthComponent()->OnDamageAppliedNative.AddUObject(
 		this, &AARPlayerCharacter::HandlePlayerDamageApplied);
 	CameraFollowComponent->SetCameraAnchor(CameraAnchor);
@@ -50,6 +55,9 @@ void AARPlayerCharacter::BeginPlay()
 
 void AARPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	FinishRoll(true);
+	GetActionComponent()->OnActionEnded.RemoveDynamic(this, &AARPlayerCharacter::HandleRollActionEnded);
+	GetActionComponent()->OnActionCancelled.RemoveDynamic(this, &AARPlayerCharacter::HandleRollActionCancelled);
 	if (GetHealthComponent())
 	{
 		GetHealthComponent()->OnDamageAppliedNative.Remove(PostHitDamageDelegateHandle);
@@ -77,10 +85,16 @@ void AARPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		if (MoveAction)
 		{
 			EnhancedInput->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AARPlayerCharacter::HandleMove);
+			EnhancedInput->BindAction(MoveAction, ETriggerEvent::Completed, this, &AARPlayerCharacter::HandleMoveReleased);
+			EnhancedInput->BindAction(MoveAction, ETriggerEvent::Canceled, this, &AARPlayerCharacter::HandleMoveReleased);
 		}
 		if (RollAction)
 		{
 			EnhancedInput->BindAction(RollAction, ETriggerEvent::Started, this, &AARPlayerCharacter::HandleRollPressed);
+		}
+		if (MouseRollAction && MouseRollAction != RollAction)
+		{
+			EnhancedInput->BindAction(MouseRollAction, ETriggerEvent::Started, this, &AARPlayerCharacter::HandleMouseRollPressed);
 		}
 		if (InteractAction)
 		{
@@ -151,33 +165,69 @@ void AARPlayerCharacter::SetGameplayInputBlocked(bool bBlocked)
 	}
 }
 
+bool AARPlayerCharacter::IsGameplayInputBlocked() const
+{
+	return bGameplayInputBlocked || (UIManagerComponent && UIManagerComponent->IsScreenOpen());
+}
+
 void AARPlayerCharacter::HandleMove(const FInputActionValue& Value)
 {
-	if (bGameplayInputBlocked || ActiveRollHandle.IsValid())
+	CurrentMoveInput = Value.Get<FVector2D>();
+	if (IsGameplayInputBlocked() || ActiveRollHandle.IsValid()) return;
+	const FVector Direction(CurrentMoveInput.Y, CurrentMoveInput.X, 0.0f);
+	if (!Direction.IsNearlyZero()
+		&& GetMovementControlComponent()->RequestBasicMove(Direction.GetSafeNormal(), FMath::Clamp(Direction.Size(), 0.0f, 1.0f)))
 	{
-		return;
-	}
-	const FVector2D Input = Value.Get<FVector2D>();
-	const FVector Direction(Input.Y, Input.X, 0.0f);
-	if (!Direction.IsNearlyZero())
-	{
-		LastMoveDirection = Direction.GetSafeNormal();
-		GetMovementControlComponent()->RequestBasicMove(LastMoveDirection, FMath::Clamp(Direction.Size(), 0.0f, 1.0f));
 		GetActionComponent()->CancelActionsByReason(EARActionCancelReason::BasicMovementInput);
 	}
 }
 
+void AARPlayerCharacter::HandleMoveReleased(const FInputActionValue& Value)
+{
+	CurrentMoveInput = FVector2D::ZeroVector;
+}
+
 void AARPlayerCharacter::HandleRollPressed(const FInputActionValue& Value)
 {
-	if (bGameplayInputBlocked || ActiveRollHandle.IsValid())
+	TryStartRoll();
+}
+
+void AARPlayerCharacter::HandleMouseRollPressed(const FInputActionValue& Value)
+{
+	TryStartRoll(true);
+}
+
+float AARPlayerCharacter::GetRollCooldownRemaining() const
+{
+	return GetWorld() ? FMath::Max(0.0, RollCooldownEndsAt - GetWorld()->GetTimeSeconds()) : 0.0f;
+}
+
+bool AARPlayerCharacter::TryStartRoll(bool bForceMouseDirection)
+{
+	if (IsGameplayInputBlocked() || ActiveRollHandle.IsValid() || !GetWorld()
+		|| !GetMovementControlComponent()->CanMoveAtAll() || GetRollCooldownRemaining() > 0.0f) return false;
+	const float Distance = GetStatsComponent()->GetFinalStat(EARStatType::RollDistance);
+	if (!FMath::IsFinite(RollDuration) || RollDuration <= 0.0f || !FMath::IsFinite(Distance) || Distance <= 0.0f) return false;
+
+	UpdateAimFromCursor();
+	FVector2D MoveInput = CurrentMoveInput;
+	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
-		return;
+		if (const UEnhancedPlayerInput* Input = Cast<UEnhancedPlayerInput>(PC->PlayerInput); Input && MoveAction)
+		{
+			// Read this frame's evaluated value, not the previous movement callback.
+			MoveInput = Input->GetActionValue(MoveAction).Get<FVector2D>();
+		}
 	}
+	const bool bMouseOnly = bForceMouseDirection || RollDirectionMode == EARRollDirectionMode::MouseOnly;
+	FVector Direction = !bMouseOnly && !MoveInput.IsNearlyZero()
+		? FVector(MoveInput.Y, MoveInput.X, 0.0f) : GetAimDirection();
+	Direction.Z = 0.0f;
+	Direction = Direction.GetSafeNormal();
+	if (Direction.IsNearlyZero()) return false;
+
 	const float Cost = GetStatsComponent()->GetFinalStat(EARStatType::RollStaminaCost);
-	if (!StaminaComponent->CanAfford(Cost))
-	{
-		return;
-	}
+	if (!StaminaComponent->CanAfford(Cost)) return false;
 
 	FARActionRequest Request;
 	Request.ActionTag = ARGameplayTags::Action_Roll;
@@ -186,16 +236,10 @@ void AARPlayerCharacter::HandleRollPressed(const FInputActionValue& Value)
 	Request.CancelRules.bCancelOnStagger = true;
 	Request.CancelRules.bCancelOnStun = true;
 	FARRequestStatus Precheck = GetActionComponent()->CanStartAction(Request);
-	if (!Precheck.IsSuccess())
-	{
-		return;
-	}
+	if (!Precheck.IsSuccess()) return false;
 	GetActionComponent()->CancelActionsByReason(EARActionCancelReason::Roll);
 	ActiveRollHandle = GetActionComponent()->TryStartAction(Request, Precheck);
-	if (!ActiveRollHandle.IsValid())
-	{
-		return;
-	}
+	if (!ActiveRollHandle.IsValid()) return false;
 
 	FARSourceInfo Source;
 	Source.Category = EARModifierSourceCategory::Other;
@@ -204,13 +248,20 @@ void AARPlayerCharacter::HandleRollPressed(const FInputActionValue& Value)
 	if (!StaminaComponent->TryConsume(Cost, Source, NewStamina))
 	{
 		FinishRoll(true);
-		return;
+		return false;
 	}
 
-	RollDirection = LastMoveDirection.IsNearlyZero() ? GetAimDirection() : LastMoveDirection;
-	RollDirection.Z = 0.0f;
-	RollDirection.Normalize();
-	RollEndsAt = GetWorld()->GetTimeSeconds() + RollDuration;
+	RollDirection = Direction;
+	ConsumeMovementInputVector();
+	TSharedPtr<FRootMotionSource_ConstantForce> Motion = MakeShared<FRootMotionSource_ConstantForce>();
+	Motion->InstanceName = TEXT("AR.PlayerRoll");
+	Motion->Priority = 1000;
+	Motion->AccumulateMode = ERootMotionAccumulateMode::Override;
+	Motion->Duration = RollDuration;
+	Motion->Force = Direction * (Distance / RollDuration);
+	Motion->FinishVelocityParams.Mode = ERootMotionFinishVelocityMode::SetVelocity;
+	Motion->FinishVelocityParams.SetVelocity = FVector::ZeroVector;
+	RollRootMotionId = GetCharacterMovement()->ApplyRootMotionSource(Motion);
 
 	FARStatModifierSpec EvasionGuarantee;
 	EvasionGuarantee.StatType = EARStatType::Evasion;
@@ -220,11 +271,12 @@ void AARPlayerCharacter::HandleRollPressed(const FInputActionValue& Value)
 	EvasionGuarantee.bGuaranteeEvasion = true;
 	bool bApplied = false;
 	GetActionComponent()->ApplyActionStatModifier(ActiveRollHandle, EvasionGuarantee, bApplied);
+	return true;
 }
 
 void AARPlayerCharacter::HandleInteractPressed(const FInputActionValue& Value)
 {
-	if (!bGameplayInputBlocked && InteractionComponent)
+	if (!IsGameplayInputBlocked() && InteractionComponent)
 	{
 		InteractionComponent->TryInteract();
 	}
@@ -232,7 +284,7 @@ void AARPlayerCharacter::HandleInteractPressed(const FInputActionValue& Value)
 
 void AARPlayerCharacter::HandleSkillPressed(const FInputActionValue& Value, FGameplayTag InputTag)
 {
-	if (!bGameplayInputBlocked && LoadoutComponent && InputTag.IsValid())
+	if (!IsGameplayInputBlocked() && LoadoutComponent && InputTag.IsValid())
 	{
 		FARSkillGroupHandle GroupHandle;
 		LoadoutComponent->HandleSkillInput(InputTag, GroupHandle);
@@ -241,7 +293,7 @@ void AARPlayerCharacter::HandleSkillPressed(const FInputActionValue& Value, FGam
 
 void AARPlayerCharacter::HandleConsumablePressed(const FInputActionValue& Value, int32 SlotIndex)
 {
-	if (!bGameplayInputBlocked && ConsumableComponent)
+	if (!IsGameplayInputBlocked() && ConsumableComponent)
 	{
 		UARConsumableDefinition* UsedDefinition = nullptr;
 		ConsumableComponent->TryUseConsumableSlot(SlotIndex, UsedDefinition);
@@ -321,40 +373,52 @@ void AARPlayerCharacter::HandlePlayerDamageApplied(AActor* Target, const FARComb
 
 void AARPlayerCharacter::UpdateRoll(float DeltaSeconds)
 {
-	if (!ActiveRollHandle.IsValid())
-	{
-		return;
-	}
+	if (!ActiveRollHandle.IsValid()) return;
 	if (!GetActionComponent()->IsActionActive(ActiveRollHandle))
 	{
-		ActiveRollHandle = FARActionHandle();
-		RollEndsAt = -1.0;
+		ClearRollMovement();
 		return;
 	}
-	if (!GetWorld() || GetWorld()->GetTimeSeconds() >= RollEndsAt)
+	if (IsGameplayInputBlocked() || !GetMovementControlComponent()->CanMoveAtAll())
+	{
+		FinishRoll(true);
+		return;
+	}
+	const TSharedPtr<FRootMotionSource> Motion = GetCharacterMovement()->GetRootMotionSourceByID(RollRootMotionId);
+	if (!Motion.IsValid() || Motion->Status.HasFlag(ERootMotionSourceStatusFlags::Finished)
+		|| Motion->Status.HasFlag(ERootMotionSourceStatusFlags::MarkedForRemoval))
 	{
 		FinishRoll(false);
-		return;
 	}
-	const float Distance = GetStatsComponent()->GetFinalStat(EARStatType::RollDistance);
-	GetMovementControlComponent()->RequestActionVelocity(ActiveRollHandle, RollDirection, Distance / FMath::Max(RollDuration, 0.01f));
 }
 
 void AARPlayerCharacter::FinishRoll(bool bCancel)
 {
-	if (!ActiveRollHandle.IsValid())
+	const FARActionHandle Handle = ActiveRollHandle;
+	ClearRollMovement();
+	if (!Handle.IsValid()) return;
+	if (bCancel) GetActionComponent()->CancelAction(Handle, EARActionCancelReason::Manual);
+	else GetActionComponent()->EndAction(Handle);
+}
+
+void AARPlayerCharacter::ClearRollMovement()
+{
+	if (RollRootMotionId != 0)
 	{
-		return;
+		RollCooldownEndsAt = GetWorld() ? GetWorld()->GetTimeSeconds() + FMath::Max(0.0f, RollCooldown) : -1.0;
+		GetCharacterMovement()->RemoveRootMotionSourceByID(RollRootMotionId);
+		RollRootMotionId = 0;
 	}
-	if (bCancel)
-	{
-		GetActionComponent()->CancelAction(ActiveRollHandle, EARActionCancelReason::Manual);
-	}
-	else
-	{
-		GetActionComponent()->EndAction(ActiveRollHandle);
-	}
-	GetMovementControlComponent()->StopMovementImmediately();
+	if (ActiveRollHandle.IsValid()) GetMovementControlComponent()->StopMovementImmediately();
 	ActiveRollHandle = FARActionHandle();
-	RollEndsAt = -1.0;
+}
+
+void AARPlayerCharacter::HandleRollActionEnded(FARActionHandle Handle)
+{
+	if (Handle == ActiveRollHandle) ClearRollMovement();
+}
+
+void AARPlayerCharacter::HandleRollActionCancelled(FARActionHandle Handle, EARActionCancelReason Reason)
+{
+	if (Handle == ActiveRollHandle) ClearRollMovement();
 }

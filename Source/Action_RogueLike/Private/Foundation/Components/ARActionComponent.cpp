@@ -1,6 +1,7 @@
 #include "Foundation/Components/ARActionComponent.h"
 
 #include "Foundation/Components/ARMovementControlComponent.h"
+#include "Foundation/Components/ARHealthComponent.h"
 #include "Foundation/Components/ARStaggerComponent.h"
 #include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Core/ARLogChannels.h"
@@ -35,6 +36,17 @@ FARRequestStatus UARActionComponent::CanStartAction(const FARActionRequest& Requ
 	if (!Request.ActionTag.IsValid())
 	{
 		Status.Result = EARRequestResult::InvalidDefinition;
+		return Status;
+	}
+	if (const UARHealthComponent* Health = GetOwner()->FindComponentByClass<UARHealthComponent>(); Health && Health->IsDead())
+	{
+		Status.Result = EARRequestResult::Dead;
+		return Status;
+	}
+	if ((StaggerComponent && StaggerComponent->IsStaggered())
+		|| ActiveActions.ContainsByPredicate([](const FARActiveAction& Action) { return Action.Request.bIsRollAction; }))
+	{
+		Status.Result = EARRequestResult::Blocked;
 		return Status;
 	}
 	if (const UARStatusEffectComponent* StatusComponent = GetOwner()->FindComponentByClass<UARStatusEffectComponent>())

@@ -34,12 +34,29 @@ AARBaseCharacter::AARBaseCharacter()
 void AARBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	StatsComponent->OnFinalStatChanged.AddDynamic(this, &AARBaseCharacter::HandleFinalStatChanged);
+	HandleFinalStatChanged(this, EARStatType::MoveSpeed, 0.0f, StatsComponent->GetFinalStat(EARStatType::MoveSpeed));
 	HealthComponent->OnDeath.AddDynamic(this, &AARBaseCharacter::HandleCharacterDeath);
 	StaggerComponent->OnStaggered.AddDynamic(this, &AARBaseCharacter::HandleStaggered);
 	StaggerComponent->OnStaggerStateChanged.AddDynamic(this, &AARBaseCharacter::HandleStaggerStateChanged);
 	StatusEffectComponent->OnStatusAdded.AddDynamic(this, &AARBaseCharacter::HandleStatusAdded);
 	StatusEffectComponent->OnStatusUpdated.AddDynamic(this, &AARBaseCharacter::HandleStatusUpdated);
 	StatusEffectComponent->OnStatusRemoved.AddDynamic(this, &AARBaseCharacter::HandleStatusRemoved);
+}
+
+void AARBaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	StatsComponent->OnFinalStatChanged.RemoveDynamic(this, &AARBaseCharacter::HandleFinalStatChanged);
+	Super::EndPlay(EndPlayReason);
+}
+
+void AARBaseCharacter::HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue)
+{
+	if (StatType == EARStatType::MoveSpeed && GetCharacterMovement())
+	{
+		GetCharacterMovement()->MaxWalkSpeed = FMath::Max(0.0f, NewValue);
+		GetCharacterMovement()->MaxWalkSpeedCrouched = FMath::Max(0.0f, NewValue);
+	}
 }
 
 bool AARBaseCharacter::CanBeCombatTarget() const

@@ -5,6 +5,7 @@
 #include "Foundation/Components/ARHealthComponent.h"
 #include "Foundation/Components/ARLoadoutComponent.h"
 #include "Foundation/Components/ARManaComponent.h"
+#include "Foundation/Components/ARMovementControlComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
 #include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Player/ARPlayerController.h"
@@ -170,7 +171,7 @@ FARRequestStatus UARUIManagerComponent::OpenScreen(EARUIScreen Screen, UObject* 
 	}
 	CurrentScreen = Screen;
 	CurrentContext = ContextObject;
-	PlayerOwner->SetGameplayInputBlocked(true);
+	PlayerOwner->GetMovementControlComponent()->StopMovementImmediately();
 	ApplyInputMode(true);
 	OnScreenOpenRequested.Broadcast(Screen, ContextObject);
 	Status.Result = EARRequestResult::Success;
@@ -187,10 +188,6 @@ bool UARUIManagerComponent::CloseCurrentScreen()
 	CurrentScreen = EARUIScreen::None;
 	CurrentContext = nullptr;
 	OnScreenCloseRequested.Broadcast(ClosedScreen);
-	if (PlayerOwner)
-	{
-		PlayerOwner->SetGameplayInputBlocked(false);
-	}
 	ApplyInputMode(false);
 	return true;
 }
