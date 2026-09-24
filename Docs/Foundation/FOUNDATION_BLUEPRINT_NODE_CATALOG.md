@@ -56,6 +56,7 @@
 | 행동 | `TryStartAction`, `EndAction`, `CancelAction`, `Action Delay` | 행동 시작/종료/취소, 취소 가능한 시간 대기 |
 | 행동 소유 효과 | `ApplyActionStatModifier`, `ApplyActionSuperArmor`, `RegisterActionHitbox` | 행동 종료 시 같이 정리할 효과·판정 등록 |
 | 이동 | `RequestBasicMove`, `RequestActionMove`, `RequestActionVelocity` | 일반 이동과 행동 중 이동 요청 |
+| 적 AI 경로 이동 | `ARMoveToActor`, `ARMoveToLocation`, `CanRequestBasicMove` | NavMesh 목표 요청과 CC 이동 잠금 검사. Behavior Tree `Move To`도 같은 Controller 검사를 거침 |
 | 이동 제한 | `AcquireMovementLock`, `ReleaseMovementLock`, `CanBasicMove`, `CanMoveAtAll` | 기본 이동/전체 이동 잠금 관리 |
 | 경직·그로기 | `ApplyStaggerAndGroggyDamage`, `AddSuperArmor`, `ResetGroggyGauge` | 피해와 별개의 경직·그로기 처리 |
 | 상태이상 | `ApplyStatusEffect`, `RemoveStatusEffect`, `HasStatus`, `GetActiveStatusEffects` | 상태 등록·해제·조회 및 이동/행동 차단 상태 조회 |
@@ -353,6 +354,9 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 
 | 대상 클래스 | 함수/표시명 | 종류 | 정확한 선언 |
 |---|---|---|---|
+| [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:22>) | `ARMoveToActor` / AR AI Move To Actor | 호출 | `EPathFollowingRequestResult::Type ARMoveToActor(AActor* Goal, float AcceptanceRadius = -1.0f)` |
+| [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:25>) | `ARMoveToLocation` / AR AI Move To Location | 호출 | `EPathFollowingRequestResult::Type ARMoveToLocation(FVector Destination, float AcceptanceRadius = -1.0f)` |
+| [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:28>) | `CanRequestBasicMove` | 조회 | `bool CanRequestBasicMove() const` |
 | [UARMovementControlComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h:34>) | `RequestBasicMove` | 호출 | `bool RequestBasicMove(FVector Direction, float Scale = 1.0f)` |
 | [UARMovementControlComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h:37>) | `RequestActionMove` | 호출 | `bool RequestActionMove(FARActionHandle ActionHandle, FVector Direction, float Scale = 1.0f)` |
 | [UARMovementControlComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h:40>) | `RequestActionVelocity` | 호출 | `bool RequestActionVelocity(FARActionHandle ActionHandle, FVector Direction, float Speed)` |

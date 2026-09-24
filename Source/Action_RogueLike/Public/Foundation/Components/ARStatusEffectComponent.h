@@ -20,6 +20,7 @@ struct FARActiveStatusEffect
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARStatusEffectChangedSignature, AActor*, Target, const FARStatusEffectView&, Status);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FARStatusEffectChangedNativeSignature, AActor*, const FARStatusEffectView&);
 
 UCLASS(ClassGroup=(ARFoundation), meta=(BlueprintSpawnableComponent))
 class ACTION_ROGUELIKE_API UARStatusEffectComponent : public UActorComponent
@@ -61,6 +62,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Status") FARStatusEffectChangedSignature OnStatusAdded;
 	UPROPERTY(BlueprintAssignable, Category="AR|Status") FARStatusEffectChangedSignature OnStatusUpdated;
 	UPROPERTY(BlueprintAssignable, Category="AR|Status") FARStatusEffectChangedSignature OnStatusRemoved;
+	FARStatusEffectChangedNativeSignature OnStatusAddedNative;
+	FARStatusEffectChangedNativeSignature OnStatusUpdatedNative;
+	FARStatusEffectChangedNativeSignature OnStatusRemovedNative;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Status") FGameplayTagContainer ImmuneStatusTags;
 

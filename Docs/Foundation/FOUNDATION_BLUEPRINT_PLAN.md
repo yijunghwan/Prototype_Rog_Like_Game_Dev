@@ -75,7 +75,9 @@ Blueprint가 하는 일은 다음과 같다.
 **위치:** `Foundation/Blueprints/Characters`  
 **역할:** 적 개발자가 상속하는 최소 공통 부모. 공통 피격/경직/사망 Flipbook 연결점 제공.
 
-적 BP의 공격 Event Graph는 반드시 `Try Start Action`으로 시작한다. AI 이동은 `Request Basic Move` 또는 `Request Action Move`를 사용한다. 적별 AI, 타깃 탐색, 공격 선택, 외형은 각 적 자식 BP에 둔다.
+적 BP의 공격 Event Graph는 반드시 `Try Start Action`으로 시작한다. `AARBaseEnemy`는 기본적으로 `AARAIController`를 사용하며, NavMesh 추적은 AI Controller의 `AR AI Move To Actor`/`AR AI Move To Location` 또는 Behavior Tree의 `Move To`로 요청한다. 두 경로 모두 공통 `Can Basic Move` 판정을 거친다. 경직·속박·기절·사망으로 기본 이동이 잠기면 진행 중인 경로 요청을 중단한다. 제한이 풀려도 이전 요청을 자동 재개하지 않으므로 AI가 목표를 다시 판단해 이동을 요청해야 한다. 길 찾기와 무관한 단순 방향 이동은 `Request Basic Move`, 행동이 소유한 돌진 등은 `Request Action Move`/`Request Action Velocity`를 사용한다. 적별 타깃 탐색, 추적/공격 선택, 외형은 각 적 자식 BP에 둔다.
+
+CC 콘텐츠를 만들 때 `DA_Status_Root`는 기본 이동·구르기 차단, 전체 이동·스킬 그룹 허용을 권장한다. `DA_Status_Stun`은 기본/전체 이동·구르기·스킬 그룹 차단과 `Stun` 사유의 기존 Action 취소를 권장한다. 이 에셋은 아직 생성 전이며 실제 공격에서 `Apply Status Effect`로 적용해야 한다. 경직은 `Apply Stagger And Groggy Damage`가 별도로 판정한다. 모든 공격/스킬을 Action Component 경유로 시작해야 상태 제한과 각 행동의 취소 정책이 적용된다.
 
 ### 3.3 `BP_LoadoutItemPickup`
 

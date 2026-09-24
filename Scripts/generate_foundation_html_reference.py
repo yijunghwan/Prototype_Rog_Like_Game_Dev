@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,9 @@ STAT_META = [
 ]
 
 PURPOSE = {
+    "ARMoveToActor": "적 AI가 CC 이동 제한을 확인한 뒤 목표 Actor로 경로 이동을 요청",
+    "ARMoveToLocation": "적 AI가 CC 이동 제한을 확인한 뒤 지정 좌표로 경로 이동을 요청",
+    "CanRequestBasicMove": "적 AI의 기본 경로 이동 요청 가능 여부를 조회",
     "ActionDelay": "행동 핸들에 묶인 지연을 시작하고 완료·취소를 통지",
     "CanStartAction": "현재 상태에서 행동 시작 가능 여부를 사전 확인",
     "TryStartAction": "행동을 시작하고 정리용 핸들을 발급",
@@ -681,6 +685,7 @@ shown.textContent=" · 현재 표시 "+count+"개 항목";}
 q.addEventListener("input",filter);scope.addEventListener("change",filter);filter();
 </script></body></html>"""
     counts = {"stats": len(stats), "class_details": len(detail_groups), "struct_fields": len(struct_groups), "nodes": node_count, "events": len(sections["7.3"])}
+    footer = footer.replace("생성일 2026-09-24", f"생성일 {date.today().isoformat()}")
     return head + "\n".join(body) + footer, counts
 
 if __name__ == "__main__":

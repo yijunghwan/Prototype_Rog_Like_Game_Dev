@@ -37,16 +37,21 @@ void AARBaseCharacter::BeginPlay()
 	StatsComponent->OnFinalStatChanged.AddDynamic(this, &AARBaseCharacter::HandleFinalStatChanged);
 	HandleFinalStatChanged(this, EARStatType::MoveSpeed, 0.0f, StatsComponent->GetFinalStat(EARStatType::MoveSpeed));
 	HealthComponent->OnDeath.AddDynamic(this, &AARBaseCharacter::HandleCharacterDeath);
-	StaggerComponent->OnStaggered.AddDynamic(this, &AARBaseCharacter::HandleStaggered);
-	StaggerComponent->OnStaggerStateChanged.AddDynamic(this, &AARBaseCharacter::HandleStaggerStateChanged);
-	StatusEffectComponent->OnStatusAdded.AddDynamic(this, &AARBaseCharacter::HandleStatusAdded);
-	StatusEffectComponent->OnStatusUpdated.AddDynamic(this, &AARBaseCharacter::HandleStatusUpdated);
-	StatusEffectComponent->OnStatusRemoved.AddDynamic(this, &AARBaseCharacter::HandleStatusRemoved);
+	StaggerComponent->OnStaggeredNative.AddUObject(this, &AARBaseCharacter::HandleStaggered);
+	StaggerComponent->OnStaggerStateChangedNative.AddUObject(this, &AARBaseCharacter::HandleStaggerStateChanged);
+	StatusEffectComponent->OnStatusAddedNative.AddUObject(this, &AARBaseCharacter::HandleStatusAdded);
+	StatusEffectComponent->OnStatusUpdatedNative.AddUObject(this, &AARBaseCharacter::HandleStatusUpdated);
+	StatusEffectComponent->OnStatusRemovedNative.AddUObject(this, &AARBaseCharacter::HandleStatusRemoved);
 }
 
 void AARBaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StatsComponent->OnFinalStatChanged.RemoveDynamic(this, &AARBaseCharacter::HandleFinalStatChanged);
+	StaggerComponent->OnStaggeredNative.RemoveAll(this);
+	StaggerComponent->OnStaggerStateChangedNative.RemoveAll(this);
+	StatusEffectComponent->OnStatusAddedNative.RemoveAll(this);
+	StatusEffectComponent->OnStatusUpdatedNative.RemoveAll(this);
+	StatusEffectComponent->OnStatusRemovedNative.RemoveAll(this);
 	Super::EndPlay(EndPlayReason);
 }
 

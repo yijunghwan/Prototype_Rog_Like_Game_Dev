@@ -38,6 +38,7 @@ void UARStatusEffectComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 	for (const FARStatusEffectView& View : RemovedViews)
 	{
+		OnStatusRemovedNative.Broadcast(GetOwner(), View);
 		OnStatusRemoved.Broadcast(GetOwner(), View);
 	}
 	RefreshTickState();
@@ -90,6 +91,7 @@ FARStatusEffectResult UARStatusEffectComponent::ApplyStatusEffect(const FARStatu
 			Existing->ExpireAt = Now + AppliedDuration;
 			Existing->Definition = Request.Definition;
 			Existing->Source = Request.Source;
+			OnStatusUpdatedNative.Broadcast(GetOwner(), MakeView(*Existing));
 			OnStatusUpdated.Broadcast(GetOwner(), MakeView(*Existing));
 		}
 		RefreshTickState();
@@ -105,6 +107,7 @@ FARStatusEffectResult UARStatusEffectComponent::ApplyStatusEffect(const FARStatu
 	Result.StatusTag = Request.Definition->StatusTag;
 	Result.AppliedDuration = AppliedDuration;
 	Result.Result = EARRequestResult::Success;
+	OnStatusAddedNative.Broadcast(GetOwner(), MakeView(Effect));
 	OnStatusAdded.Broadcast(GetOwner(), MakeView(Effect));
 	RefreshTickState();
 	return Result;
@@ -122,6 +125,7 @@ bool UARStatusEffectComponent::RemoveStatusEffect(FARStatusEffectHandle Handle)
 	}
 	FARStatusEffectView View = MakeView(ActiveEffects[Index]);
 	ActiveEffects.RemoveAt(Index);
+	OnStatusRemovedNative.Broadcast(GetOwner(), View);
 	OnStatusRemoved.Broadcast(GetOwner(), View);
 	RefreshTickState();
 	return true;
@@ -142,6 +146,7 @@ int32 UARStatusEffectComponent::RemoveStatusEffectsBySource(EARModifierSourceCat
 	}
 	for (const FARStatusEffectView& View : RemovedViews)
 	{
+		OnStatusRemovedNative.Broadcast(GetOwner(), View);
 		OnStatusRemoved.Broadcast(GetOwner(), View);
 	}
 	RefreshTickState();

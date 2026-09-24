@@ -54,6 +54,7 @@ void UARStaggerComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	if (bWasStaggeredLastTick && !bStaggeredNow)
 	{
 		StaggerImmuneUntil = Now + PostStaggerImmunityDuration;
+		OnStaggerStateChangedNative.Broadcast(GetOwner(), false);
 		OnStaggerStateChanged.Broadcast(GetOwner(), false);
 	}
 	bWasStaggeredLastTick = bStaggeredNow;
@@ -100,6 +101,7 @@ FARStaggerResult UARStaggerComponent::ApplyStaggerAndGroggyDamage(const FARStagg
 			bWasStaggeredLastTick = true;
 			if (!bAlreadyStaggered)
 			{
+				OnStaggerStateChangedNative.Broadcast(GetOwner(), true);
 				OnStaggerStateChanged.Broadcast(GetOwner(), true);
 			}
 			bBroadcastStaggered = true;
@@ -125,6 +127,7 @@ FARStaggerResult UARStaggerComponent::ApplyStaggerAndGroggyDamage(const FARStagg
 	Result.CurrentGroggy = CurrentGroggy;
 	if (bBroadcastStaggered)
 	{
+		OnStaggeredNative.Broadcast(GetOwner(), Result);
 		OnStaggered.Broadcast(GetOwner(), Result);
 	}
 	return Result;

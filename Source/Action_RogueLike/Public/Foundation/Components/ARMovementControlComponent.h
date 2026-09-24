@@ -20,6 +20,7 @@ struct FARActiveMovementLock
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FARMovementLockChangedSignature, AActor*, Target, bool, bCanBasicMove, bool, bCanMoveAtAll);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FARMovementLockChangedNativeSignature, AActor*, bool, bool);
 
 UCLASS(ClassGroup=(ARFoundation), meta=(BlueprintSpawnableComponent))
 class ACTION_ROGUELIKE_API UARMovementControlComponent : public UActorComponent
@@ -59,6 +60,7 @@ public:
 	void StopMovementImmediately();
 
 	UPROPERTY(BlueprintAssignable, Category="AR|Movement") FARMovementLockChangedSignature OnMovementLockChanged;
+	FARMovementLockChangedNativeSignature OnMovementLockChangedNative;
 
 private:
 	bool IsActiveOwnedAction(FARActionHandle ActionHandle) const;

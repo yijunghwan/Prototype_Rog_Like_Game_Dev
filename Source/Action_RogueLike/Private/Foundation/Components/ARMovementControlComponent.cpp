@@ -72,6 +72,7 @@ FARMovementLockHandle UARMovementControlComponent::AcquireMovementLock(FName Sou
 	Lock.SourceId = SourceId;
 	Lock.LockType = LockType;
 	RefreshMovementMode(bCouldMoveAtAll);
+	OnMovementLockChangedNative.Broadcast(GetOwner(), CanBasicMove(), CanMoveAtAll());
 	OnMovementLockChanged.Broadcast(GetOwner(), CanBasicMove(), CanMoveAtAll());
 	return Handle;
 }
@@ -86,6 +87,7 @@ bool UARMovementControlComponent::ReleaseMovementLock(FARMovementLockHandle Hand
 	if (Removed > 0)
 	{
 		RefreshMovementMode(bCouldMoveAtAll);
+		OnMovementLockChangedNative.Broadcast(GetOwner(), CanBasicMove(), CanMoveAtAll());
 		OnMovementLockChanged.Broadcast(GetOwner(), CanBasicMove(), CanMoveAtAll());
 	}
 	return Removed > 0;
@@ -101,6 +103,7 @@ int32 UARMovementControlComponent::ReleaseMovementLocksBySource(FName SourceId)
 	if (Removed > 0)
 	{
 		RefreshMovementMode(bCouldMoveAtAll);
+		OnMovementLockChangedNative.Broadcast(GetOwner(), CanBasicMove(), CanMoveAtAll());
 		OnMovementLockChanged.Broadcast(GetOwner(), CanBasicMove(), CanMoveAtAll());
 	}
 	return Removed;

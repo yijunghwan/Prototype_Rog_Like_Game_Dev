@@ -285,7 +285,9 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 
 `UARInteractionComponent`는 Player 주변의 `ARInteractable` 채널을 조회해 거리, 우선순위, 선택적 시야 검사를 통과한 현재 후보를 보관한다. F 입력은 이 Component의 `TryInteract`만 호출한다. 상점·픽업·NPC는 `IARInteractable`을 구현하고, UI 생성은 직접 하지 않고 UI Manager에 요청한다.
 
-`AARGameMode`는 새 Foundation Player/Controller를 기본 클래스로 지정한다. 기존 `/Game/TopDown` 맵과 클릭 이동 Controller는 Foundation Test Map이 정상 동작한 뒤에만 기본 설정에서 교체한다.
+`AARGameMode`는 새 Foundation Player/Controller를 기본 클래스로 지정한다. 현재 프로젝트 기본 맵은 `/Game/Game/Foundation/Test/Test_Level`, 기본 GameMode는 `/Game/Game/Foundation/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 사용하지 않는다.
+
+적의 일반 경로 이동은 `AARAIController`가 담당한다. `ARMoveToActor`/`ARMoveToLocation`과 Behavior Tree `Move To`가 공통 `MoveTo` 검사에서 `UARMovementControlComponent::CanBasicMove()`를 확인한다. 이동 잠금 이벤트가 기본 이동 불가로 바뀌면 AI Controller는 진행 중인 경로를 취소하고 속도를 멈춘다. 해제 시 자동 재개하지 않고 AI가 목표를 재평가한다. 공격·돌진 등 액션 소유 이동은 기존 Action Handle 경로를 사용하므로 속박의 기본 이동 제한과 분리된다.
 
 ### Paper2D 및 카메라
 

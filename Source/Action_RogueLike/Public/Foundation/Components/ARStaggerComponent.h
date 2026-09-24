@@ -19,6 +19,8 @@ struct FARActiveSuperArmor
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARStaggeredSignature, AActor*, Target, const FARStaggerResult&, Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARStaggerStateChangedSignature, AActor*, Target, bool, bIsStaggered);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FARStaggeredNativeSignature, AActor*, const FARStaggerResult&);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FARStaggerStateChangedNativeSignature, AActor*, bool);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FARGroggyChangedSignature, AActor*, Target, float, Current, float, Maximum, float, Delta);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARGroggyDepletedSignature, AActor*, Target);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARSuperArmorChangedSignature, AActor*, Target, bool, bIsActive);
@@ -67,6 +69,8 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="AR|Stagger") FARStaggeredSignature OnStaggered;
 	UPROPERTY(BlueprintAssignable, Category="AR|Stagger") FARStaggerStateChangedSignature OnStaggerStateChanged;
+	FARStaggeredNativeSignature OnStaggeredNative;
+	FARStaggerStateChangedNativeSignature OnStaggerStateChangedNative;
 	UPROPERTY(BlueprintAssignable, Category="AR|Stagger") FARGroggyChangedSignature OnGroggyChanged;
 	UPROPERTY(BlueprintAssignable, Category="AR|Stagger") FARGroggyDepletedSignature OnGroggyGaugeDepleted;
 	UPROPERTY(BlueprintAssignable, Category="AR|Stagger") FARSuperArmorChangedSignature OnSuperArmorChanged;

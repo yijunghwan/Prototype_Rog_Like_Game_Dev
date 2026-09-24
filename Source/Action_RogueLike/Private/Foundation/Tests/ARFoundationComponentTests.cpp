@@ -8,8 +8,10 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/RootMotionSource.h"
 #include "InputActionValue.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Components/BoxComponent.h"
 #include "Foundation/Actions/ARActionTypes.h"
+#include "Foundation/AI/ARAIController.h"
 #include "Foundation/Blueprint/ARResourceBlueprintLibrary.h"
 #include "Foundation/Characters/ARBaseEnemy.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
@@ -243,6 +245,97 @@ bool FARStaggerGroggyRulesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Super armor is added"), bArmorAdded && ArmorHandle.IsValid());
 	TestTrue(TEXT("Super armor blocks stagger"), Result.bBlockedBySuperArmor && !Result.bStaggered);
 	TestEqual(TEXT("Super armor does not block groggy damage"), Result.CurrentGroggy, 40.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARAIMovementCCGateTest,
+	"AR.Foundation.AI.MovementCCGate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARAIMovementCCGateTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARBaseEnemy* Enemy = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARAIController* Controller = TestWorld.World->SpawnActor<AARAIController>();
+	if (!TestNotNull(TEXT("Enemy spawned"), Enemy)
+		|| !TestNotNull(TEXT("Player spawned"), Player)
+		|| !TestNotNull(TEXT("AR AI controller spawned"), Controller))
+	{
+		return false;
+	}
+	Enemy->DispatchBeginPlay();
+	Player->DispatchBeginPlay();
+	TestTrue(TEXT("Enemy BeginPlay ran"), Enemy->HasActorBegunPlay());
+	TestTrue(TEXT("Enemy listens for status changes"), Enemy->GetStatusEffectComponent()->OnStatusAddedNative.IsBound());
+	TestTrue(TEXT("Enemy listens for stagger changes"), Enemy->GetStaggerComponent()->OnStaggerStateChangedNative.IsBound());
+	TestTrue(TEXT("Player listens for status changes"), Player->GetStatusEffectComponent()->OnStatusAddedNative.IsBound());
+	Controller->Possess(Enemy);
+	TestEqual(TEXT("Enemy uses AR AI controller by default"), Enemy->AIControllerClass.Get(), AARAIController::StaticClass());
+	TestTrue(TEXT("Unrestricted enemy can request basic AI movement"), Controller->CanRequestBasicMove());
+
+	UARStatusEffectDefinition* Root = NewObject<UARStatusEffectDefinition>();
+	Root->DefinitionTag = ARGameplayTags::Status_Root;
+	Root->StatusTag = ARGameplayTags::Status_Root;
+	Root->BaseDuration = 2.0f;
+	Root->bBlocksBasicMovement = true;
+	Root->bBlocksAllMovement = false;
+	Root->bBlocksRoll = true;
+	Root->bBlocksSkillGroups = false;
+	FARStatusEffectRequest StatusRequest;
+	StatusRequest.Definition = Root;
+	const FARStatusEffectResult EnemyRoot = Enemy->GetStatusEffectComponent()->ApplyStatusEffect(StatusRequest);
+	TestEqual(TEXT("Enemy root applies"), EnemyRoot.Result, EARRequestResult::Success);
+	TestTrue(TEXT("Root definition blocks basic movement"), Root->bBlocksBasicMovement);
+	TestTrue(TEXT("Root is active on enemy"), Enemy->GetStatusEffectComponent()->BlocksBasicMovement());
+	TestFalse(TEXT("Root locks enemy basic movement"), Enemy->GetMovementControlComponent()->CanBasicMove());
+	TestFalse(TEXT("Root blocks AI path requests"), Controller->CanRequestBasicMove());
+	TestEqual(TEXT("AR move wrapper rejects a rooted enemy"), Controller->ARMoveToActor(Player), EPathFollowingRequestResult::Failed);
+	TestTrue(TEXT("Root still permits action-owned movement"), Enemy->GetMovementControlComponent()->CanMoveAtAll());
+	FARActionRequest AttackAction;
+	AttackAction.ActionTag = ARGameplayTags::Action_Roll;
+	TestTrue(TEXT("Root still permits a non-roll action"), Enemy->GetActionComponent()->CanStartAction(AttackAction).IsSuccess());
+	AttackAction.bIsRollAction = true;
+	TestFalse(TEXT("Root blocks roll action"), Enemy->GetActionComponent()->CanStartAction(AttackAction).IsSuccess());
+	TestTrue(TEXT("Enemy root can be removed"), Enemy->GetStatusEffectComponent()->RemoveStatusEffect(EnemyRoot.Handle));
+	TestTrue(TEXT("AI path requests are allowed again after root"), Controller->CanRequestBasicMove());
+
+	UARStatusEffectDefinition* Stun = NewObject<UARStatusEffectDefinition>();
+	Stun->DefinitionTag = ARGameplayTags::Status_Stun;
+	Stun->StatusTag = ARGameplayTags::Status_Stun;
+	Stun->BaseDuration = 2.0f;
+	Stun->bBlocksBasicMovement = true;
+	Stun->bBlocksAllMovement = true;
+	Stun->bBlocksRoll = true;
+	Stun->bBlocksSkillGroups = true;
+	Stun->bCancelActionsOnApply = true;
+	Stun->ActionCancelReason = EARActionCancelReason::Stun;
+	StatusRequest.Definition = Stun;
+	const FARStatusEffectResult EnemyStun = Enemy->GetStatusEffectComponent()->ApplyStatusEffect(StatusRequest);
+	TestEqual(TEXT("Enemy stun applies"), EnemyStun.Result, EARRequestResult::Success);
+	TestFalse(TEXT("Stun blocks AI path requests"), Controller->CanRequestBasicMove());
+	TestFalse(TEXT("Stun blocks all enemy movement"), Enemy->GetMovementControlComponent()->CanMoveAtAll());
+	AttackAction.bIsRollAction = false;
+	TestFalse(TEXT("Stun blocks new enemy actions"), Enemy->GetActionComponent()->CanStartAction(AttackAction).IsSuccess());
+	TestTrue(TEXT("Enemy stun can be removed"), Enemy->GetStatusEffectComponent()->RemoveStatusEffect(EnemyStun.Handle));
+	TestTrue(TEXT("AI path requests are allowed again after stun"), Controller->CanRequestBasicMove());
+
+	const FARStatusEffectResult PlayerStun = Player->GetStatusEffectComponent()->ApplyStatusEffect(StatusRequest);
+	TestEqual(TEXT("Player stun applies through the same status system"), PlayerStun.Result, EARRequestResult::Success);
+	TestFalse(TEXT("Player movement is locked by stun"), Player->GetMovementControlComponent()->CanBasicMove());
+	TestFalse(TEXT("Player action is blocked by stun"), Player->GetActionComponent()->CanStartAction(AttackAction).IsSuccess());
+	TestTrue(TEXT("Player stun can be removed"), Player->GetStatusEffectComponent()->RemoveStatusEffect(PlayerStun.Handle));
+	TestTrue(TEXT("Player movement returns after stun"), Player->GetMovementControlComponent()->CanBasicMove());
+
+	FARStaggerRequest StaggerRequest;
+	StaggerRequest.HitContext.HitId = FGuid::NewGuid();
+	StaggerRequest.HitContext.Target = Enemy;
+	StaggerRequest.HitContext.bValidHit = true;
+	StaggerRequest.Template.BaseStaggerDamage = Enemy->GetStatsComponent()->GetFinalStat(EARStatType::StaggerResistance) + 1.0f;
+	TestTrue(TEXT("Enemy staggers on sufficient stagger damage"), Enemy->GetStaggerComponent()->ApplyStaggerAndGroggyDamage(StaggerRequest).bStaggered);
+	TestFalse(TEXT("Stagger blocks AI path requests"), Controller->CanRequestBasicMove());
+	ARFoundationTests::AdvanceWorld(TestWorld.World, Enemy->GetStaggerComponent()->BaseStaggerDuration + 0.1f);
+	TestTrue(TEXT("AI path requests return after stagger"), Controller->CanRequestBasicMove());
 	return true;
 }
 

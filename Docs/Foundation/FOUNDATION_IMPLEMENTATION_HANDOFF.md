@@ -195,7 +195,7 @@ AR.Foundation.UI.SnapshotAndInputBlocking Success
 - 전투 대상 인터페이스는 Blueprint에서 새로 구현하지 않는다. `AARBaseCharacter`의 Blueprint 자식을 만들어 상속된 팀·생존 판정을 사용한다.
 - 유물·소모품 수동 폐기는 픽업 Spawn 성공 뒤에만 인스턴스를 제거한다. 슬롯 감소 Spawn 실패 시 초과 슬롯에 보존하고 재시도한다.
 - 실제 Input Action, Mapping Context, Data Asset, Runtime BP, Widget, Test Map은 아직 생성하지 않았다. C++ 입력 포인터가 비어 있으면 해당 기능은 실행되지 않는다.
-- 기존 `/Game/TopDown` 기본 맵과 GameMode를 의도적으로 유지하고 있다. Foundation Test Map이 확인되기 전에는 변경하지 않는다.
+- 현재 기본 맵은 `/Game/Game/Foundation/Test/Test_Level`, 기본 GameMode는 `/Game/Game/Foundation/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 콘텐츠에서 제거했다.
 - 월드 드롭은 `UARWorldItemDropSubsystem`이 처리한다. 실제 프로젝트에서는 컴포넌트의 Pickup Class를 외형 BP 자식으로 지정해야 한다.
 - 실제 플레이 화면, Paper2D 픽셀 스케일, 애니메이션, UI 디자인은 검증 전이다.
 
@@ -287,7 +287,7 @@ AR.Foundation 자동화 테스트: 21 성공 / 0 실패 / 0 경고
 
 ## 2026-09-24 콘텐츠 제작용 한·영 HTML 레퍼런스
 
-Docs/Foundation/FOUNDATION_REFERENCE_KO_EN.html에 46개 스탯의 한국명·영어명·용도·C++ 기본값, 클래스/컴포넌트 116개 필드와 구조체 244개 필드, Blueprint 함수·구현 이벤트 252개 및 이벤트 디스패처 41개의 이름·용도·입출력을 검색 가능한 표로 정리했다. Details 필드는 에디터 편집 범위와 BP 읽기/쓰기 접근을 구분한다. 적은 AARBaseEnemy에 자체 추가 필드가 없으며 공통 캐릭터/컴포넌트 설정을 상속한다. 환경 함정은 일반 Actor에 UARCombatSourceComponent를 붙이는 구성이므로 함정 고유 범위·주기는 콘텐츠 BP에서 정의한다.
+Docs/Foundation/FOUNDATION_REFERENCE_KO_EN.html에 46개 스탯의 한국명·영어명·용도·C++ 기본값, 클래스/컴포넌트 116개 필드와 구조체 244개 필드, Blueprint 함수·구현 이벤트 255개 및 이벤트 디스패처 41개의 이름·용도·입출력을 검색 가능한 표로 정리했다. Details 필드는 에디터 편집 범위와 BP 읽기/쓰기 접근을 구분한다. 적은 AARBaseEnemy에 자체 추가 필드가 없으며 공통 캐릭터/컴포넌트 설정을 상속한다. 환경 함정은 일반 Actor에 UARCombatSourceComponent를 붙이는 구성이므로 함정 고유 범위·주기는 콘텐츠 BP에서 정의한다.
 
 HTML 생성기는 Scripts/generate_foundation_html_reference.py다. 목록과 C++를 바꾸면 생성기를 재실행해야 한다. 브라우저 렌더링, 검색, HTML 파싱을 확인했다. 이 문서의 범위는 프로젝트가 추가한 C++ 노출 항목이며 언리얼 엔진 기본 노드/Details 및 바이너리 BP 그래프 내부의 사용자 정의 변수는 포함하지 않는다.
 
@@ -298,3 +298,15 @@ AARPlayerCharacter의 PostHitInvulnerabilityDuration C++ 기본값을 0.0초로 
 상속 관계는 APaperCharacter → AARBaseCharacter → AARPlayerCharacter 또는 AARBaseEnemy다. 플레이어와 적은 공통 캐릭터 부모를 공유한다. 환경 공격원은 별도의 캐릭터 자식이 아니라 일반 AActor에 UARCombatSourceComponent를 붙이는 방식이며, 이 컴포넌트가 Environment 팀을 제공한다. 환경 Actor는 캐릭터 공통 스탯·체력·경직 컴포넌트를 자동 상속하지 않는다.
 
 추가 검증: 테스트 플레이어 BP_test_Player의 실제 클래스 기본 객체(CDO)를 로드해 피격 후 무적 값이 0.0초인지 확인했다. AR.Foundation.Player.PostHitInvulnerability 단독 테스트 1 성공 / 0 실패 / 0 테스트 경고이며, Saved/Automation/PostHitDefaultBP/index.json과 Saved/Logs/PostHitDefaultBP.log에 결과가 있다.
+
+## 2026-09-25 적 AI 기본 이동과 CC 연결
+
+`AARBaseEnemy`의 기본 AI Controller를 `AARAIController`로 지정하고 배치·스폰 모두 자동 점유하도록 했다. `AR AI Move To Actor`와 `AR AI Move To Location`은 NavMesh 경로 요청용 Blueprint 노드다. 반환값은 요청 접수 상태이며 목적지 도착 여부는 아니다. AI Controller의 공통 `MoveTo` 진입점은 `CanBasicMove()`를 검사하므로 Behavior Tree의 일반 `Move To`도 같은 CC 제한을 따른다. 현재 적별 추적·공격 의사결정 트리는 아직 없으며 콘텐츠 BP/Behavior Tree에서 만들어야 한다.
+
+경직, 상태이상, 사망 등으로 기본 이동 잠금이 생기면 `OnMovementLockChanged`를 통해 진행 중인 AI 경로 요청을 중단하고 즉시 정지한다. 잠금 해제 후에는 이전 목적지로 자동 재출발하지 않는다. 적 AI가 현재 목표를 다시 검사하고 새 이동을 요청해야 한다. 기본 이동과 달리 Action 소유 돌진은 `Request Action Move` 또는 `Request Action Velocity`로 처리한다. 액션 시작·취소는 기존 Action Component를 거쳐야 기절·속박·경직 정책이 적용된다.
+
+C++ 핵심 규칙은 Status/Stagger/Movement Lock의 네이티브 이벤트로 연결했다. 기존 BlueprintAssignable 이벤트는 콘텐츠 BP용으로 그대로 방송한다. 이 변경으로 자동화 월드에서도 상태이상·경직 적용이 실제 캐릭터 이동 잠금과 AI 경로 차단까지 이어진다.
+
+기절·속박 Data Asset은 아직 생성 전이다. 속박은 기본 이동과 구르기를 막되 전체 이동/스킬 그룹은 허용하고, 기절은 기본/전체 이동·구르기·스킬 그룹을 막도록 설정한다. 기존 행동의 취소 여부는 `bCancelActionsOnApply`와 각 Action의 취소 규칙으로 정한다. 공격이 `Apply Status Effect` 또는 `Apply Stagger And Groggy Damage`를 호출해야 실제 CC가 발생한다. `AR.Foundation.AI.MovementCCGate` 자동화 테스트는 적 속박·기절·경직에 따른 AI 이동 차단과 해제, 플레이어 기절의 공통 이동/Action 차단을 검증한다.
+
+검증: `Action_RogueLikeEditor Win64 Development` 빌드 성공. `AR.Foundation.AI.MovementCCGate` 단독 테스트 1 성공 / 0 실패, Foundation 전체 테스트 28 성공 / 0 실패 / 0 경고. 결과는 `Saved/Automation/AIFoundationFull/index.json`과 `Saved/Logs/AIFoundationFull.log`에 있다. NavMesh가 있는 실제 테스트 맵에서 추적 시작·중단·재요청 시각적 검증은 적 BP/Behavior Tree 제작 뒤 진행해야 한다.
