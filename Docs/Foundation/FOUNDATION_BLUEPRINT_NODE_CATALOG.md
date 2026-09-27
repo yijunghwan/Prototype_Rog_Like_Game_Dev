@@ -8,7 +8,7 @@
 
 `Source`의 C++ 헤더 70개, 구현 파일 60개, 빌드/타깃 C# 파일 3개를 읽었다. Foundation 런타임, 자동화 테스트, 기본 TopDown 및 Strategy/TwinStick 템플릿을 포함한다. 기존 Foundation 문서 4개와 코드를 대조했다. 최초 목록은 정적 코드 검토로 작성했으며, 이후 2026-09-24 보완 내용을 반영했다. 보완 후 빌드·자동화 테스트 결과는 handoff의 최신 기록을 따른다. `.uasset` 내부 Blueprint 그래프와 엔진이 제공하는 모든 상속 노드를 읽었다는 의미는 아니다.
 
-현재 프로젝트는 Paper2D 기반 탑다운 액션 로그라이크를 만들기 위한 C++ Foundation이다. 전투 계산, 자원, 스탯, 행동 수명, 상태이상, 장비/유물/소모품, 획득/교체/진화, 상호작용, UI 데이터 전달이 구현되어 있다. 개별 공격의 연출·판정 배치, 적 AI, 맵, 실제 위젯, 아이템 효과는 Blueprint 콘텐츠로 제작해야 한다. `Content/Game`은 검토 시점에 안내 문서만 있으며 실제 게임용 에셋 제작이 남아 있다.
+현재 프로젝트는 Paper2D 기반 탑다운 액션 로그라이크를 만들기 위한 C++ Foundation이다. 전투 계산, 자원, 스탯, 행동 수명, 상태이상, 장비/유물/소모품, 획득/교체/진화, 상호작용, UI 데이터 전달이 구현되어 있다. 초기 검토 이후 테스트 맵·플레이어·게임모드·입력 에셋과 임시 자원 HUD가 추가됐다. `WBP_TestResourceHUD`는 체력·스태미나·마나를 실제 데이터와 연결해 표시한다. 개별 공격의 연출·판정 배치, 적별 AI, 인벤토리·선택창, 아이템 효과는 콘텐츠로 제작해야 한다.
 
 ## 2. 테스트 콘텐츠별 사용할 기반
 
@@ -350,13 +350,18 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [UARManaComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARManaComponent.h:28>) | `GetMax` | 조회 | `float GetMax() const` |
 | [UARManaComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARManaComponent.h:29>) | `GetRatio` | 조회 | `float GetRatio() const` |
 
-#### AR|Movement
+#### AR|AI|Movement
 
 | 대상 클래스 | 함수/표시명 | 종류 | 정확한 선언 |
 |---|---|---|---|
 | [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:22>) | `ARMoveToActor` / AR AI Move To Actor | 호출 | `EPathFollowingRequestResult::Type ARMoveToActor(AActor* Goal, float AcceptanceRadius = -1.0f)` |
 | [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:25>) | `ARMoveToLocation` / AR AI Move To Location | 호출 | `EPathFollowingRequestResult::Type ARMoveToLocation(FVector Destination, float AcceptanceRadius = -1.0f)` |
-| [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:28>) | `CanRequestBasicMove` | 조회 | `bool CanRequestBasicMove() const` |
+| [AARAIController](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h:28>) | `CanRequestBasicMove` / Can Request Basic Move | 조회 | `bool CanRequestBasicMove() const` |
+
+#### AR|Movement
+
+| 대상 클래스 | 함수/표시명 | 종류 | 정확한 선언 |
+|---|---|---|---|
 | [UARMovementControlComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h:34>) | `RequestBasicMove` | 호출 | `bool RequestBasicMove(FVector Direction, float Scale = 1.0f)` |
 | [UARMovementControlComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h:37>) | `RequestActionMove` | 호출 | `bool RequestActionMove(FARActionHandle ActionHandle, FVector Direction, float Scale = 1.0f)` |
 | [UARMovementControlComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h:40>) | `RequestActionVelocity` | 호출 | `bool RequestActionVelocity(FARActionHandle ActionHandle, FVector Direction, float Speed)` |
@@ -810,6 +815,8 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 |---|---|---|
 | `TObjectPtr<UInputMappingContext> PlayerMappingContext` | 읽기 | AR\|Input |
 | `int32 MappingPriority = 0` | 읽기 | AR\|Input |
+| `bool bShowResourceHUD = true` | 읽기 | AR\|UI |
+| `TSoftClassPtr<UARResourceHUDWidget> ResourceHUDClass` | 읽기 | AR\|UI |
 
 #### AStrategyPawn
 

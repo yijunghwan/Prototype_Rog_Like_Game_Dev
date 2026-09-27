@@ -283,6 +283,8 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 
 `AARPlayerController`는 `IMC_Player` 등록, 마우스 위치의 월드 평면 투영, 게임/UI 입력 모드 전환을 소유한다. `AARPlayerCharacter`는 Controller가 전달한 이동·조준·논리 Input Tag를 실제 Component 요청으로 바꾼다. `UARUIManagerComponent`는 HUD, 인벤토리, 진화 선택 UI를 한 번에 하나만 열고 Player 사망 시 열린 UI와 대기 Token을 취소한다.
 
+`AARPlayerController`는 로컬 플레이어의 `WBP_TestResourceHUD`도 자동 생성한다. `UARResourceHUDWidget`이 UI Manager의 자원 Snapshot을 받아 체력·스태미나·마나 바와 숫자를 갱신한다. `bShowResourceHUD`/`ResourceHUDClass`로 표시 여부와 자식 Widget을 바꿀 수 있다. Pawn 변경 시 기존 구독을 해제하고 새 Pawn에 연결한다. 에셋의 Designer 트리는 콘텐츠에 있으며, 에셋이 없으면 네이티브 기본 레이아웃을 사용한다.
+
 `UARInteractionComponent`는 Player 주변의 `ARInteractable` 채널을 조회해 거리, 우선순위, 선택적 시야 검사를 통과한 현재 후보를 보관한다. F 입력은 이 Component의 `TryInteract`만 호출한다. 상점·픽업·NPC는 `IARInteractable`을 구현하고, UI 생성은 직접 하지 않고 UI Manager에 요청한다.
 
 `AARGameMode`는 새 Foundation Player/Controller를 기본 클래스로 지정한다. 현재 프로젝트 기본 맵은 `/Game/Game/Foundation/Test/Test_Level`, 기본 GameMode는 `/Game/Game/Foundation/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 사용하지 않는다.

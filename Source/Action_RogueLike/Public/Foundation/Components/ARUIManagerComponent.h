@@ -13,6 +13,7 @@ struct FARCombatDamageResult;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARUIScreenOpenRequestedSignature, EARUIScreen, Screen, UObject*, ContextObject);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARUIScreenEventSignature, EARUIScreen, Screen);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARHUDSnapshotChangedSignature, const FARPlayerHUDSnapshot&, Snapshot);
+DECLARE_MULTICAST_DELEGATE_OneParam(FARHUDSnapshotChangedNativeSignature, const FARPlayerHUDSnapshot&);
 
 UCLASS(ClassGroup=(ARFoundation), meta=(BlueprintSpawnableComponent))
 class ACTION_ROGUELIKE_API UARUIManagerComponent : public UActorComponent
@@ -43,6 +44,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|UI") FARUIScreenEventSignature OnScreenCloseRequested;
 	UPROPERTY(BlueprintAssignable, Category="AR|UI") FARUIScreenEventSignature OnScreenBackRequested;
 	UPROPERTY(BlueprintAssignable, Category="AR|UI|HUD") FARHUDSnapshotChangedSignature OnHUDSnapshotChanged;
+	FARHUDSnapshotChangedNativeSignature OnHUDSnapshotChangedNative;
 
 private:
 	void ApplyInputMode(bool bUIOpen);

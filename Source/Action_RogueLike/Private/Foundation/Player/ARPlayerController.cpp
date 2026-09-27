@@ -2,12 +2,14 @@
 
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "Foundation/UI/ARResourceHUDWidget.h"
 
 AARPlayerController::AARPlayerController()
 {
 	bShowMouseCursor = true;
 	bEnableClickEvents = false;
 	bEnableMouseOverEvents = false;
+	ResourceHUDClass = TSoftClassPtr<UARResourceHUDWidget>(FSoftObjectPath(TEXT("/Game/Game/Foundation/UI/WBP_TestResourceHUD.WBP_TestResourceHUD_C")));
 }
 
 void AARPlayerController::BeginPlay()
@@ -20,6 +22,48 @@ void AARPlayerController::BeginPlay()
 			InputSubsystem->AddMappingContext(PlayerMappingContext, MappingPriority);
 		}
 	}
+	RefreshResourceHUD();
+}
+
+void AARPlayerController::RefreshResourceHUD()
+{
+	if (!IsLocalController() || !HasActorBegunPlay() || !bShowResourceHUD || !GetLocalPlayer()) return;
+	if (!ResourceHUD)
+	{
+		UClass* Class = ResourceHUDClass.IsNull() ? nullptr : ResourceHUDClass.LoadSynchronous();
+		ResourceHUD = CreateWidget<UARResourceHUDWidget>(this, Class ? Class : UARResourceHUDWidget::StaticClass());
+		if (ResourceHUD) ResourceHUD->AddToViewport(10);
+	}
+	if (ResourceHUD) ResourceHUD->ObservePawn(GetPawn());
+}
+
+void AARPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	RefreshResourceHUD();
+}
+
+void AARPlayerController::OnRep_Pawn()
+{
+	Super::OnRep_Pawn();
+	RefreshResourceHUD();
+}
+
+void AARPlayerController::OnUnPossess()
+{
+	Super::OnUnPossess();
+	if (ResourceHUD) ResourceHUD->ObservePawn(nullptr);
+}
+
+void AARPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (ResourceHUD)
+	{
+		ResourceHUD->ObservePawn(nullptr);
+		ResourceHUD->RemoveFromParent();
+		ResourceHUD = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 bool AARPlayerController::ProjectMouseToGameplayPlane(float PlaneZ, FVector& WorldPoint) const

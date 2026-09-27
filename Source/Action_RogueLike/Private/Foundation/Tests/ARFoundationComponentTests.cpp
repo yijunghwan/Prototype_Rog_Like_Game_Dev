@@ -10,6 +10,10 @@
 #include "InputActionValue.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/ProgressBar.h"
+#include "Components/TextBlock.h"
+#include "UObject/Script.h"
+#include "Foundation/UI/ARResourceHUDWidget.h"
 #include "Foundation/Actions/ARActionTypes.h"
 #include "Foundation/AI/ARAIController.h"
 #include "Foundation/Blueprint/ARResourceBlueprintLibrary.h"
@@ -1309,6 +1313,72 @@ bool FARPlayerDashCooldownTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Zero cooldown allows another dash"), Player->TryStartRoll(true));
 	Player->FinishRoll(false);
 	TestEqual(TEXT("Zero cooldown leaves no wait"), Player->GetRollCooldownRemaining(), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARResourceHUDLiveUpdateTest,
+	"AR.Foundation.UI.ResourceHUDLiveUpdates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARResourceHUDLiveUpdateTest::RunTest(const FString& Parameters)
+{
+	FEditorScriptExecutionGuard ScriptGuard;
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	Player->DispatchBeginPlay();
+	UClass* HUDClass = LoadClass<UARResourceHUDWidget>(nullptr,
+		TEXT("/Game/Game/Foundation/UI/WBP_TestResourceHUD.WBP_TestResourceHUD_C"));
+	if (!TestNotNull(TEXT("Editable Designer HUD asset loads"), HUDClass)) return false;
+	UARResourceHUDWidget* HUD = CreateWidget<UARResourceHUDWidget>(TestWorld.World, HUDClass);
+	if (!TestNotNull(TEXT("HUD widget created"), HUD)) return false;
+	HUD->TakeWidget();
+	HUD->ObservePawn(Player);
+	UProgressBar* HealthBar = Cast<UProgressBar>(HUD->GetWidgetFromName(TEXT("HealthBar")));
+	UProgressBar* ManaBar = Cast<UProgressBar>(HUD->GetWidgetFromName(TEXT("ManaBar")));
+	UProgressBar* StaminaBar = Cast<UProgressBar>(HUD->GetWidgetFromName(TEXT("StaminaBar")));
+	UTextBlock* ManaText = Cast<UTextBlock>(HUD->GetWidgetFromName(TEXT("ManaValue")));
+	if (!TestNotNull(TEXT("Health bar bound"), HealthBar)
+		|| !TestNotNull(TEXT("Mana bar bound"), ManaBar)
+		|| !TestNotNull(TEXT("Stamina bar bound"), StaminaBar)
+		|| !TestNotNull(TEXT("Mana text bound"), ManaText)) return false;
+	TestEqual(TEXT("Initial health is full"), HealthBar->GetPercent(), 1.0f);
+	TestEqual(TEXT("Initial mana is full"), ManaBar->GetPercent(), 1.0f);
+	TestEqual(TEXT("Initial stamina is full"), StaminaBar->GetPercent(), 1.0f);
+
+	float Remaining = 0;
+	FARSourceInfo Source;
+	Player->GetManaComponent()->TryConsume(25.0f, Source, Remaining);
+	Player->GetStaminaComponent()->TryConsume(40.0f, Source, Remaining);
+	AARBaseEnemy* Enemy = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	Enemy->DispatchBeginPlay();
+	FARCombatDamageRequest Damage;
+	Damage.Attacker = Enemy;
+	Damage.Target = Player;
+	Damage.BaseDamage = 30.0f;
+	Damage.bApplyEvasion = false;
+	Damage.bCanCrit = false;
+	const FARCombatDamageResult Result = TestWorld.World->GetSubsystem<UARCombatSubsystem>()->ApplyCombatDamage(Damage);
+	TestEqual(TEXT("Real combat request damages health"), Result.HealthDamage, 30);
+	TestEqual(TEXT("Damage updates health without polling"), HealthBar->GetPercent(), 0.7f);
+	TestEqual(TEXT("Consumption updates mana without polling"), ManaBar->GetPercent(), 0.75f);
+	TestEqual(TEXT("Consumption updates stamina without polling"), StaminaBar->GetPercent(), 0.6f);
+	TestTrue(TEXT("Mana label shows consumed resource"), ManaText->GetText().ToString().Contains(TEXT("75")));
+	Player->GetManaComponent()->Restore(25.0f, Source);
+	TestEqual(TEXT("Recovery updates mana"), ManaBar->GetPercent(), 1.0f);
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::MaxMana, 200.0f);
+	TestEqual(TEXT("Maximum resource change updates the ratio"), ManaBar->GetPercent(), 0.5f);
+	TestTrue(TEXT("Maximum resource change updates the label"), ManaText->GetText().ToString().Contains(TEXT("200")));
+
+	AARPlayerCharacter* Replacement = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	Replacement->DispatchBeginPlay();
+	HUD->ObservePawn(Replacement);
+	TestEqual(TEXT("Possession change refreshes health"), HealthBar->GetPercent(), 1.0f);
+	Player->GetStaminaComponent()->TryConsume(10.0f, Source, Remaining);
+	TestEqual(TEXT("Old pawn no longer drives HUD"), StaminaBar->GetPercent(), 1.0f);
+	HUD->ObservePawn(nullptr);
+	TestEqual(TEXT("No player hides HUD"), HUD->GetVisibility(), ESlateVisibility::Collapsed);
+	Replacement->GetManaComponent()->TryConsume(20.0f, Source, Remaining);
+	TestEqual(TEXT("Disconnected HUD ignores subsequent resource events"), ManaBar->GetPercent(), 0.0f);
 	return true;
 }
 

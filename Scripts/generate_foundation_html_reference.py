@@ -63,9 +63,9 @@ STAT_META = [
 ]
 
 PURPOSE = {
-    "ARMoveToActor": "적 AI가 CC 이동 제한을 확인한 뒤 목표 Actor로 경로 이동을 요청",
-    "ARMoveToLocation": "적 AI가 CC 이동 제한을 확인한 뒤 지정 좌표로 경로 이동을 요청",
-    "CanRequestBasicMove": "적 AI의 기본 경로 이동 요청 가능 여부를 조회",
+    "ARMoveToActor": "적 AI 목표 추적 이동. Goal Actor로 NavMesh 경로 이동을 요청한다. 기본 이동 잠금(CC 등)이 있거나 Goal이 유효하지 않으면 Failed. 반환값은 요청 접수 상태이며 도착 이벤트가 아니다.",
+    "ARMoveToLocation": "적 AI 좌표 이동. Destination 월드 좌표로 NavMesh 경로 이동을 요청한다. 기본 이동 잠금(CC 등)이 있으면 Failed. 반환값은 요청 접수 상태이며 도착 이벤트가 아니다.",
+    "CanRequestBasicMove": "적 AI 이동 가능 확인. 소유 Pawn과 MovementControlComponent가 유효하고 CanBasicMove가 참이면 true. NavMesh·목표 유효성·도착 가능성을 보장하는 검사는 아니다.",
     "ActionDelay": "행동 핸들에 묶인 지연을 시작하고 완료·취소를 통지",
     "CanStartAction": "현재 상태에서 행동 시작 가능 여부를 사전 확인",
     "TryStartAction": "행동을 시작하고 정리용 핸들을 발급",
@@ -356,6 +356,8 @@ FIELD_PURPOSE = {
     "ActionHandle": "이 히트박스가 속한 행동의 수명 핸들. 실행 중 변경하는 설정값은 아니다.",
     "HitPolicy": "한 대상에 대한 명중 허용 방식. 초기화 시 정책을 정한다.",
     "MappingPriority": "입력 매핑 컨텍스트가 다른 컨텍스트보다 우선할 정도.",
+    "bShowResourceHUD": "로컬 플레이어의 체력·스태미나·마나 HUD를 자동 표시할지 설정.",
+    "ResourceHUDClass": "자동 생성할 자원 HUD Widget 클래스. 기본 WBP_TestResourceHUD의 Designer에서 외형을 편집.",
     "StatusTag": "상태이상의 종류를 식별하고 면역·차단을 조회하는 태그.",
     "BaseDuration": "상태이상 기본 지속시간(초).",
     "bAffectedByTenacity": "대상의 강인함에 따라 지속시간을 줄일지 설정.",
@@ -628,7 +630,7 @@ Details의 “조회 전용” 필드는 값 설정이 아니라 컴포넌트 �
 World Context/Target 같은 핀은 에디터가 자동 연결하거나 숨길 수 있으므로 실제 에디터 표시가 최종 기준이다.</div>
 <div class="toolbar"><input id="q" type="search" placeholder="한국어·영어 이름, 클래스, 입력/출력 검색" aria-label="검색">
 <select id="scope" aria-label="범위"><option value="all">전체</option><option value="stats">스탯</option><option value="details">Details</option><option value="nodes">노드</option><option value="events">이벤트</option></select>
-<nav><a href="#stats">스탯</a><a href="#details">Details</a><a href="#nodes">노드</a><a href="#events">이벤트</a></nav></div>"""
+<nav><a href="#stats">스탯</a><a href="#details">Details</a><a href="#nodes">노드</a><a href="#enemy-ai-movement">적 AI 이동</a><a href="#events">이벤트</a></nav></div>"""
     body = ['<section id="stats" data-scope="stats"><h2>스탯 / Stats</h2><p>StatsComponent의 Base Stats에서 기본값을 설정한다. 아래 기본값은 C++ 생성자 기준이며 BP가 재정의했을 수 있다. 현재 체력·스태미나·MP 등은 스탯이 아니라 실시간 자원이다.</p><div class="tablebox"><table><thead><tr><th>한국명</th><th>영어명 / EARStatType</th><th>분류</th><th>용도</th><th>C++ 기본값</th></tr></thead><tbody>']
     for name, ko, category, desc, default in stats:
         body.append('<tr class="entry" data-scope="stats"><td><strong>' + esc(ko) + '</strong></td><td><code>' + esc(name) + '</code></td><td>' + esc(category) + '</td><td>' + esc(desc) + '</td><td><code>' + esc(default) + '</code></td></tr>')
@@ -661,13 +663,39 @@ World Context/Target 같은 핀은 에디터가 자동 연결하거나 숨길 �
         body.append("</tbody></table></div>")
     body.append('</section>')
     body.append('<section id="nodes" data-scope="nodes"><h2>Blueprint 노드 / 영어명·용도·입출력</h2><p>동일한 이름이라도 대상 클래스가 다르면 별도 노드다. 입력/출력은 C++ 선언 기준으로 정리했으며 실행 흐름 핀과 자동 Target 핀은 생략했다.</p>')
+    body.append('''<div class="intro" id="enemy-ai-movement"><h3>적 AI 이동 / AR|AI|Movement</h3>
+<p><strong>우리가 만든 AI Controller 노드:</strong> <a href="#node-AARAIController-ARMoveToActor">AR AI Move To Actor</a> (목표 추적),
+<a href="#node-AARAIController-ARMoveToLocation">AR AI Move To Location</a> (좌표 이동),
+<a href="#node-AARAIController-CanRequestBasicMove">Can Request Basic Move</a> (이동 가능 확인).</p>
+<p><strong>사용:</strong> 적 BP에서 Get Controller → Cast To AR AIController → 해당 노드의 Target에 연결한다.
+AI Controller BP 안에서는 Self를 Target으로 사용한다. AARBaseEnemy는 기본적으로 AARAIController를 사용하고 배치·스폰 시 자동 점유한다.
+적 자식 BP에서 AI Controller Class나 Auto Possess AI를 재정의했다면 해당 설정을 확인한다. 맵에는 이동 가능한 NavMesh가 필요하다.</p>
+<p><strong>Input:</strong> Goal은 따라갈 Actor, Destination은 이동할 월드 좌표, Acceptance Radius는 도착 허용 반경(cm)이다.
+Acceptance Radius 기본 -1은 엔진 기본 허용 반경을 사용한다. 캡슐 반경 등 엔진 경로 추종 설정도 도착 판정에 영향을 준다.</p>
+<p><strong>Output:</strong> Request Successful은 경로 요청 접수, Already At Goal은 이미 허용 범위 안, Failed는 거부·실패다.
+이 노드에는 AI Move To 비동기 노드의 On Success/On Fail 완료 실행 핀이 없다. 이동 완료가 필요하면 Controller의 경로 완료 알림을 별도로 연결한다.</p>
+<p><strong>CC:</strong> 기본 이동이 잠기면 새 요청을 거부하고 진행 중인 경로를 중단한다. 속박은 기본 이동,
+기절·경직은 전체 이동을 막도록 공통 정책에 연결돼 있다. 기절·속박은 해당 상태 Data Asset의 차단 설정이 필요하다.
+해제 후 이전 경로를 자동 재개하지 않으므로 AI가 목표를 다시 판단해 새 이동을 요청한다.
+이 Controller를 사용하는 Behavior Tree의 Move To도 같은 검사를 거친다.</p>
+<p><strong>구분:</strong> Request Basic Move는 방향 입력이며 길 찾기 노드가 아니다.
+스킬 돌진은 Action이 소유하는 Request Action Move/Request Action Velocity로 처리하고,
+스킬 시작·취소는 Action 시스템의 별도 CC 규칙을 따른다.</p></div>''')
     for key, title in (("7.1", "Foundation"), ("7.2", "기존 템플릿")):
         body.append('<h3>' + title + '</h3><div class="tablebox"><table><thead><tr><th>카테고리 · 대상</th><th>영어 노드명</th><th>용도</th><th>Input</th><th>Output</th><th>선언</th></tr></thead><tbody>')
         for category, owner, link, name, label, kind, sig in sections[key]:
             inputs, outputs = pins(sig)
+            row_anchor = ""
+            if owner == "AARAIController":
+                row_anchor = ' id="node-' + esc(owner) + '-' + esc(name) + '"'
+                inputs.insert(0, "Target: AARAIController (적의 Controller)")
+                if name in ("ARMoveToActor", "ARMoveToLocation"):
+                    outputs.append("Failed / AlreadyAtGoal / RequestSuccessful: 요청 상태, 이동 완료 이벤트 아님")
+                elif name == "CanRequestBasicMove":
+                    outputs.append("true: 공통 기본 이동 허용 / false: 잠금 또는 유효한 소유 대상 없음")
             inp = "".join('<span class="pin"><code>' + esc(p) + '</code></span>' for p in inputs) or '<span class="muted">없음</span>'
             out = "".join('<span class="pin"><code>' + esc(p) + '</code></span>' for p in outputs) or '<span class="muted">없음</span>'
-            body.append('<tr class="entry" data-scope="nodes"><td><span class="group">' + esc(category) + '</span><br><code>' + esc(owner) + '</code></td><td><strong><code>' + esc(label) + '</code></strong><br><span class="note">' + esc(kind) + '</span></td><td>' + esc(purpose(name, category, kind)) + '</td><td>' + inp + '</td><td>' + out + '</td><td>' + source_link(link) + '<br><code class="note">' + esc(sig) + '</code></td></tr>')
+            body.append('<tr class="entry" data-scope="nodes"' + row_anchor + '><td><span class="group">' + esc(category) + '</span><br><code>' + esc(owner) + '</code></td><td><strong><code>' + esc(label) + '</code></strong><br><span class="note">' + esc(kind) + '</span></td><td>' + esc(purpose(name, category, kind)) + '</td><td>' + inp + '</td><td>' + out + '</td><td>' + source_link(link) + '<br><code class="note">' + esc(sig) + '</code></td></tr>')
         body.append('</tbody></table></div>')
     body.append('</section>')
     body.append('<section id="events" data-scope="events"><h2>이벤트 디스패처 / 전달 출력</h2><p>Bind Event 또는 Assign으로 구독한다. Input은 구독 대상 인스턴스이며, 아래 전달 인자는 이벤트 발생 시 콜백으로 나오는 값이다.</p><div class="tablebox"><table><thead><tr><th>소유 클래스</th><th>영어 이벤트명</th><th>용도</th><th>Input</th><th>Output / 전달 값</th></tr></thead><tbody>')

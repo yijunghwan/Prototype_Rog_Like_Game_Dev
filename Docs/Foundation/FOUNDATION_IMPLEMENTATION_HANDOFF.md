@@ -1,5 +1,7 @@
 # Foundation 구현 인수인계 기록
 
+> 다음 에이전트는 먼저 [최신 작업 인계 요약](../AGENT_HANDOFF_CURRENT.md)을 읽는다. 이 파일은 전체 구현 이력이며, 날짜별 보완 기록과 최신 검증 결과를 함께 확인해야 한다.
+
 **기록일:** 2026-09-23  
 **프로젝트:** Unreal Engine 5.8 / Paper2D / 32×32 기본 캐릭터·타일 기반 탑뷰 액션 로그라이크
 **이전 검증 지점(최신 결과는 아래 보완 기록 참조):** `Action_RogueLikeEditor Win64 Development` 빌드 성공, `AR.Foundation` 자동화 테스트 21/21 성공
@@ -310,3 +312,19 @@ C++ 핵심 규칙은 Status/Stagger/Movement Lock의 네이티브 이벤트로 �
 기절·속박 Data Asset은 아직 생성 전이다. 속박은 기본 이동과 구르기를 막되 전체 이동/스킬 그룹은 허용하고, 기절은 기본/전체 이동·구르기·스킬 그룹을 막도록 설정한다. 기존 행동의 취소 여부는 `bCancelActionsOnApply`와 각 Action의 취소 규칙으로 정한다. 공격이 `Apply Status Effect` 또는 `Apply Stagger And Groggy Damage`를 호출해야 실제 CC가 발생한다. `AR.Foundation.AI.MovementCCGate` 자동화 테스트는 적 속박·기절·경직에 따른 AI 이동 차단과 해제, 플레이어 기절의 공통 이동/Action 차단을 검증한다.
 
 검증: `Action_RogueLikeEditor Win64 Development` 빌드 성공. `AR.Foundation.AI.MovementCCGate` 단독 테스트 1 성공 / 0 실패, Foundation 전체 테스트 28 성공 / 0 실패 / 0 경고. 결과는 `Saved/Automation/AIFoundationFull/index.json`과 `Saved/Logs/AIFoundationFull.log`에 있다. NavMesh가 있는 실제 테스트 맵에서 추적 시작·중단·재요청 시각적 검증은 적 BP/Behavior Tree 제작 뒤 진행해야 한다.
+
+## 2026-09-28 임시 체력·스태미나·마나 HUD
+
+`Content/Game/Foundation/UI/WBP_TestResourceHUD.uasset`을 생성하고 기본 테스트 게임에 적용했다. 부모는 `UARResourceHUDWidget`이며 실제 Designer 트리에 기본 UMG 바·텍스트를 배치했다. 화면 왼쪽 위의 체력(빨강), 스태미나(초록), 마나(파랑) 바와 현재값/최대값을 표시한다. 별도 이미지가 필요 없고 Designer에서 색상·크기·위치·폰트를 교체할 수 있다. 데이터 연결을 유지하려면 `HealthBar`, `StaminaBar`, `ManaBar`(Progress Bar), `HealthValue`, `StaminaValue`, `ManaValue`(Text) 이름과 종류를 유지한다.
+
+`AARPlayerController`의 `bShowResourceHUD`(기본 true), `ResourceHUDClass`(기본 WBP_TestResourceHUD)로 표시 여부와 자식 클래스를 지정한다. 로컬 플레이어에만 자동 생성하고 Pawn 교체·해제·종료 시 구독을 정리한다. HUD는 HitTestInvisible로 전투 마우스 입력을 가로채지 않는다. UI Manager의 네이티브 Snapshot 이벤트로 갱신하며 기존 Blueprint 이벤트도 유지한다. 생성 시 현재 값을 즉시 반영하고 UI Manager 초기화 완료 시에도 Snapshot을 방송한다. 보호막·스킬·인벤토리 화면은 이번 표시 범위에 포함하지 않는다.
+
+에셋이 없는 경우 네이티브 기본 레이아웃으로 동작한다. `-run=ARCreateResourceHUD` 도구는 에디터 빌드에서 초기 Designer 에셋을 생성하며 기존 파일을 덮어쓰지 않는다. 에디터 전용 모듈 의존성은 에디터 타깃에서만 추가했다.
+
+검증: 에디터 Development 빌드 성공. `AR.Foundation` 29 성공 / 0 실패 / 0 경고. `AR.Foundation.UI.ResourceHUDLiveUpdates`는 실제 에셋 로드, 전투 피해·자원 소비·회복·최대 마나 변경, Pawn 교체와 구독 해제를 검증한다. 결과는 `Saved/Automation/ResourceHUDFinal/index.json`에 있다. 기존 `Test_Level`의 실제 게임 실행에서도 표시를 확인했으며 스크린샷은 `Saved/Screenshots/WindowsEditor/ScreenShot00001.png`다. 외형 수정 안내는 `Content/Game/Foundation/UI/README.md`를 따른다. HTML 레퍼런스의 클래스 필드 목록은 118개로 갱신했다.
+
+## 2026-09-28 인계 및 업로드 전 최종 검증
+
+HUD 숫자 표시는 소수점 없이 반올림하며 내부 자원값과 바 비율의 실수 정밀도는 유지한다. 적 AI 이동 HTML 안내와 칼리번·엑스칼리버 기획 및 Docs/AGENT_HANDOFF_CURRENT.md를 정리했다. 사용자의 요청에 따라 이 변경과 문서를 함께 커밋·푸시한다.
+
+최종 에디터 Development 빌드 성공. 전체 AR.Foundation 테스트 29 성공 / 0 실패 / 0 경고 / 미실행 0. 결과: Saved/Automation/HandoffFinal/index.json 및 Saved/Logs/HandoffFinalTests.log, 빌드 기록: Saved/Logs/HandoffFinalBuild.log.

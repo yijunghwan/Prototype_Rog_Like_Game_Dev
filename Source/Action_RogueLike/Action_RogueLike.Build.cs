@@ -25,7 +25,11 @@ public class Action_RogueLike : ModuleRules
 			"Slate"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] { "SlateCore" });
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "UMGEditor" });
+		}
 
 		PublicIncludePaths.AddRange(new string[] {
 			"Action_RogueLike",

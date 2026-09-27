@@ -53,6 +53,7 @@ void UARUIManagerComponent::BeginPlay()
 			PlayerOwner->GetStatusEffectComponent()->OnStatusRemoved.AddDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
 		}
 	}
+	BroadcastHUDSnapshot();
 }
 
 void UARUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -210,7 +211,9 @@ void UARUIManagerComponent::ApplyInputMode(bool bUIOpen)
 
 void UARUIManagerComponent::BroadcastHUDSnapshot()
 {
-	OnHUDSnapshotChanged.Broadcast(GetHUDSnapshot());
+	const FARPlayerHUDSnapshot Snapshot = GetHUDSnapshot();
+	OnHUDSnapshotChangedNative.Broadcast(Snapshot);
+	OnHUDSnapshotChanged.Broadcast(Snapshot);
 }
 
 void UARUIManagerComponent::HandleHealthChanged(AActor* Target, float Current, float Maximum, float Delta, EARResourceChangeReason Reason)
