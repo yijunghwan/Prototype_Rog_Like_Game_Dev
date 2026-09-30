@@ -486,6 +486,7 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:115>) | `GetStatBreakdown` | 조회 | `FARStatBreakdown GetStatBreakdown(EARStatType StatType) const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:118>) | `GetAllFinalStatViews` | 조회 | `TArray<FARFinalStatView> GetAllFinalStatViews() const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:121>) | `GetModifiersBySource` | 조회 | `FARStatModifierQueryResult GetModifiersBySource(EARModifierSourceCategory Category, FName SourceId) const` |
+| [UARStatsComponent](../../Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h) | `GetVisibleStatEffects` | 조회 | `TArray<FARStatEffectView> GetVisibleStatEffects() const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:124>) | `GetModifierRemainingTime` | 조회 | `bool GetModifierRemainingTime(FARStatModifierHandle Handle, bool& bIsPermanent, float& RemainingSeconds) const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:127>) | `GetDamageRemainingMultiplier` | 조회 | `float GetDamageRemainingMultiplier(EARStatType ReductionStat) const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:130>) | `HasGuaranteedInvulnerability` | 조회 | `bool HasGuaranteedInvulnerability() const` |
@@ -1398,6 +1399,12 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | `float Value = 0.0f` | 읽기/쓰기 | Stat |
 | `float Duration = -1.0f` | 읽기/쓰기 | Stat |
 | `FARSourceInfo Source` | 읽기/쓰기 | Stat |
+| `bool bStackOnly = false` | 읽기/쓰기 | Stack |
+| `FARStatModifierHandle StackGroupHandle` | 읽기/쓰기 | Stack |
+| `bool bAffectedByTenacity = false` | 읽기/쓰기 | Duration |
+| `EARStatEffectDisplay HUDDisplay = Hidden` | 읽기/쓰기 | HUD |
+| `FText HUDName` | 읽기/쓰기 | HUD |
+| `TSoftObjectPtr<UTexture2D> HUDIcon` | 읽기/쓰기 | HUD |
 | `bool bGuaranteeInvulnerability = false` | 읽기/쓰기 | Guarantee |
 | `bool bGuaranteeEvasion = false` | 읽기/쓰기 | Guarantee |
 

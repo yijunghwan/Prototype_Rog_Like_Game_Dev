@@ -5,6 +5,16 @@
 #include "Foundation/Core/ARFoundationTypes.h"
 #include "ARStatsComponent.generated.h"
 
+class UTexture2D;
+
+UENUM(BlueprintType)
+enum class EARStatEffectDisplay : uint8
+{
+	Hidden,
+	Buff,
+	Debuff
+};
+
 USTRUCT(BlueprintType)
 struct ACTION_ROGUELIKE_API FARStatModifierSpec
 {
@@ -24,6 +34,16 @@ struct ACTION_ROGUELIKE_API FARStatModifierSpec
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat")
 	FARSourceInfo Source;
+
+	/** Records one stack without changing or recalculating a stat. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stack") bool bStackOnly = false;
+	/** Pass the first application handle to attach another stat change to the same stack. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stack") FARStatModifierHandle StackGroupHandle;
+	/** Only affects finite durations, using the target's tenacity at application time. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Duration") bool bAffectedByTenacity = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD") EARStatEffectDisplay HUDDisplay = EARStatEffectDisplay::Hidden;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="HUDDisplay != EARStatEffectDisplay::Hidden")) FText HUDName;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="HUDDisplay != EARStatEffectDisplay::Hidden")) TSoftObjectPtr<UTexture2D> HUDIcon;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Guarantee")
 	bool bGuaranteeInvulnerability = false;
@@ -66,6 +86,21 @@ struct ACTION_ROGUELIKE_API FARStatModifierQueryResult
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Stat") float LongestRemainingTime = 0.0f;
 };
 
+/** One visible source, with one stack per application group (not per stat change). */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARStatEffectView
+{
+	GENERATED_BODY()
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARModifierSourceCategory Category = EARModifierSourceCategory::Other;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FName SourceId;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARStatEffectDisplay Display = EARStatEffectDisplay::Hidden;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 StackCount = 0;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bHasPermanent = false;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float LongestRemainingTime = 0.0f;
+};
+
 USTRUCT()
 struct FARActiveStatModifier
 {
@@ -73,6 +108,7 @@ struct FARActiveStatModifier
 
 	UPROPERTY() FARStatModifierHandle Handle;
 	UPROPERTY() FARStatModifierSpec Spec;
+	UPROPERTY() FGuid StackGroupId;
 	UPROPERTY() double AppliedAt = 0.0;
 	UPROPERTY() double ExpireAt = -1.0;
 };
@@ -120,6 +156,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="AR|Stats")
 	FARStatModifierQueryResult GetModifiersBySource(EARModifierSourceCategory Category, FName SourceId) const;
+
+	UFUNCTION(BlueprintPure, Category="AR|Stats")
+	TArray<FARStatEffectView> GetVisibleStatEffects() const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Stats")
 	bool GetModifierRemainingTime(FARStatModifierHandle Handle, bool& bIsPermanent, float& RemainingSeconds) const;

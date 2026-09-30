@@ -326,10 +326,11 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 | `GetFinalStat(StatType)` | 캐시된 최종값 반환 |
 | `GetModifierRemainingTime(Handle)` | 영구/남은 시간 상태 반환 |
 | `GetModifiersBySource(Category, SourceId)` | 존재 여부, 중첩 수, 가장 긴 남은 시간 반환 |
+| `GetVisibleStatEffects()` | 현재 HUD에 표시할 출처별 버프·디버프 아이콘, 중첩 수, 남은 시간 반환 |
 | `RemoveOneModifierStack(Category, SourceId, Policy)` | 최신/가장 오래된 중첩 하나 제거 |
 | `GetStatBreakdown(StatType)` | 인벤토리/디버그용 읽기 전용 분해 정보 |
 
-이벤트는 `OnFinalStatChanged`, `OnStatModifiersChanged`, `OnModifierAdded`, `OnModifierRemoved`다. Modifier Spec에는 출처 분류, 출처 ID, 표시 이름, 지속시간, 스탯, 계산 방식을 항상 넣는다. Buff는 같은 SourceId여도 Handle 기준으로 독립 중첩한다. `DisplayName`은 조회 키로 쓰지 않는다.
+이벤트는 `OnFinalStatChanged`, `OnStatModifiersChanged`, `OnModifierAdded`, `OnModifierRemoved`다. Modifier Spec에는 출처 분류, 출처 ID, 표시 이름, 지속시간, 스탯, 계산 방식을 항상 넣는다. 같은 SourceId의 재적용은 독립 중첩하지만, 한 적용이 여러 스탯을 바꿀 때는 첫 반환 Handle을 `StackGroupHandle`에 전달해 한 중첩으로 센다. `GetModifiersBySource`는 수정치 개수가 아닌 살아 있는 적용 그룹 수를 반환한다. `bStackOnly`는 스탯 재계산 없이 중첩만 저장하며, `bAffectedByTenacity`는 유한 지속시간에 대상의 강인함을 적용 시점에 한 번 반영한다. HUD 표시를 선택한 수정치는 대상의 스탯 컴포넌트가 아이콘 메타데이터와 수명을 함께 관리하고 UI가 이를 읽는다. `DisplayName`은 조회 키로 쓰지 않는다.
 
 전체 피해 감소율 Modifier의 `bGuaranteeInvulnerability`, 회피력 Modifier의 `bGuaranteeEvasion`은 별도 관리형 Token을 함께 생성한다. 단순 수치 `+100`으로 구현하지 않으며 원 Modifier가 제거·만료되면 연결 Token도 제거한다. Action 귀속 Modifier는 Action 종료·취소 시 Handle로 정리한다.
 

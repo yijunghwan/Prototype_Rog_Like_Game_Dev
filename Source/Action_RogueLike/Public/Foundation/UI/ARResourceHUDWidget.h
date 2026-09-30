@@ -7,6 +7,8 @@
 
 class UProgressBar;
 class UTextBlock;
+class UHorizontalBox;
+class UBorder;
 class UARUIManagerComponent;
 class APawn;
 
@@ -24,6 +26,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UProgressBar> HealthBar;
@@ -32,8 +35,19 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> HealthValue;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> StaminaValue;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> ManaValue;
+	/** Optional designer container; a default icon strip is added under resources on CanvasPanel roots. */
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UHorizontalBox> StatEffectIcons;
 
 private:
 	void Disconnect();
 	UPROPERTY(Transient) TObjectPtr<UARUIManagerComponent> ObservedUI;
+	UPROPERTY(Transient) TObjectPtr<UBorder> StatEffectPanel;
+	struct FTimedLabel
+	{
+		TWeakObjectPtr<UTextBlock> Text;
+		double EndsAt = 0.0;
+		int32 LastShown = -1;
+	};
+	TArray<FTimedLabel> TimedLabels;
+	TArray<FString> CachedEffectKeys;
 };

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Foundation/Items/ARConsumableTypes.h"
 #include "Foundation/Items/ARItemTypes.h"
+#include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Status/ARStatusEffectTypes.h"
 #include "ARUITypes.generated.h"
 
@@ -44,6 +45,8 @@ struct ACTION_ROGUELIKE_API FARPlayerHUDSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bHasEquippedWeapon = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARLoadoutItemSnapshot EquippedWeapon;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARLoadoutItemSnapshot> ActiveRelics;
+	/** Visible stat effects on the player, including stacks with no stat change. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARStatEffectView> StatEffects;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARRegisteredSkillUIData> Skills;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARConsumableSlotSnapshot> Consumables;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARStatusEffectView> StatusEffects;

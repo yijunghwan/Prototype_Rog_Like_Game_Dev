@@ -45,7 +45,7 @@ void UARStatsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 
 	for (const FARActiveStatModifier& Modifier : Expired)
 	{
-		RecalculateStat(Modifier.Spec.StatType);
+		if (!Modifier.Spec.bStackOnly) RecalculateStat(Modifier.Spec.StatType);
 		BroadcastSourceChange(Modifier.Spec.Source);
 	}
 
@@ -66,9 +66,14 @@ FARStatModifierHandle UARStatsComponent::AddStatModifier(const FARStatModifierSp
 		UE_LOG(LogARFoundation, Warning, TEXT("Rejected invalid stat modifier on %s."), *GetNameSafe(GetOwner()));
 		return Handle;
 	}
-	if (Spec.Operation == EARStatModifierOperation::IndependentDamageReduction && !IsReductionStat(Spec.StatType))
+	if (!Spec.bStackOnly && Spec.Operation == EARStatModifierOperation::IndependentDamageReduction && !IsReductionStat(Spec.StatType))
 	{
 		UE_LOG(LogARFoundation, Warning, TEXT("Independent damage reduction is only valid for reduction stats."));
+		return Handle;
+	}
+	if (Spec.bStackOnly && (Spec.bGuaranteeInvulnerability || Spec.bGuaranteeEvasion))
+	{
+		UE_LOG(LogARFoundation, Warning, TEXT("Stack-only effects cannot grant invulnerability or evasion."));
 		return Handle;
 	}
 	if (Spec.bGuaranteeInvulnerability && Spec.StatType != EARStatType::OverallDamageReduction)
@@ -81,15 +86,47 @@ FARStatModifierHandle UARStatsComponent::AddStatModifier(const FARStatModifierSp
 		UE_LOG(LogARFoundation, Warning, TEXT("Evasion guarantee requires Evasion."));
 		return Handle;
 	}
+	if ((Spec.bStackOnly || Spec.HUDDisplay != EARStatEffectDisplay::Hidden) && Spec.Source.SourceId.IsNone())
+	{
+		UE_LOG(LogARFoundation, Warning, TEXT("Stack and HUD effects require a Source Id on %s."), *GetNameSafe(GetOwner()));
+		return Handle;
+	}
 
+	const FARActiveStatModifier* GroupMember = nullptr;
+	if (Spec.StackGroupHandle.IsValid())
+	{
+		GroupMember = ActiveModifiers.FindByPredicate([&Spec](const FARActiveStatModifier& Modifier)
+		{
+			return Modifier.StackGroupId == Spec.StackGroupHandle.Id;
+		});
+		if (!GroupMember || GroupMember->Spec.Source.Category != Spec.Source.Category
+			|| GroupMember->Spec.Source.SourceId != Spec.Source.SourceId)
+		{
+			UE_LOG(LogARFoundation, Warning, TEXT("Invalid stat effect stack group on %s."), *GetNameSafe(GetOwner()));
+			return Handle;
+		}
+	}
+	else if (Spec.bAffectedByTenacity && Spec.Duration > 0.0f
+		&& GetFinalStat(EARStatType::Tenacity) >= 100.0f)
+	{
+		return Handle;
+	}
+
+	const FGuid ExistingGroupId = GroupMember ? GroupMember->StackGroupId : FGuid();
+	const double ExistingGroupExpiry = GroupMember ? GroupMember->ExpireAt : -1.0;
+	const float EffectiveDuration = Spec.bAffectedByTenacity && Spec.Duration > 0.0f
+		? Spec.Duration * (1.0f - FMath::Clamp(GetFinalStat(EARStatType::Tenacity), 0.0f, 100.0f) / 100.0f)
+		: Spec.Duration;
 	Handle.Id = FGuid::NewGuid();
 	FARActiveStatModifier& NewModifier = ActiveModifiers.AddDefaulted_GetRef();
 	NewModifier.Handle = Handle;
 	NewModifier.Spec = Spec;
 	NewModifier.AppliedAt = GetNow();
-	NewModifier.ExpireAt = Spec.Duration < 0.0f ? -1.0 : NewModifier.AppliedAt + Spec.Duration;
+	NewModifier.StackGroupId = GroupMember ? ExistingGroupId : Handle.Id;
+	NewModifier.ExpireAt = GroupMember ? ExistingGroupExpiry
+		: (EffectiveDuration < 0.0f ? -1.0 : NewModifier.AppliedAt + EffectiveDuration);
 
-	RecalculateStat(Spec.StatType);
+	if (!Spec.bStackOnly) RecalculateStat(Spec.StatType);
 	BroadcastSourceChange(Spec.Source);
 	if (NewModifier.ExpireAt >= 0.0)
 	{
@@ -112,7 +149,7 @@ bool UARStatsComponent::RemoveStatModifier(FARStatModifierHandle Handle)
 
 	const FARActiveStatModifier Removed = ActiveModifiers[Index];
 	ActiveModifiers.RemoveAt(Index);
-	RecalculateStat(Removed.Spec.StatType);
+	if (!Removed.Spec.bStackOnly) RecalculateStat(Removed.Spec.StatType);
 	BroadcastSourceChange(Removed.Spec.Source);
 	return true;
 }
@@ -129,7 +166,7 @@ int32 UARStatsComponent::RemoveModifiers(EARModifierSourceCategory Category, FNa
 		const bool bIdMatches = SourceId.IsNone() || Modifier.Spec.Source.SourceId == SourceId;
 		if (bCategoryMatches && bIdMatches)
 		{
-			DirtyStats.Add(Modifier.Spec.StatType);
+			if (!Modifier.Spec.bStackOnly) DirtyStats.Add(Modifier.Spec.StatType);
 			ChangedSources.Add(Modifier.Spec.Source);
 			ActiveModifiers.RemoveAt(Index);
 			++RemovedCount;
@@ -173,7 +210,14 @@ bool UARStatsComponent::RemoveOneModifierStack(EARModifierSourceCategory Categor
 		return false;
 	}
 	RemovedHandle = ActiveModifiers[SelectedIndex].Handle;
-	return RemoveStatModifier(RemovedHandle);
+	const FGuid GroupId = ActiveModifiers[SelectedIndex].StackGroupId;
+	TArray<FARStatModifierHandle> GroupHandles;
+	for (const FARActiveStatModifier& Modifier : ActiveModifiers)
+	{
+		if (Modifier.StackGroupId == GroupId) GroupHandles.Add(Modifier.Handle);
+	}
+	for (const FARStatModifierHandle& GroupHandle : GroupHandles) RemoveStatModifier(GroupHandle);
+	return true;
 }
 
 float UARStatsComponent::GetFinalStat(EARStatType StatType) const
@@ -217,12 +261,13 @@ FARStatModifierQueryResult UARStatsComponent::GetModifiersBySource(EARModifierSo
 {
 	FARStatModifierQueryResult Result;
 	const double Now = GetNow();
+	TSet<FGuid> Groups;
 	for (const FARActiveStatModifier& Modifier : ActiveModifiers)
 	{
 		if ((Category == EARModifierSourceCategory::All || Modifier.Spec.Source.Category == Category) && Modifier.Spec.Source.SourceId == SourceId)
 		{
 			Result.bExists = true;
-			++Result.StackCount;
+			Groups.Add(Modifier.StackGroupId);
 			if (Modifier.ExpireAt < 0.0)
 			{
 				Result.bHasPermanent = true;
@@ -234,7 +279,53 @@ FARStatModifierQueryResult UARStatsComponent::GetModifiersBySource(EARModifierSo
 			}
 		}
 	}
+	Result.StackCount = Groups.Num();
 	return Result;
+}
+
+TArray<FARStatEffectView> UARStatsComponent::GetVisibleStatEffects() const
+{
+	TArray<FARStatEffectView> Views;
+	const double Now = GetNow();
+	for (const FARActiveStatModifier& Modifier : ActiveModifiers)
+	{
+		if (Modifier.Spec.HUDDisplay == EARStatEffectDisplay::Hidden) continue;
+		const bool bKnownSource = Views.ContainsByPredicate([&Modifier](const FARStatEffectView& View)
+		{
+			return View.Category == Modifier.Spec.Source.Category && View.SourceId == Modifier.Spec.Source.SourceId;
+		});
+		if (bKnownSource) continue;
+		FARStatEffectView& View = Views.AddDefaulted_GetRef();
+		View.Category = Modifier.Spec.Source.Category;
+		View.SourceId = Modifier.Spec.Source.SourceId;
+		View.Display = Modifier.Spec.HUDDisplay;
+		View.DisplayName = Modifier.Spec.HUDName.IsEmpty() ? Modifier.Spec.Source.DisplayName : Modifier.Spec.HUDName;
+		View.Icon = Modifier.Spec.HUDIcon;
+	}
+	for (FARStatEffectView& View : Views)
+	{
+		TSet<FGuid> Groups;
+		for (const FARActiveStatModifier& Modifier : ActiveModifiers)
+		{
+			if (Modifier.Spec.Source.Category != View.Category || Modifier.Spec.Source.SourceId != View.SourceId) continue;
+			Groups.Add(Modifier.StackGroupId);
+			if (Modifier.ExpireAt < 0.0)
+			{
+				View.bHasPermanent = true;
+				View.LongestRemainingTime = -1.0f;
+			}
+			else if (!View.bHasPermanent)
+			{
+				View.LongestRemainingTime = FMath::Max(View.LongestRemainingTime, static_cast<float>(Modifier.ExpireAt - Now));
+			}
+		}
+		View.StackCount = Groups.Num();
+	}
+	Views.Sort([](const FARStatEffectView& A, const FARStatEffectView& B)
+	{
+		return A.SourceId.LexicalLess(B.SourceId);
+	});
+	return Views;
 }
 
 bool UARStatsComponent::GetModifierRemainingTime(FARStatModifierHandle Handle, bool& bIsPermanent, float& RemainingSeconds) const
@@ -267,7 +358,7 @@ float UARStatsComponent::GetDamageRemainingMultiplier(EARStatType ReductionStat)
 	TArray<float> IndependentValues;
 	for (const FARActiveStatModifier& Modifier : ActiveModifiers)
 	{
-		if (Modifier.Spec.StatType != ReductionStat)
+		if (Modifier.Spec.bStackOnly || Modifier.Spec.StatType != ReductionStat)
 		{
 			continue;
 		}
@@ -293,7 +384,7 @@ bool UARStatsComponent::HasGuaranteedInvulnerability() const
 {
 	return ActiveModifiers.ContainsByPredicate([](const FARActiveStatModifier& Modifier)
 	{
-		return Modifier.Spec.bGuaranteeInvulnerability;
+		return !Modifier.Spec.bStackOnly && Modifier.Spec.bGuaranteeInvulnerability;
 	});
 }
 
@@ -301,7 +392,7 @@ bool UARStatsComponent::HasGuaranteedEvasion() const
 {
 	return ActiveModifiers.ContainsByPredicate([](const FARActiveStatModifier& Modifier)
 	{
-		return Modifier.Spec.bGuaranteeEvasion;
+		return !Modifier.Spec.bStackOnly && Modifier.Spec.bGuaranteeEvasion;
 	});
 }
 
@@ -340,7 +431,7 @@ float UARStatsComponent::CalculateGeneralStat(EARStatType StatType, FARStatBreak
 	float MultiplicativeProduct = 1.0f;
 	for (const FARActiveStatModifier& Modifier : ActiveModifiers)
 	{
-		if (Modifier.Spec.StatType != StatType)
+		if (Modifier.Spec.bStackOnly || Modifier.Spec.StatType != StatType)
 		{
 			continue;
 		}

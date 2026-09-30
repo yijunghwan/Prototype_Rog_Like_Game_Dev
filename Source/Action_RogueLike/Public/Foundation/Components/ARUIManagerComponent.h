@@ -61,6 +61,7 @@ private:
 	UFUNCTION() void HandleConsumableSlotsChanged(const TArray<FARConsumableSlotSnapshot>& Slots);
 	UFUNCTION() void HandleAimWorldLocationChanged(AARPlayerCharacter* Player, FVector WorldLocation);
 	UFUNCTION() void HandleStatusEffectChanged(AActor* Target, const FARStatusEffectView& Status);
+	UFUNCTION() void HandleStatModifiersChanged(AActor* Target, FName SourceId, FText DisplayName, int32 StackCount, float LongestRemainingTime);
 
 	UPROPERTY(Transient) TObjectPtr<AARPlayerCharacter> PlayerOwner;
 	UPROPERTY(Transient) TObjectPtr<UObject> CurrentContext;

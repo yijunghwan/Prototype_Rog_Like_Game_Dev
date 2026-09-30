@@ -4,6 +4,9 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
@@ -13,6 +16,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Components/ARUIManagerComponent.h"
+#include "Foundation/Status/ARStatusEffectDefinition.h"
 
 void UARResourceHUDWidget::BuildDefaultLayout(UWidgetTree* Tree)
 {
@@ -72,6 +76,29 @@ TSharedRef<SWidget> UARResourceHUDWidget::RebuildWidget()
 	HealthValue = Cast<UTextBlock>(WidgetTree->FindWidget(TEXT("HealthValue")));
 	StaminaValue = Cast<UTextBlock>(WidgetTree->FindWidget(TEXT("StaminaValue")));
 	ManaValue = Cast<UTextBlock>(WidgetTree->FindWidget(TEXT("ManaValue")));
+	StatEffectIcons = Cast<UHorizontalBox>(WidgetTree->FindWidget(TEXT("StatEffectIcons")));
+	StatEffectPanel = Cast<UBorder>(WidgetTree->FindWidget(TEXT("StatEffectPanel")));
+	if (!StatEffectIcons && StatEffectPanel)
+	{
+		StatEffectIcons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("StatEffectIcons"));
+		StatEffectPanel->SetContent(StatEffectIcons);
+	}
+	if (!StatEffectIcons)
+	{
+		if (UCanvasPanel* Canvas = Cast<UCanvasPanel>(WidgetTree->RootWidget))
+		{
+			StatEffectPanel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("StatEffectPanel"));
+			StatEffectPanel->SetBrushColor(FLinearColor(0.025f, 0.035f, 0.055f, 0.92f));
+			StatEffectPanel->SetPadding(FMargin(8.0f));
+			StatEffectIcons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("StatEffectIcons"));
+			StatEffectPanel->SetContent(StatEffectIcons);
+			UCanvasPanelSlot* EffectSlot = Canvas->AddChildToCanvas(StatEffectPanel);
+			EffectSlot->SetPosition(FVector2D(24.0f, 220.0f));
+			EffectSlot->SetAutoSize(true);
+		}
+	}
+	TimedLabels.Reset();
+	CachedEffectKeys.Reset();
 	return Super::RebuildWidget();
 }
 
@@ -80,6 +107,24 @@ void UARResourceHUDWidget::NativeConstruct()
 	Super::NativeConstruct();
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	ObservePawn(GetOwningPlayerPawn());
+}
+
+void UARResourceHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	for (FTimedLabel& Label : TimedLabels)
+	{
+		if (UTextBlock* Text = Label.Text.Get())
+		{
+			const int32 Seconds = FMath::CeilToInt(FMath::Max(0.0, Label.EndsAt - Now));
+			if (Label.LastShown != Seconds)
+			{
+				Text->SetText(FText::AsNumber(Seconds));
+				Label.LastShown = Seconds;
+			}
+		}
+	}
 }
 
 void UARResourceHUDWidget::Disconnect()
@@ -118,6 +163,93 @@ void UARResourceHUDWidget::ApplySnapshot(const FARPlayerHUDSnapshot& Snapshot)
 	Update(HealthBar, HealthValue, Snapshot.Health);
 	Update(StaminaBar, StaminaValue, Snapshot.Stamina);
 	Update(ManaBar, ManaValue, Snapshot.Mana);
+
+	if (!StatEffectIcons) return;
+	TArray<FString> EffectKeys;
+	TArray<float> TimedRemaining;
+	for (const FARStatEffectView& Effect : Snapshot.StatEffects)
+	{
+		EffectKeys.Add(FString::Printf(TEXT("S:%d:%s:%d:%d:%d:%s:%s"), static_cast<int32>(Effect.Category),
+			*Effect.SourceId.ToString(), Effect.StackCount, Effect.bHasPermanent ? 1 : 0, static_cast<int32>(Effect.Display),
+			*Effect.DisplayName.ToString(), *Effect.Icon.ToSoftObjectPath().ToString()));
+		if (!Effect.bHasPermanent) TimedRemaining.Add(Effect.LongestRemainingTime);
+	}
+	for (const FARStatusEffectView& Effect : Snapshot.StatusEffects)
+	{
+		if (!Effect.Definition) continue;
+		EffectKeys.Add(FString::Printf(TEXT("C:%s"), *Effect.Handle.Id.ToString(EGuidFormats::Digits)));
+		TimedRemaining.Add(Effect.RemainingTime);
+	}
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (EffectKeys == CachedEffectKeys && TimedRemaining.Num() == TimedLabels.Num())
+	{
+		for (int32 Index = 0; Index < TimedLabels.Num(); ++Index)
+		{
+			TimedLabels[Index].EndsAt = Now + TimedRemaining[Index];
+		}
+		return;
+	}
+	CachedEffectKeys = MoveTemp(EffectKeys);
+	StatEffectIcons->ClearChildren();
+	TimedLabels.Reset();
+	auto AddEffect = [this, Now](const FText& Name, TSoftObjectPtr<UTexture2D> Icon, int32 StackCount, float Remaining, bool bPermanent, FLinearColor Tint)
+	{
+		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
+		UHorizontalBoxSlot* ColumnSlot = StatEffectIcons->AddChildToHorizontalBox(Column);
+		ColumnSlot->SetPadding(FMargin(0.0f, 0.0f, 6.0f, 0.0f));
+		UBorder* Frame = WidgetTree->ConstructWidget<UBorder>();
+		Frame->SetBrushColor(Tint);
+		Frame->SetPadding(FMargin(2.0f));
+		Frame->SetToolTipText(Name);
+		Column->AddChildToVerticalBox(Frame);
+		USizeBox* Size = WidgetTree->ConstructWidget<USizeBox>();
+		Size->SetWidthOverride(36.0f);
+		Size->SetHeightOverride(36.0f);
+		Frame->SetContent(Size);
+		UOverlay* Overlay = WidgetTree->ConstructWidget<UOverlay>();
+		Size->SetContent(Overlay);
+		UImage* Image = WidgetTree->ConstructWidget<UImage>();
+		if (UTexture2D* Texture = Icon.LoadSynchronous()) Image->SetBrushFromTexture(Texture);
+		Overlay->AddChildToOverlay(Image);
+		if (StackCount > 1)
+		{
+			UTextBlock* StackText = WidgetTree->ConstructWidget<UTextBlock>();
+			StackText->SetText(FText::AsNumber(StackCount));
+			StackText->SetFontSize(14);
+			StackText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+			UOverlaySlot* StackSlot = Overlay->AddChildToOverlay(StackText);
+			StackSlot->SetHorizontalAlignment(HAlign_Right);
+			StackSlot->SetVerticalAlignment(VAlign_Bottom);
+		}
+		if (!bPermanent)
+		{
+			UTextBlock* TimeText = WidgetTree->ConstructWidget<UTextBlock>();
+			TimeText->SetFontSize(11);
+			TimeText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+			Column->AddChildToVerticalBox(TimeText);
+			FTimedLabel& Label = TimedLabels.AddDefaulted_GetRef();
+			Label.Text = TimeText;
+			Label.EndsAt = Now + Remaining;
+			Label.LastShown = FMath::CeilToInt(Remaining);
+			TimeText->SetText(FText::AsNumber(Label.LastShown));
+		}
+	};
+	for (const FARStatEffectView& Effect : Snapshot.StatEffects)
+	{
+		AddEffect(Effect.DisplayName, Effect.Icon, Effect.StackCount, Effect.LongestRemainingTime,
+			Effect.bHasPermanent, Effect.Display == EARStatEffectDisplay::Debuff
+				? FLinearColor(0.55f, 0.08f, 0.1f) : FLinearColor(0.05f, 0.45f, 0.2f));
+	}
+	for (const FARStatusEffectView& Effect : Snapshot.StatusEffects)
+	{
+		if (Effect.Definition)
+		{
+			AddEffect(Effect.Definition->DisplayName, Effect.Definition->Icon, 1, Effect.RemainingTime,
+				false, FLinearColor(0.55f, 0.08f, 0.1f));
+		}
+	}
+	if (StatEffectPanel) StatEffectPanel->SetVisibility(StatEffectIcons->GetChildrenCount() == 0 ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	else StatEffectIcons->SetVisibility(StatEffectIcons->GetChildrenCount() == 0 ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 }
 
 void UARResourceHUDWidget::NativeDestruct()

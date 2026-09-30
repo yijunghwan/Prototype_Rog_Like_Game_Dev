@@ -26,4 +26,5 @@ namespace ARGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG(Item_Type_ActiveRelic, "Item.Type.ActiveRelic");
 	UE_DEFINE_GAMEPLAY_TAG(Item_Type_PassiveRelic, "Item.Type.PassiveRelic");
 	UE_DEFINE_GAMEPLAY_TAG(Item_Type_Consumable, "Item.Type.Consumable");
+
 }

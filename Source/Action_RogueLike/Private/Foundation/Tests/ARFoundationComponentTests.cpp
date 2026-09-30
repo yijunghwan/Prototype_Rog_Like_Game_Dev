@@ -11,7 +11,9 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/ProgressBar.h"
+#include "Components/HorizontalBox.h"
 #include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
 #include "UObject/Script.h"
 #include "Foundation/UI/ARResourceHUDWidget.h"
 #include "Foundation/Actions/ARActionTypes.h"
@@ -390,6 +392,73 @@ bool FARStatusTenacityRefreshTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARStatEffectStacksAndTenacityTest,
+	"AR.Foundation.Stats.EffectStacksAndTenacity",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARStatEffectStacksAndTenacityTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	UARStatsComponent* Stats = nullptr;
+	UARActionComponent* Action = nullptr;
+	UARStaggerComponent* Stagger = nullptr;
+	UARStatusEffectComponent* Status = nullptr;
+	if (!TestNotNull(TEXT("Test actor created"), ARFoundationTests::MakeActorWithComponents(TestWorld.World, Stats, Action, Stagger, Status))) return false;
+	Stats->SetBaseStat(EARStatType::Tenacity, 50.0f);
+	FARStatModifierSpec Effect;
+	Effect.StatType = EARStatType::AttackPower;
+	Effect.Value = 10.0f;
+	Effect.Duration = 4.0f;
+	Effect.bAffectedByTenacity = true;
+	Effect.Source.Category = EARModifierSourceCategory::Buff;
+	Effect.Source.SourceId = TEXT("Test.PowerBuff");
+	Effect.Source.DisplayName = FText::FromString(TEXT("Power buff"));
+	Effect.HUDDisplay = EARStatEffectDisplay::Buff;
+	bool bApplied = false;
+	const FARStatModifierHandle First = Stats->AddStatModifier(Effect, bApplied);
+	TestTrue(TEXT("First timed stack applies"), bApplied);
+	bool bPermanent = false;
+	float Remaining = 0.0f;
+	Stats->GetModifierRemainingTime(First, bPermanent, Remaining);
+	TestTrue(TEXT("Tenacity halves four-second modifier"), FMath::IsNearlyEqual(Remaining, 2.0f, 0.01f));
+	FARStatModifierSpec SecondStat = Effect;
+	SecondStat.StatType = EARStatType::SpellPower;
+	SecondStat.Value = 5.0f;
+	SecondStat.StackGroupHandle = First;
+	const FARStatModifierHandle Grouped = Stats->AddStatModifier(SecondStat, bApplied);
+	TestTrue(TEXT("Second stat joins first stack"), bApplied);
+	TestEqual(TEXT("Two stat changes count as one stack"), Stats->GetModifiersBySource(EARModifierSourceCategory::Buff, Effect.Source.SourceId).StackCount, 1);
+	TestEqual(TEXT("Grouped spell bonus applies"), Stats->GetFinalStat(EARStatType::SpellPower), 5.0f);
+	const FARStatModifierHandle AnotherStack = Stats->AddStatModifier(Effect, bApplied);
+	TestTrue(TEXT("Another application independently stacks"), bApplied);
+	TestEqual(TEXT("Two applications count as two stacks"), Stats->GetModifiersBySource(EARModifierSourceCategory::Buff, Effect.Source.SourceId).StackCount, 2);
+	TestEqual(TEXT("Two attack bonuses both apply"), Stats->GetFinalStat(EARStatType::AttackPower), 20.0f);
+	TestEqual(TEXT("Same source is one HUD icon"), Stats->GetVisibleStatEffects().Num(), 1);
+	TestEqual(TEXT("HUD icon carries two stacks"), Stats->GetVisibleStatEffects()[0].StackCount, 2);
+	FARStatModifierHandle Removed;
+	TestTrue(TEXT("Removing one stack removes its whole group"), Stats->RemoveOneModifierStack(EARModifierSourceCategory::Buff, Effect.Source.SourceId, EARModifierStackRemovalPolicy::Oldest, Removed));
+	TestEqual(TEXT("Grouped spell bonus is gone"), Stats->GetFinalStat(EARStatType::SpellPower), 0.0f);
+	TestEqual(TEXT("One attack bonus remains"), Stats->GetFinalStat(EARStatType::AttackPower), 10.0f);
+	TestEqual(TEXT("One stack remains"), Stats->GetModifiersBySource(EARModifierSourceCategory::Buff, Effect.Source.SourceId).StackCount, 1);
+	FARStatModifierSpec Counter = Effect;
+	Counter.Source.SourceId = TEXT("Test.Counter");
+	Counter.bStackOnly = true;
+	Counter.Duration = -1.0f;
+	Counter.Value = 1000.0f;
+	Stats->AddStatModifier(Counter, bApplied);
+	TestTrue(TEXT("Stack-only application succeeds"), bApplied);
+	Stats->AddStatModifier(Counter, bApplied);
+	TestEqual(TEXT("Pure counter stores two stacks"), Stats->GetModifiersBySource(EARModifierSourceCategory::Buff, Counter.Source.SourceId).StackCount, 2);
+	TestEqual(TEXT("Pure counter does not change attack power"), Stats->GetFinalStat(EARStatType::AttackPower), 10.0f);
+	Stats->SetBaseStat(EARStatType::Tenacity, 100.0f);
+	Stats->AddStatModifier(Effect, bApplied);
+	TestFalse(TEXT("Full tenacity blocks a checked finite effect"), bApplied);
+	TestEqual(TEXT("Blocked effect adds no stack"), Stats->GetModifiersBySource(EARModifierSourceCategory::Buff, Effect.Source.SourceId).StackCount, 1);
+	TestTrue(TEXT("Remaining attack stack can be removed"), Stats->RemoveStatModifier(AnotherStack));
+	TestFalse(TEXT("Grouped handle was removed with its stack"), Stats->RemoveStatModifier(Grouped));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARLoadoutDropAtomicTest,
 	"AR.Foundation.Items.LoadoutDropAtomic",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -489,11 +558,33 @@ bool FARItemOwnedGuaranteeCleanupTest::RunTest(const FString& Parameters)
 		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
 	UARItemDefinition* SecondDefinition = ARFoundationTests::MakeItem(
 		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
+	FARStatModifierSpec DefaultAttack;
+	DefaultAttack.Source.SourceId = TEXT("Test.DefaultGroup");
+	DefaultAttack.HUDDisplay = EARStatEffectDisplay::Buff;
+	DefaultAttack.StatType = EARStatType::AttackPower;
+	DefaultAttack.Value = 2.0f;
+	FARStatModifierSpec DefaultSpell = DefaultAttack;
+	DefaultSpell.StatType = EARStatType::SpellPower;
+	DefaultSpell.Value = 3.0f;
+	FirstDefinition->DefaultStatModifiers.Add(DefaultAttack);
+	FirstDefinition->DefaultStatModifiers.Add(DefaultSpell);
 	UARLoadoutItemInstance* First = NewObject<UARLoadoutItemInstance>(Player);
 	UARLoadoutItemInstance* Second = NewObject<UARLoadoutItemInstance>(Player);
 	First->InitializeInstance(Player, FirstDefinition);
 	Second->InitializeInstance(Player, SecondDefinition);
 	TestTrue(TEXT("Both item instances register"), First->RegisterItem() && Second->RegisterItem());
+	TestEqual(TEXT("Default modifiers sharing Source Id form one stack"),
+		Player->GetStatsComponent()->GetModifiersBySource(EARModifierSourceCategory::Relic, DefaultAttack.Source.SourceId).StackCount, 1);
+	FARStatModifierSpec OwnedStack;
+	OwnedStack.bStackOnly = true;
+	OwnedStack.Source.SourceId = TEXT("Test.SharedRelicStack");
+	OwnedStack.HUDDisplay = EARStatEffectDisplay::Buff;
+	bool bFirstStack = false, bSecondStack = false;
+	First->ApplyItemStatModifier(OwnedStack, bFirstStack);
+	Second->ApplyItemStatModifier(OwnedStack, bSecondStack);
+	TestTrue(TEXT("Both relic stacks apply under explicit source ID"), bFirstStack && bSecondStack);
+	TestEqual(TEXT("Explicit item source ID is queryable"),
+		Player->GetStatsComponent()->GetModifiersBySource(EARModifierSourceCategory::Relic, OwnedStack.Source.SourceId).StackCount, 2);
 
 	FARSuperArmorSpec Armor;
 	Armor.Duration = -1.0f;
@@ -506,9 +597,13 @@ bool FARItemOwnedGuaranteeCleanupTest::RunTest(const FString& Parameters)
 	Second->ApplyItemCCImmunity(Immunity, bSecondImmunity);
 	TestTrue(TEXT("Both items grant their own guarantees"), bFirstArmor && bSecondArmor && bFirstImmunity && bSecondImmunity);
 	First->UnregisterItem(EARItemRemovalReason::Manual);
+	TestEqual(TEXT("First item removes only its own stack"),
+		Player->GetStatsComponent()->GetModifiersBySource(EARModifierSourceCategory::Relic, OwnedStack.Source.SourceId).StackCount, 1);
 	TestTrue(TEXT("Second item keeps super armor after first is removed"), Player->GetStaggerComponent()->IsSuperArmorActive());
 	TestTrue(TEXT("Second item keeps CC immunity after first is removed"), Player->GetStatusEffectComponent()->IsCCImmunityActive());
 	Second->UnregisterItem(EARItemRemovalReason::Manual);
+	TestEqual(TEXT("Second item clears final stack"),
+		Player->GetStatsComponent()->GetModifiersBySource(EARModifierSourceCategory::Relic, OwnedStack.Source.SourceId).StackCount, 0);
 	TestFalse(TEXT("Final item removal clears super armor"), Player->GetStaggerComponent()->IsSuperArmorActive());
 	TestFalse(TEXT("Final item removal clears CC immunity"), Player->GetStatusEffectComponent()->IsCCImmunityActive());
 	return true;
@@ -1038,6 +1133,23 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("HUD aim point is projected onto the player plane"),
 		Snapshot.AimWorldLocation.Equals(FVector(100.0f, 50.0f, Player->GetActorLocation().Z), 0.01f));
 	TestEqual(TEXT("HUD snapshot includes active status effects"), Snapshot.StatusEffects.Num(), 1);
+	FARStatModifierSpec VisibleStack;
+	VisibleStack.bStackOnly = true;
+	VisibleStack.Source.Category = EARModifierSourceCategory::Buff;
+	VisibleStack.Source.SourceId = TEXT("Test.SwordStacks");
+	VisibleStack.Source.DisplayName = FText::FromString(TEXT("Sword stacks"));
+	VisibleStack.HUDDisplay = EARStatEffectDisplay::Buff;
+	bool bStackAdded = false;
+	const FARStatModifierHandle VisibleStackHandle = Player->GetStatsComponent()->AddStatModifier(VisibleStack, bStackAdded);
+	TestTrue(TEXT("Stack-only effect applies"), bStackAdded);
+	const FARPlayerHUDSnapshot CounterSnapshot = UI->GetHUDSnapshot();
+	TestEqual(TEXT("Visible stat effects reach HUD snapshot"), CounterSnapshot.StatEffects.Num(), 1);
+	if (CounterSnapshot.StatEffects.Num() == 1)
+	{
+		TestEqual(TEXT("One application is one stack"), CounterSnapshot.StatEffects[0].StackCount, 1);
+	}
+	TestTrue(TEXT("Visible stack can be removed"), Player->GetStatsComponent()->RemoveStatModifier(VisibleStackHandle));
+	TestEqual(TEXT("Removed effect disappears from HUD snapshot"), UI->GetHUDSnapshot().StatEffects.Num(), 0);
 	const TArray<FARFinalStatView> StatViews = Player->GetStatsComponent()->GetAllFinalStatViews();
 	TestEqual(TEXT("Character sheet exposes every public stat in enum order"),
 		StatViews.Num(), static_cast<int32>(EARStatType::Count));
@@ -1538,6 +1650,26 @@ bool FARResourceHUDLiveUpdateTest::RunTest(const FString& Parameters)
 	Player->GetStatsComponent()->SetBaseStat(EARStatType::MaxMana, 200.0f);
 	TestEqual(TEXT("Maximum resource change updates the ratio"), ManaBar->GetPercent(), 0.5f);
 	TestTrue(TEXT("Maximum resource change updates the label"), ManaText->GetText().ToString().Contains(TEXT("200")));
+	FARStatModifierSpec VisibleStack;
+	VisibleStack.bStackOnly = true;
+	VisibleStack.Source.Category = EARModifierSourceCategory::Buff;
+	VisibleStack.Source.SourceId = TEXT("Test.LiveStacks");
+	VisibleStack.Source.DisplayName = FText::FromString(TEXT("Sword stacks"));
+	VisibleStack.HUDDisplay = EARStatEffectDisplay::Buff;
+	bool bStackAdded = false;
+	const FARStatModifierHandle FirstStack = Player->GetStatsComponent()->AddStatModifier(VisibleStack, bStackAdded);
+	TestTrue(TEXT("First live stack added"), bStackAdded);
+	UHorizontalBox* EffectIcons = Cast<UHorizontalBox>(HUD->GetWidgetFromName(TEXT("StatEffectIcons")));
+	if (!TestNotNull(TEXT("Effect icons created on existing HUD"), EffectIcons)) return false;
+	TestEqual(TEXT("One icon appears for one visible source"), EffectIcons->GetChildrenCount(), 1);
+	const FARStatModifierHandle SecondStack = Player->GetStatsComponent()->AddStatModifier(VisibleStack, bStackAdded);
+	TestTrue(TEXT("Second live stack added"), bStackAdded);
+	TestEqual(TEXT("Two stacks remain one icon"), EffectIcons->GetChildrenCount(), 1);
+	TestEqual(TEXT("HUD snapshot reports two stacks"), Player->GetUIManagerComponent()->GetHUDSnapshot().StatEffects[0].StackCount, 2);
+	TestTrue(TEXT("First stack removed"), Player->GetStatsComponent()->RemoveStatModifier(FirstStack));
+	TestEqual(TEXT("One stack remains"), Player->GetStatsComponent()->GetModifiersBySource(EARModifierSourceCategory::Buff, TEXT("Test.LiveStacks")).StackCount, 1);
+	TestTrue(TEXT("Second stack removed"), Player->GetStatsComponent()->RemoveStatModifier(SecondStack));
+	TestEqual(TEXT("Removed effect icon disappears"), EffectIcons->GetChildrenCount(), 0);
 
 	AARPlayerCharacter* Replacement = TestWorld.World->SpawnActor<AARPlayerCharacter>();
 	Replacement->DispatchBeginPlay();

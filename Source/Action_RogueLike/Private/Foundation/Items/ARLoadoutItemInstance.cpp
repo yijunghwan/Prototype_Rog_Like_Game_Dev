@@ -26,18 +26,28 @@ bool UARLoadoutItemInstance::RegisterItem()
 		return false;
 	}
 	bRegistered = true;
+	TMap<FName, FARStatModifierHandle> DefaultGroups;
 	for (const FARStatModifierSpec& DefaultSpec : Definition->DefaultStatModifiers)
 	{
 		FARStatModifierSpec Spec = DefaultSpec;
 		Spec.Duration = -1.0f;
+		Spec.StackGroupHandle = FARStatModifierHandle();
+		if (const FARStatModifierHandle* Existing = DefaultGroups.Find(Spec.Source.SourceId))
+		{
+			Spec.StackGroupHandle = *Existing;
+		}
 		bool bSuccess = false;
-		ApplyItemStatModifier(Spec, bSuccess);
+		const FARStatModifierHandle Handle = ApplyItemStatModifier(Spec, bSuccess);
 		if (!bSuccess)
 		{
 			UE_LOG(LogARItems, Error, TEXT("Failed to apply default modifier for %s; registration rolled back."), *GetNameSafe(Definition));
 			RemoveAllOwnItemModifiers();
 			bRegistered = false;
 			return false;
+		}
+		if (!Spec.Source.SourceId.IsNone() && !DefaultGroups.Contains(Spec.Source.SourceId))
+		{
+			DefaultGroups.Add(Spec.Source.SourceId, Handle);
 		}
 	}
 	ReceiveItemRegistered();
@@ -99,6 +109,8 @@ FARStatModifierHandle UARLoadoutItemInstance::ApplyItemStatModifier(const FARSta
 	}
 	FARStatModifierSpec OwnedSpec = Spec;
 	OwnedSpec.Source = MakeOwnedSource(Spec.Source);
+	// Item ownership is tracked by OwnModifierHandles; keep an explicit gameplay Source Id queryable.
+	if (!Spec.Source.SourceId.IsNone()) OwnedSpec.Source.SourceId = Spec.Source.SourceId;
 	FARStatModifierHandle Handle = Stats->AddStatModifier(OwnedSpec, bSuccess);
 	if (bSuccess)
 	{

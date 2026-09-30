@@ -8,6 +8,7 @@
 #include "Foundation/Components/ARMovementControlComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
 #include "Foundation/Components/ARStatusEffectComponent.h"
+#include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Player/ARPlayerController.h"
 
 UARUIManagerComponent::UARUIManagerComponent()
@@ -46,6 +47,10 @@ void UARUIManagerComponent::BeginPlay()
 	if (PlayerOwner)
 	{
 		PlayerOwner->OnAimWorldLocationChanged.AddDynamic(this, &UARUIManagerComponent::HandleAimWorldLocationChanged);
+		if (PlayerOwner->GetStatsComponent())
+		{
+			PlayerOwner->GetStatsComponent()->OnStatModifiersChanged.AddDynamic(this, &UARUIManagerComponent::HandleStatModifiersChanged);
+		}
 		if (PlayerOwner->GetStatusEffectComponent())
 		{
 			PlayerOwner->GetStatusEffectComponent()->OnStatusAdded.AddDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
@@ -85,6 +90,10 @@ void UARUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (PlayerOwner)
 	{
 		PlayerOwner->OnAimWorldLocationChanged.RemoveDynamic(this, &UARUIManagerComponent::HandleAimWorldLocationChanged);
+		if (PlayerOwner->GetStatsComponent())
+		{
+			PlayerOwner->GetStatsComponent()->OnStatModifiersChanged.RemoveDynamic(this, &UARUIManagerComponent::HandleStatModifiersChanged);
+		}
 		if (PlayerOwner->GetStatusEffectComponent())
 		{
 			PlayerOwner->GetStatusEffectComponent()->OnStatusAdded.RemoveDynamic(this, &UARUIManagerComponent::HandleStatusEffectChanged);
@@ -148,6 +157,10 @@ FARPlayerHUDSnapshot UARUIManagerComponent::GetHUDSnapshot() const
 	if (const UARStatusEffectComponent* StatusEffects = PlayerOwner->GetStatusEffectComponent())
 	{
 		Snapshot.StatusEffects = StatusEffects->GetActiveStatusEffects();
+	}
+	if (const UARStatsComponent* Stats = PlayerOwner->GetStatsComponent())
+	{
+		Snapshot.StatEffects = Stats->GetVisibleStatEffects();
 	}
 	return Snapshot;
 }
@@ -262,6 +275,11 @@ void UARUIManagerComponent::HandleAimWorldLocationChanged(AARPlayerCharacter* Pl
 }
 
 void UARUIManagerComponent::HandleStatusEffectChanged(AActor* Target, const FARStatusEffectView& Status)
+{
+	BroadcastHUDSnapshot();
+}
+
+void UARUIManagerComponent::HandleStatModifiersChanged(AActor* Target, FName SourceId, FText DisplayName, int32 StackCount, float LongestRemainingTime)
 {
 	BroadcastHUDSnapshot();
 }

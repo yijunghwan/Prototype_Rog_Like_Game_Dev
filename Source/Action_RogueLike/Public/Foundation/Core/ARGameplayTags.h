@@ -28,4 +28,6 @@ namespace ARGameplayTags
 	ACTION_ROGUELIKE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_ActiveRelic);
 	ACTION_ROGUELIKE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_PassiveRelic);
 	ACTION_ROGUELIKE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Item_Type_Consumable);
+
+	/** Shared by independent passive item instances; the item instance keeps each counter separate. */
 }
