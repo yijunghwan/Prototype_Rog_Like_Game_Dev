@@ -2,6 +2,7 @@
 
 #include "Engine/World.h"
 #include "Foundation/Components/ARStatsComponent.h"
+#include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Status/ARStatusEffectDefinition.h"
 
@@ -25,6 +26,15 @@ void UARStatusEffectComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	const double Now = GetNow();
+	const bool bHadCCImmunity = !ActiveCCImmunities.IsEmpty();
+	ActiveCCImmunities.RemoveAll([Now](const FARActiveCCImmunity& Immunity)
+	{
+		return Immunity.ExpireAt >= 0.0 && Immunity.ExpireAt <= Now;
+	});
+	if (bHadCCImmunity && !IsCCImmunityActive())
+	{
+		OnCCImmunityChanged.Broadcast(GetOwner(), false);
+	}
 	TArray<FARStatusEffectView> RemovedViews;
 	for (int32 Index = ActiveEffects.Num() - 1; Index >= 0; --Index)
 	{
@@ -62,6 +72,14 @@ FARStatusEffectResult UARStatusEffectComponent::ApplyStatusEffect(const FARStatu
 	if (!FMath::IsFinite(RequestedDuration) || RequestedDuration <= 0.0f)
 	{
 		Result.Result = EARRequestResult::InvalidDefinition;
+		return Result;
+	}
+	const bool bCrowdControl = Request.Definition->bIsCrowdControl
+		|| Request.Definition->StatusTag.MatchesTag(ARGameplayTags::Status_Stun)
+		|| Request.Definition->StatusTag.MatchesTag(ARGameplayTags::Status_Root);
+	if (bCrowdControl && IsCCImmunityActive())
+	{
+		Result.Result = EARRequestResult::Blocked;
 		return Result;
 	}
 	const float Tenacity = Request.Definition->bAffectedByTenacity
@@ -158,6 +176,78 @@ int32 UARStatusEffectComponent::ClearAllStatusEffects()
 	return RemoveStatusEffectsBySource(EARModifierSourceCategory::All, NAME_None);
 }
 
+FARCCImmunityHandle UARStatusEffectComponent::AddCCImmunity(const FARCCImmunitySpec& Spec, bool& bSuccess)
+{
+	bSuccess = false;
+	FARCCImmunityHandle Handle;
+	if (!FMath::IsFinite(Spec.Duration) || Spec.Duration == 0.0f || !GetOwner())
+	{
+		return Handle;
+	}
+	const bool bWasImmune = IsCCImmunityActive();
+	Handle.Id = FGuid::NewGuid();
+	FARActiveCCImmunity& Immunity = ActiveCCImmunities.AddDefaulted_GetRef();
+	Immunity.Handle = Handle;
+	Immunity.Source = Spec.Source;
+	Immunity.ExpireAt = Spec.Duration < 0.0f ? -1.0 : GetNow() + Spec.Duration;
+	bSuccess = true;
+	if (!bWasImmune)
+	{
+		OnCCImmunityChanged.Broadcast(GetOwner(), true);
+	}
+	RefreshTickState();
+	return Handle;
+}
+
+bool UARStatusEffectComponent::RemoveCCImmunity(FARCCImmunityHandle Handle)
+{
+	const bool bWasImmune = IsCCImmunityActive();
+	const int32 Removed = ActiveCCImmunities.RemoveAll([&Handle](const FARActiveCCImmunity& Immunity)
+	{
+		return Immunity.Handle == Handle;
+	});
+	if (bWasImmune && !IsCCImmunityActive())
+	{
+		OnCCImmunityChanged.Broadcast(GetOwner(), false);
+	}
+	RefreshTickState();
+	return Removed > 0;
+}
+
+int32 UARStatusEffectComponent::RemoveCCImmunityBySource(EARModifierSourceCategory Category, FName SourceId)
+{
+	const bool bWasImmune = IsCCImmunityActive();
+	const int32 Removed = ActiveCCImmunities.RemoveAll([Category, SourceId](const FARActiveCCImmunity& Immunity)
+	{
+		return (Category == EARModifierSourceCategory::All || Immunity.Source.Category == Category)
+			&& (SourceId.IsNone() || Immunity.Source.SourceId == SourceId);
+	});
+	if (bWasImmune && !IsCCImmunityActive())
+	{
+		OnCCImmunityChanged.Broadcast(GetOwner(), false);
+	}
+	RefreshTickState();
+	return Removed;
+}
+
+bool UARStatusEffectComponent::IsCCImmunityActive() const
+{
+	const double Now = GetNow();
+	return ActiveCCImmunities.ContainsByPredicate([Now](const FARActiveCCImmunity& Immunity)
+	{
+		return Immunity.ExpireAt < 0.0 || Immunity.ExpireAt > Now;
+	});
+}
+
+bool UARStatusEffectComponent::IsCCImmunityHandleActive(FARCCImmunityHandle Handle) const
+{
+	const double Now = GetNow();
+	return ActiveCCImmunities.ContainsByPredicate([Handle, Now](const FARActiveCCImmunity& Immunity)
+	{
+		return Immunity.Handle == Handle && (Immunity.ExpireAt < 0.0 || Immunity.ExpireAt > Now);
+	});
+}
+
 bool UARStatusEffectComponent::HasStatus(FGameplayTag StatusTag) const
 {
 	return ActiveEffects.ContainsByPredicate([StatusTag](const FARActiveStatusEffect& Effect)
@@ -232,7 +322,10 @@ FARStatusEffectView UARStatusEffectComponent::MakeView(const FARActiveStatusEffe
 
 void UARStatusEffectComponent::RefreshTickState()
 {
-	SetComponentTickEnabled(!ActiveEffects.IsEmpty());
+	SetComponentTickEnabled(!ActiveEffects.IsEmpty() || ActiveCCImmunities.ContainsByPredicate([](const FARActiveCCImmunity& Immunity)
+	{
+		return Immunity.ExpireAt >= 0.0;
+	}));
 }
 
 double UARStatusEffectComponent::GetNow() const

@@ -8,7 +8,7 @@
 #include "ARItemTypes.generated.h"
 
 class UTexture2D;
-class UARLoadoutItemDefinition;
+class UARItemDefinition;
 class UARLoadoutItemInstance;
 class AARLoadoutItemPickup;
 
@@ -102,7 +102,7 @@ struct ACTION_ROGUELIKE_API FARRegisteredSkillUIData
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText Description;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> SourceDefinition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARItemDefinition> SourceDefinition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 HUDSortOrder = 0;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARResourceCost ResourceCost;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) float CooldownRemaining = 0.0f;
@@ -130,9 +130,10 @@ struct ACTION_ROGUELIKE_API FARLoadoutItemDisplayData
 	GENERATED_BODY()
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> Definition = nullptr;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag DefinitionTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARItemDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 ItemId = 0;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag ItemTypeTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FString> AdditionalTags;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARLoadoutItemKind Kind = EARLoadoutItemKind::PassiveRelic;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText ShortDescription;
@@ -149,7 +150,7 @@ struct ACTION_ROGUELIKE_API FARLoadoutItemSnapshot
 	GENERATED_BODY()
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARItemDefinition> Definition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARLoadoutItemKind Kind = EARLoadoutItemKind::PassiveRelic;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FARItemUIState> UIStates;
 };
@@ -169,7 +170,7 @@ struct ACTION_ROGUELIKE_API FARLoadoutDropRequest
 {
 	GENERATED_BODY()
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARLoadoutItemDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARItemDefinition> Definition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FVector SuggestedLocation = FVector::ZeroVector;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<AARLoadoutItemPickup> SpawnedPickup = nullptr;
 };
@@ -181,7 +182,7 @@ struct ACTION_ROGUELIKE_API FARWeaponEvolutionResult
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARRequestStatus Status;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FAREvolutionToken Token;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<TSoftObjectPtr<class UARWeaponDefinition>> Candidates;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<TSoftObjectPtr<UARItemDefinition>> Candidates;
 	/** False when the only valid candidate was committed immediately. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bRequiresSelection = false;
 	/** Set only for a successful single-candidate automatic evolution. */

@@ -6,8 +6,7 @@
 #include "ARItemPickupActors.generated.h"
 
 class USphereComponent;
-class UARLoadoutItemDefinition;
-class UARConsumableDefinition;
+class UARItemDefinition;
 
 UCLASS(Abstract, Blueprintable)
 class ACTION_ROGUELIKE_API AARItemPickupBase : public AActor, public IARInteractableInterface
@@ -29,6 +28,19 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") bool bRequiresLineOfSight = false;
 };
 
+/** Place this actor for any item type; the common definition routes acquisition. */
+UCLASS(Blueprintable)
+class ACTION_ROGUELIKE_API AARItemPickup : public AARItemPickupBase
+{
+	GENERATED_BODY()
+
+public:
+	virtual bool CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const override;
+	virtual FARRequestStatus Interact_Implementation(AARPlayerCharacter* Interactor) override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<UARItemDefinition> ItemDefinition;
+};
+
 UCLASS(Blueprintable)
 class ACTION_ROGUELIKE_API AARLoadoutItemPickup : public AARItemPickupBase
 {
@@ -38,9 +50,9 @@ public:
 	virtual bool CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const override;
 	virtual FARRequestStatus Interact_Implementation(AARPlayerCharacter* Interactor) override;
 
-	void AssignItemDefinition(const UARLoadoutItemDefinition* Definition);
+	void AssignItemDefinition(const UARItemDefinition* Definition);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<const UARLoadoutItemDefinition> ItemDefinition;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<const UARItemDefinition> ItemDefinition;
 
 protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="AR|Pickup", meta=(DisplayName="On Pickup Definition Assigned"))
@@ -56,9 +68,9 @@ public:
 	virtual bool CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const override;
 	virtual FARRequestStatus Interact_Implementation(AARPlayerCharacter* Interactor) override;
 
-	void AssignConsumableDefinition(UARConsumableDefinition* Definition);
+	void AssignConsumableDefinition(UARItemDefinition* Definition);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<UARConsumableDefinition> ConsumableDefinition;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Pickup") TObjectPtr<UARItemDefinition> ConsumableDefinition;
 
 protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="AR|Pickup", meta=(DisplayName="On Pickup Definition Assigned"))

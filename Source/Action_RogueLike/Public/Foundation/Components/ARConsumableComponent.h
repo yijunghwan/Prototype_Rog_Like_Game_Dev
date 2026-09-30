@@ -6,7 +6,7 @@
 #include "ARConsumableComponent.generated.h"
 
 class AARPlayerCharacter;
-class UARConsumableDefinition;
+class UARItemDefinition;
 class UARConsumableInstance;
 class UARStatsComponent;
 class AARConsumablePickup;
@@ -26,10 +26,10 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintCallable, Category="AR|Consumable")
-	FARConsumableAcquisitionResult TryAcquireConsumable(UARConsumableDefinition* Definition);
+	FARConsumableAcquisitionResult TryAcquireConsumable(UARItemDefinition* Definition);
 
 	UFUNCTION(BlueprintCallable, Category="AR|Consumable")
-	FARRequestStatus TryUseConsumableSlot(int32 SlotIndex, UARConsumableDefinition*& UsedDefinition);
+	FARRequestStatus TryUseConsumableSlot(int32 SlotIndex, UARItemDefinition*& UsedDefinition);
 
 	UFUNCTION(BlueprintCallable, Category="AR|Consumable")
 	FARRequestStatus DropConsumableSlot(int32 SlotIndex, FARConsumableDropRequest& DropRequest);
@@ -47,7 +47,7 @@ public:
 	bool GetConsumableSlotDisplayData(int32 SlotIndex, FARConsumableDisplayData& DisplayData) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Consumable|UI")
-	bool GetConsumableDefinitionDisplayData(const UARConsumableDefinition* Definition, FARConsumableDisplayData& DisplayData) const;
+	bool GetConsumableDefinitionDisplayData(const UARItemDefinition* Definition, FARConsumableDisplayData& DisplayData) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Consumable")
 	int32 GetMaxConsumableSlots() const { return DesiredSlotCount; }
@@ -58,7 +58,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Consumable|Drop", meta=(ClampMin="0.0")) float DropForwardDistance = 96.0f;
 
 private:
-	bool ValidateDefinition(const UARConsumableDefinition* Definition, FARRequestStatus& Status) const;
+	bool ValidateDefinition(const UARItemDefinition* Definition, FARRequestStatus& Status) const;
 	void SynchronizeSlotCount();
 	void BroadcastSlotsChanged();
 	void RemoveSlotInstance(int32 SlotIndex, EARConsumableRemovalReason Reason);

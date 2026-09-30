@@ -1,5 +1,20 @@
 # Foundation 구현 인수인계 기록
 
+## 2026-09-30 — 슈퍼아머·CC 면역 보장 효과
+
+- 아이템 런타임에 `ApplyItemSuperArmor`/`RemoveOwnItemSuperArmor`, `ApplyItemCCImmunity`/`RemoveOwnItemCCImmunity`를 추가했다. 각 아이템 인스턴스가 준 효과만 등록 해제 시 자동 회수한다. 스킬 행동에는 기존 `ApplyActionSuperArmor`와 새 `ApplyActionCCImmunity`가 있고 행동 종료·취소 시 자동 해제된다.
+- 새 CC 면역은 `UARStatusEffectComponent`가 지속시간·핸들·출처별로 관리한다. 기절·속박 및 Definition의 `bIsCrowdControl` 표시 상태를 적용 전에 차단한다. 기존 상태 해제나 비-CC 차단 기능은 아니다. 강인함 상한/계산식을 바꾸지 않았다.
+- `AR.Foundation` 자동화 테스트 32/32 및 Editor Win64 Development 빌드 성공. 신규 테스트는 CC 중첩·만료·비-CC 예외·출처별 제거·아이템 제거 시 소유 효과 회수이며 기존 행동 취소 테스트에도 CC 면역 정리를 추가했다. 로그: `Saved/Logs/FoundationGuaranteesFinal.log`.
+
+## 2026-09-30 — 아이템 Definition 통합
+
+- 기존 무기/유물/소모품별 Definition 클래스를 저작 가능한 `UARItemDefinition` 하나로 통합했다. `ItemTypeTag`, 유형별 고유 양의 `ItemId`, 중복 가능한 문자열 `AdditionalTags`가 식별 체계다. 아이템 `DefinitionTag`는 제거했으나 상태이상 등 다른 Gameplay Tag는 유지한다.
+- 공통 `UARItemInstance` 아래에 기존 장비/유물 `UARLoadoutItemInstance`와 소모품 `UARConsumableInstance`를 두었다. 획득·진화·픽업·드롭·UI 데이터는 공통 Definition을 참조하도록 수정했다. 일반 픽업 `AARItemPickup`과 Blueprint 조회·획득 라이브러리를 추가했다.
+- `FindItemByKey`, `FindItemsByAdditionalTag`, `CountOwnedItemsByAdditionalTag`, `TryAcquireItem`, `ValidateItemCatalog`가 현행 조회·검증 진입점이다. Asset Manager 등록은 `ARItem` 단일 유형이다.
+- 사용자 요청에 따라 테스트 유물 에셋 5개는 Windows 휴지통으로 이동했고 테스트 전용 C++ 클래스/태그를 제거했다. 새 실제 아이템 에셋은 아직 없다.
+- Unreal Editor Win64 Development 빌드 성공, `AR.Foundation` 테스트 30/30 통과. 저장된 실제 아이템 에셋의 카탈로그 조회·에디터 픽업 동작은 콘텐츠 제작 후 추가 검증이 필요하다. 이번 변경은 커밋·푸시하지 않았다.
+- 제작 설명은 [통합 아이템 제작 가이드](ITEM_DATA_ASSET_FIELD_GUIDE.html)를 우선한다. 기존 전체 노드 카탈로그의 아이템 표는 이전 스냅샷이므로 그대로 따라 만들면 안 된다.
+
 > 다음 에이전트는 먼저 [최신 작업 인계 요약](../AGENT_HANDOFF_CURRENT.md)을 읽는다. 이 파일은 전체 구현 이력이며, 날짜별 보완 기록과 최신 검증 결과를 함께 확인해야 한다.
 
 **기록일:** 2026-09-23  
@@ -197,7 +212,7 @@ AR.Foundation.UI.SnapshotAndInputBlocking Success
 - 전투 대상 인터페이스는 Blueprint에서 새로 구현하지 않는다. `AARBaseCharacter`의 Blueprint 자식을 만들어 상속된 팀·생존 판정을 사용한다.
 - 유물·소모품 수동 폐기는 픽업 Spawn 성공 뒤에만 인스턴스를 제거한다. 슬롯 감소 Spawn 실패 시 초과 슬롯에 보존하고 재시도한다.
 - 실제 Input Action, Mapping Context, Data Asset, Runtime BP, Widget, Test Map은 아직 생성하지 않았다. C++ 입력 포인터가 비어 있으면 해당 기능은 실행되지 않는다.
-- 현재 기본 맵은 `/Game/Game/Foundation/Test/Test_Level`, 기본 GameMode는 `/Game/Game/Foundation/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 콘텐츠에서 제거했다.
+- 2026-09-29 이후 기본 맵은 `/Game/Game/Tests/Maps/Test_Level`, 기본 GameMode는 `/Game/Game/Tests/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 콘텐츠에서 제거했다.
 - 월드 드롭은 `UARWorldItemDropSubsystem`이 처리한다. 실제 프로젝트에서는 컴포넌트의 Pickup Class를 외형 BP 자식으로 지정해야 한다.
 - 실제 플레이 화면, Paper2D 픽셀 스케일, 애니메이션, UI 디자인은 검증 전이다.
 
@@ -315,13 +330,13 @@ C++ 핵심 규칙은 Status/Stagger/Movement Lock의 네이티브 이벤트로 �
 
 ## 2026-09-28 임시 체력·스태미나·마나 HUD
 
-`Content/Game/Foundation/UI/WBP_TestResourceHUD.uasset`을 생성하고 기본 테스트 게임에 적용했다. 부모는 `UARResourceHUDWidget`이며 실제 Designer 트리에 기본 UMG 바·텍스트를 배치했다. 화면 왼쪽 위의 체력(빨강), 스태미나(초록), 마나(파랑) 바와 현재값/최대값을 표시한다. 별도 이미지가 필요 없고 Designer에서 색상·크기·위치·폰트를 교체할 수 있다. 데이터 연결을 유지하려면 `HealthBar`, `StaminaBar`, `ManaBar`(Progress Bar), `HealthValue`, `StaminaValue`, `ManaValue`(Text) 이름과 종류를 유지한다.
+`Content/Game/Tests/UI/WBP_TestResourceHUD.uasset`을 생성하고 기본 테스트 게임에 적용했다(2026-09-29 폴더 정리 후 위치). 부모는 `UARResourceHUDWidget`이며 실제 Designer 트리에 기본 UMG 바·텍스트를 배치했다. 화면 왼쪽 위의 체력(빨강), 스태미나(초록), 마나(파랑) 바와 현재값/최대값을 표시한다. 별도 이미지가 필요 없고 Designer에서 색상·크기·위치·폰트를 교체할 수 있다. 데이터 연결을 유지하려면 `HealthBar`, `StaminaBar`, `ManaBar`(Progress Bar), `HealthValue`, `StaminaValue`, `ManaValue`(Text) 이름과 종류를 유지한다.
 
 `AARPlayerController`의 `bShowResourceHUD`(기본 true), `ResourceHUDClass`(기본 WBP_TestResourceHUD)로 표시 여부와 자식 클래스를 지정한다. 로컬 플레이어에만 자동 생성하고 Pawn 교체·해제·종료 시 구독을 정리한다. HUD는 HitTestInvisible로 전투 마우스 입력을 가로채지 않는다. UI Manager의 네이티브 Snapshot 이벤트로 갱신하며 기존 Blueprint 이벤트도 유지한다. 생성 시 현재 값을 즉시 반영하고 UI Manager 초기화 완료 시에도 Snapshot을 방송한다. 보호막·스킬·인벤토리 화면은 이번 표시 범위에 포함하지 않는다.
 
 에셋이 없는 경우 네이티브 기본 레이아웃으로 동작한다. `-run=ARCreateResourceHUD` 도구는 에디터 빌드에서 초기 Designer 에셋을 생성하며 기존 파일을 덮어쓰지 않는다. 에디터 전용 모듈 의존성은 에디터 타깃에서만 추가했다.
 
-검증: 에디터 Development 빌드 성공. `AR.Foundation` 29 성공 / 0 실패 / 0 경고. `AR.Foundation.UI.ResourceHUDLiveUpdates`는 실제 에셋 로드, 전투 피해·자원 소비·회복·최대 마나 변경, Pawn 교체와 구독 해제를 검증한다. 결과는 `Saved/Automation/ResourceHUDFinal/index.json`에 있다. 기존 `Test_Level`의 실제 게임 실행에서도 표시를 확인했으며 스크린샷은 `Saved/Screenshots/WindowsEditor/ScreenShot00001.png`다. 외형 수정 안내는 `Content/Game/Foundation/UI/README.md`를 따른다. HTML 레퍼런스의 클래스 필드 목록은 118개로 갱신했다.
+검증: 에디터 Development 빌드 성공. `AR.Foundation` 29 성공 / 0 실패 / 0 경고. `AR.Foundation.UI.ResourceHUDLiveUpdates`는 실제 에셋 로드, 전투 피해·자원 소비·회복·최대 마나 변경, Pawn 교체와 구독 해제를 검증한다. 결과는 `Saved/Automation/ResourceHUDFinal/index.json`에 있다. 기존 `Test_Level`의 실제 게임 실행에서도 표시를 확인했으며 스크린샷은 `Saved/Screenshots/WindowsEditor/ScreenShot00001.png`다. 현재 외형 수정 안내는 `Content/Game/Tests/UI/폴더 설명!.md`를 따른다. HTML 레퍼런스의 클래스 필드 목록은 118개로 갱신했다.
 
 ## 2026-09-28 인계 및 업로드 전 최종 검증
 

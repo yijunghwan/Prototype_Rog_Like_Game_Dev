@@ -51,6 +51,7 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="AR|Stagger")
 	bool IsSuperArmorActive() const { return ActiveSuperArmor.Num() > 0; }
+	bool IsSuperArmorHandleActive(FARSuperArmorHandle Handle) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Stagger")
 	bool IsStaggered() const;

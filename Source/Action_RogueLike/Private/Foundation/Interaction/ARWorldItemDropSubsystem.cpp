@@ -2,11 +2,10 @@
 
 #include "Engine/World.h"
 #include "Foundation/Interaction/ARItemPickupActors.h"
-#include "Foundation/Items/ARConsumableDefinition.h"
-#include "Foundation/Items/ARLoadoutItemDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
 #include "Kismet/GameplayStatics.h"
 
-bool UARWorldItemDropSubsystem::TrySpawnLoadoutPickup(const UARLoadoutItemDefinition* Definition, FVector DesiredLocation,
+bool UARWorldItemDropSubsystem::TrySpawnLoadoutPickup(const UARItemDefinition* Definition, FVector DesiredLocation,
 	TSubclassOf<AARLoadoutItemPickup> PickupClass, AActor* DropOwner, AARLoadoutItemPickup*& SpawnedPickup)
 {
 	SpawnedPickup = nullptr;
@@ -34,7 +33,7 @@ bool UARWorldItemDropSubsystem::TrySpawnLoadoutPickup(const UARLoadoutItemDefini
 	return true;
 }
 
-bool UARWorldItemDropSubsystem::TrySpawnConsumablePickup(UARConsumableDefinition* Definition, FVector DesiredLocation,
+bool UARWorldItemDropSubsystem::TrySpawnConsumablePickup(UARItemDefinition* Definition, FVector DesiredLocation,
 	TSubclassOf<AARConsumablePickup> PickupClass, AActor* DropOwner, AARConsumablePickup*& SpawnedPickup)
 {
 	SpawnedPickup = nullptr;

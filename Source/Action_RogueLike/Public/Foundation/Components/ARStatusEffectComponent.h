@@ -19,8 +19,18 @@ struct FARActiveStatusEffect
 	UPROPERTY() double ExpireAt = 0.0;
 };
 
+USTRUCT()
+struct FARActiveCCImmunity
+{
+	GENERATED_BODY()
+	UPROPERTY() FARCCImmunityHandle Handle;
+	UPROPERTY() FARSourceInfo Source;
+	UPROPERTY() double ExpireAt = -1.0;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARStatusEffectChangedSignature, AActor*, Target, const FARStatusEffectView&, Status);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FARStatusEffectChangedNativeSignature, AActor*, const FARStatusEffectView&);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARCCImmunityChangedSignature, AActor*, Target, bool, bIsImmune);
 
 UCLASS(ClassGroup=(ARFoundation), meta=(BlueprintSpawnableComponent))
 class ACTION_ROGUELIKE_API UARStatusEffectComponent : public UActorComponent
@@ -45,6 +55,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Status")
 	int32 ClearAllStatusEffects();
 
+	/** Each handle is independent; the guarantee remains until the last active handle ends. */
+	UFUNCTION(BlueprintCallable, Category="AR|Status|CC Immunity")
+	FARCCImmunityHandle AddCCImmunity(const FARCCImmunitySpec& Spec, bool& bSuccess);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Status|CC Immunity")
+	bool RemoveCCImmunity(FARCCImmunityHandle Handle);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Status|CC Immunity")
+	int32 RemoveCCImmunityBySource(EARModifierSourceCategory Category, FName SourceId);
+
+	UFUNCTION(BlueprintPure, Category="AR|Status|CC Immunity")
+	bool IsCCImmunityActive() const;
+	bool IsCCImmunityHandleActive(FARCCImmunityHandle Handle) const;
+
 	UFUNCTION(BlueprintPure, Category="AR|Status")
 	bool HasStatus(FGameplayTag StatusTag) const;
 
@@ -62,6 +86,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Status") FARStatusEffectChangedSignature OnStatusAdded;
 	UPROPERTY(BlueprintAssignable, Category="AR|Status") FARStatusEffectChangedSignature OnStatusUpdated;
 	UPROPERTY(BlueprintAssignable, Category="AR|Status") FARStatusEffectChangedSignature OnStatusRemoved;
+	UPROPERTY(BlueprintAssignable, Category="AR|Status|CC Immunity") FARCCImmunityChangedSignature OnCCImmunityChanged;
 	FARStatusEffectChangedNativeSignature OnStatusAddedNative;
 	FARStatusEffectChangedNativeSignature OnStatusUpdatedNative;
 	FARStatusEffectChangedNativeSignature OnStatusRemovedNative;
@@ -75,4 +100,5 @@ private:
 
 	UPROPERTY(Transient) TObjectPtr<UARStatsComponent> StatsComponent;
 	UPROPERTY(Transient) TArray<FARActiveStatusEffect> ActiveEffects;
+	UPROPERTY(Transient) TArray<FARActiveCCImmunity> ActiveCCImmunities;
 };

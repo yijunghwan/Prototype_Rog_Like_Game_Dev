@@ -20,7 +20,7 @@ UARCreateResourceHUDCommandlet::UARCreateResourceHUDCommandlet()
 int32 UARCreateResourceHUDCommandlet::Main(const FString& Params)
 {
 #if WITH_EDITOR
-	const FString PackageName = TEXT("/Game/Game/Foundation/UI/WBP_TestResourceHUD");
+	const FString PackageName = TEXT("/Game/Game/Tests/UI/WBP_TestResourceHUD");
 	if (FPackageName::DoesPackageExist(PackageName))
 	{
 		UE_LOG(LogTemp, Display, TEXT("Resource HUD asset already exists. Keeping Designer edits."));

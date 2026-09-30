@@ -9,7 +9,7 @@ AARPlayerController::AARPlayerController()
 	bShowMouseCursor = true;
 	bEnableClickEvents = false;
 	bEnableMouseOverEvents = false;
-	ResourceHUDClass = TSoftClassPtr<UARResourceHUDWidget>(FSoftObjectPath(TEXT("/Game/Game/Foundation/UI/WBP_TestResourceHUD.WBP_TestResourceHUD_C")));
+	ResourceHUDClass = TSoftClassPtr<UARResourceHUDWidget>(FSoftObjectPath(TEXT("/Game/Game/Tests/UI/WBP_TestResourceHUD.WBP_TestResourceHUD_C")));
 }
 
 void AARPlayerController::BeginPlay()

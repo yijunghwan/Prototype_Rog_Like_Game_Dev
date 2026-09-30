@@ -7,7 +7,7 @@
 #include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Core/ARLogChannels.h"
-#include "Foundation/Items/ARLoadoutItemDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
 #include "Foundation/Items/ARLoadoutItemInstance.h"
 #include "Foundation/Interaction/ARItemPickupActors.h"
 #include "Foundation/Interaction/ARWorldItemDropSubsystem.h"
@@ -98,7 +98,7 @@ void UARLoadoutComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-FARLoadoutAcquisitionResult UARLoadoutComponent::BeginLoadoutAcquisition(const UARLoadoutItemDefinition* Definition)
+FARLoadoutAcquisitionResult UARLoadoutComponent::BeginLoadoutAcquisition(const UARItemDefinition* Definition)
 {
 	FARLoadoutAcquisitionResult Result;
 	if (!ValidateDefinition(Definition, Result.Status))
@@ -128,7 +128,7 @@ UARLoadoutItemInstance* UARLoadoutComponent::CommitLoadoutAcquisition(FARAcquisi
 	{
 		return nullptr;
 	}
-	const UARLoadoutItemDefinition* Definition = Pending.Definition.Get();
+	const UARItemDefinition* Definition = Pending.Definition.Get();
 	if (Pending.Revision != LoadoutRevision)
 	{
 		Status.Result = EARRequestResult::StaleRequest;
@@ -472,7 +472,7 @@ TArray<FARLoadoutItemSnapshot> UARLoadoutComponent::GetLoadoutInventory() const
 bool UARLoadoutComponent::GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadoutItemDisplayData& DisplayData) const
 {
 	const UARLoadoutItemInstance* Instance = FindItemInstance(InstanceId);
-	const UARLoadoutItemDefinition* Definition = Instance ? Instance->GetItemDefinition() : nullptr;
+	const UARItemDefinition* Definition = Instance ? Instance->GetItemDefinition() : nullptr;
 	if (!Instance || !GetLoadoutDefinitionDisplayData(Definition, DisplayData))
 	{
 		DisplayData = FARLoadoutItemDisplayData();
@@ -484,7 +484,7 @@ bool UARLoadoutComponent::GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadout
 	return true;
 }
 
-bool UARLoadoutComponent::GetLoadoutDefinitionDisplayData(const UARLoadoutItemDefinition* Definition, FARLoadoutItemDisplayData& DisplayData) const
+bool UARLoadoutComponent::GetLoadoutDefinitionDisplayData(const UARItemDefinition* Definition, FARLoadoutItemDisplayData& DisplayData) const
 {
 	DisplayData = FARLoadoutItemDisplayData();
 	if (!Definition)
@@ -492,8 +492,9 @@ bool UARLoadoutComponent::GetLoadoutDefinitionDisplayData(const UARLoadoutItemDe
 		return false;
 	}
 	DisplayData.Definition = Definition;
-	DisplayData.DefinitionTag = Definition->DefinitionTag;
+	DisplayData.ItemId = Definition->ItemId;
 	DisplayData.ItemTypeTag = Definition->ItemTypeTag;
+	DisplayData.AdditionalTags = Definition->AdditionalTags;
 	DisplayData.Kind = Definition->GetItemKind();
 	DisplayData.DisplayName = Definition->DisplayName;
 	DisplayData.ShortDescription = Definition->ShortDescription;
@@ -511,7 +512,7 @@ bool UARLoadoutComponent::GetLoadoutDefinitionDisplayData(const UARLoadoutItemDe
 FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 {
 	FARWeaponEvolutionResult Result;
-	const UARWeaponDefinition* Weapon = EquippedWeapon ? Cast<UARWeaponDefinition>(EquippedWeapon->GetItemDefinition()) : nullptr;
+	const UARItemDefinition* Weapon = EquippedWeapon ? EquippedWeapon->GetItemDefinition() : nullptr;
 	if (!Weapon || Weapon->EvolutionGroupId.IsNone() || Weapon->NextEvolutionCandidates.IsEmpty())
 	{
 		Result.Status.Result = EARRequestResult::InvalidDefinition;
@@ -519,9 +520,9 @@ FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 	}
 
 	TSet<FSoftObjectPath> UniquePaths;
-	for (const TSoftObjectPtr<UARWeaponDefinition>& CandidateReference : Weapon->NextEvolutionCandidates)
+	for (const TSoftObjectPtr<UARItemDefinition>& CandidateReference : Weapon->NextEvolutionCandidates)
 	{
-		UARWeaponDefinition* Candidate = CandidateReference.LoadSynchronous();
+		UARItemDefinition* Candidate = CandidateReference.LoadSynchronous();
 		FARRequestStatus CandidateStatus;
 		if (!ValidateEvolutionCandidate(Weapon, Candidate, CandidateStatus))
 		{
@@ -547,7 +548,7 @@ FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 	FARPendingEvolution Pending;
 	Pending.Revision = LoadoutRevision;
 	Pending.WeaponInstanceId = EquippedWeapon->GetInstanceId();
-	for (const TSoftObjectPtr<UARWeaponDefinition>& Candidate : Result.Candidates)
+	for (const TSoftObjectPtr<UARItemDefinition>& Candidate : Result.Candidates)
 	{
 		Pending.CandidatePaths.Add(Candidate.ToSoftObjectPath());
 	}
@@ -556,7 +557,7 @@ FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 	if (Result.Candidates.Num() == 1)
 	{
 		FARRequestStatus CommitStatus;
-		UARWeaponDefinition* Candidate = Result.Candidates[0].LoadSynchronous();
+		UARItemDefinition* Candidate = Result.Candidates[0].LoadSynchronous();
 		Result.EvolvedInstance = CommitWeaponEvolution(Result.Token, Candidate, CommitStatus);
 		Result.Token = FAREvolutionToken();
 		Result.Status = CommitStatus;
@@ -568,7 +569,7 @@ FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 	return Result;
 }
 
-UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionToken Token, const UARWeaponDefinition* Candidate, FARRequestStatus& Status)
+UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionToken Token, const UARItemDefinition* Candidate, FARRequestStatus& Status)
 {
 	Status.Result = EARRequestResult::InvalidHandle;
 	FARPendingEvolution Pending;
@@ -583,7 +584,7 @@ UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionT
 		Status.Result = EARRequestResult::InvalidDefinition;
 		return nullptr;
 	}
-	const UARWeaponDefinition* Current = Cast<UARWeaponDefinition>(EquippedWeapon->GetItemDefinition());
+	const UARItemDefinition* Current = EquippedWeapon->GetItemDefinition();
 	if (!ValidateEvolutionCandidate(Current, Candidate, Status))
 	{
 		return nullptr;
@@ -597,27 +598,22 @@ UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionT
 	return NewInstance;
 }
 
-bool UARLoadoutComponent::ValidateDefinition(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status) const
+bool UARLoadoutComponent::ValidateDefinition(const UARItemDefinition* Definition, FARRequestStatus& Status) const
 {
-	if (!PlayerOwner || !Definition || !Definition->DefinitionTag.IsValid() || !Definition->RuntimeBehaviorClass)
+	if (!PlayerOwner || !Definition || Definition->ItemId <= 0 || !Definition->RuntimeBehaviorClass)
 	{
 		Status.Result = !PlayerOwner ? EARRequestResult::InvalidOwner : EARRequestResult::InvalidDefinition;
 		return false;
 	}
-	if (Definition->RuntimeBehaviorClass->HasAnyClassFlags(CLASS_Abstract))
+	if (Definition->RuntimeBehaviorClass->HasAnyClassFlags(CLASS_Abstract)
+		|| !Definition->RuntimeBehaviorClass->IsChildOf(UARLoadoutItemInstance::StaticClass()))
 	{
 		Status.Result = EARRequestResult::InvalidDefinition;
 		return false;
 	}
-	FGameplayTag ExpectedItemType;
-	switch (Definition->GetItemKind())
-	{
-	case EARLoadoutItemKind::Weapon: ExpectedItemType = ARGameplayTags::Item_Type_Weapon; break;
-	case EARLoadoutItemKind::ActiveRelic: ExpectedItemType = ARGameplayTags::Item_Type_ActiveRelic; break;
-	case EARLoadoutItemKind::PassiveRelic: ExpectedItemType = ARGameplayTags::Item_Type_PassiveRelic; break;
-	default: break;
-	}
-	if (!ExpectedItemType.IsValid() || Definition->ItemTypeTag != ExpectedItemType)
+	if (Definition->ItemTypeTag != ARGameplayTags::Item_Type_Weapon
+		&& Definition->ItemTypeTag != ARGameplayTags::Item_Type_ActiveRelic
+		&& Definition->ItemTypeTag != ARGameplayTags::Item_Type_PassiveRelic)
 	{
 		Status.Result = EARRequestResult::InvalidDefinition;
 		return false;
@@ -641,11 +637,13 @@ bool UARLoadoutComponent::ValidateDefinition(const UARLoadoutItemDefinition* Def
 }
 
 bool UARLoadoutComponent::ValidateEvolutionCandidate(
-	const UARWeaponDefinition* Current,
-	const UARWeaponDefinition* Candidate,
+	const UARItemDefinition* Current,
+	const UARItemDefinition* Candidate,
 	FARRequestStatus& Status) const
 {
-	if (!Current || !Candidate || Current == Candidate || Current->EvolutionGroupId.IsNone()
+	if (!Current || !Candidate || Current == Candidate
+		|| Current->ItemTypeTag != ARGameplayTags::Item_Type_Weapon
+		|| Candidate->ItemTypeTag != ARGameplayTags::Item_Type_Weapon || Current->EvolutionGroupId.IsNone()
 		|| Candidate->EvolutionGroupId != Current->EvolutionGroupId
 		|| Candidate->EvolutionStage != Current->EvolutionStage + 1)
 	{
@@ -655,9 +653,9 @@ bool UARLoadoutComponent::ValidateEvolutionCandidate(
 	return ValidateDefinition(Candidate, Status);
 }
 
-UARLoadoutItemInstance* UARLoadoutComponent::CreateAndRegisterInstance(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status)
+UARLoadoutItemInstance* UARLoadoutComponent::CreateAndRegisterInstance(const UARItemDefinition* Definition, FARRequestStatus& Status)
 {
-	UARLoadoutItemInstance* Instance = NewObject<UARLoadoutItemInstance>(this, Definition->RuntimeBehaviorClass);
+	UARLoadoutItemInstance* Instance = NewObject<UARLoadoutItemInstance>(this, Definition->RuntimeBehaviorClass.Get());
 	if (!Instance)
 	{
 		Status.Result = EARRequestResult::Rejected;

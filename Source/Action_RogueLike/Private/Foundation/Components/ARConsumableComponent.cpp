@@ -4,10 +4,11 @@
 #include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Components/ARHealthComponent.h"
 #include "Foundation/Components/ARUIManagerComponent.h"
+#include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Interaction/ARItemPickupActors.h"
 #include "Foundation/Interaction/ARWorldItemDropSubsystem.h"
-#include "Foundation/Items/ARConsumableDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
 #include "Foundation/Items/ARConsumableInstance.h"
 
 UARConsumableComponent::UARConsumableComponent()
@@ -47,7 +48,7 @@ void UARConsumableComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-FARConsumableAcquisitionResult UARConsumableComponent::TryAcquireConsumable(UARConsumableDefinition* Definition)
+FARConsumableAcquisitionResult UARConsumableComponent::TryAcquireConsumable(UARItemDefinition* Definition)
 {
 	FARConsumableAcquisitionResult Result;
 	if (!ValidateDefinition(Definition, Result.Status))
@@ -68,7 +69,7 @@ FARConsumableAcquisitionResult UARConsumableComponent::TryAcquireConsumable(UARC
 		Result.Status.Result = EARRequestResult::SlotFull;
 		return Result;
 	}
-	UARConsumableInstance* Instance = NewObject<UARConsumableInstance>(this, Definition->RuntimeBehaviorClass);
+	UARConsumableInstance* Instance = NewObject<UARConsumableInstance>(this, Definition->RuntimeBehaviorClass.Get());
 	if (!Instance)
 	{
 		Result.Status.Result = EARRequestResult::Rejected;
@@ -89,7 +90,7 @@ FARConsumableAcquisitionResult UARConsumableComponent::TryAcquireConsumable(UARC
 	return Result;
 }
 
-FARRequestStatus UARConsumableComponent::TryUseConsumableSlot(int32 SlotIndex, UARConsumableDefinition*& UsedDefinition)
+FARRequestStatus UARConsumableComponent::TryUseConsumableSlot(int32 SlotIndex, UARItemDefinition*& UsedDefinition)
 {
 	FARRequestStatus Status;
 	UsedDefinition = nullptr;
@@ -195,7 +196,7 @@ bool UARConsumableComponent::GetConsumableSlotDisplayData(int32 SlotIndex, FARCo
 	return true;
 }
 
-bool UARConsumableComponent::GetConsumableDefinitionDisplayData(const UARConsumableDefinition* Definition, FARConsumableDisplayData& DisplayData) const
+bool UARConsumableComponent::GetConsumableDefinitionDisplayData(const UARItemDefinition* Definition, FARConsumableDisplayData& DisplayData) const
 {
 	DisplayData = FARConsumableDisplayData();
 	if (!Definition)
@@ -203,8 +204,9 @@ bool UARConsumableComponent::GetConsumableDefinitionDisplayData(const UARConsuma
 		return false;
 	}
 	DisplayData.Definition = Definition;
-	DisplayData.DefinitionTag = Definition->DefinitionTag;
+	DisplayData.ItemId = Definition->ItemId;
 	DisplayData.ItemTypeTag = Definition->ItemTypeTag;
+	DisplayData.AdditionalTags = Definition->AdditionalTags;
 	DisplayData.DisplayName = Definition->DisplayName;
 	DisplayData.ShortDescription = Definition->ShortDescription;
 	DisplayData.DetailedDescription = Definition->DetailedDescription;
@@ -212,15 +214,17 @@ bool UARConsumableComponent::GetConsumableDefinitionDisplayData(const UARConsuma
 	return true;
 }
 
-bool UARConsumableComponent::ValidateDefinition(const UARConsumableDefinition* Definition, FARRequestStatus& Status) const
+bool UARConsumableComponent::ValidateDefinition(const UARItemDefinition* Definition, FARRequestStatus& Status) const
 {
 	if (!PlayerOwner)
 	{
 		Status.Result = EARRequestResult::InvalidOwner;
 		return false;
 	}
-	if (!Definition || !Definition->DefinitionTag.IsValid() || !Definition->RuntimeBehaviorClass
-		|| Definition->RuntimeBehaviorClass->HasAnyClassFlags(CLASS_Abstract))
+	if (!Definition || Definition->ItemId <= 0 || !Definition->RuntimeBehaviorClass
+		|| Definition->ItemTypeTag != ARGameplayTags::Item_Type_Consumable
+		|| Definition->RuntimeBehaviorClass->HasAnyClassFlags(CLASS_Abstract)
+		|| !Definition->RuntimeBehaviorClass->IsChildOf(UARConsumableInstance::StaticClass()))
 	{
 		Status.Result = EARRequestResult::InvalidDefinition;
 		return false;

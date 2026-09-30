@@ -2,15 +2,17 @@
 
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Components/ARStatsComponent.h"
+#include "Foundation/Components/ARStaggerComponent.h"
+#include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Core/ARLogChannels.h"
-#include "Foundation/Items/ARLoadoutItemDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
 
 UWorld* UARLoadoutItemInstance::GetWorld() const
 {
 	return ItemOwner.IsValid() ? ItemOwner->GetWorld() : nullptr;
 }
 
-void UARLoadoutItemInstance::InitializeInstance(AARPlayerCharacter* InOwner, const UARLoadoutItemDefinition* InDefinition)
+void UARLoadoutItemInstance::InitializeInstance(AARPlayerCharacter* InOwner, const UARItemDefinition* InDefinition)
 {
 	ItemOwner = InOwner;
 	Definition = InDefinition;
@@ -49,6 +51,25 @@ void UARLoadoutItemInstance::UnregisterItem(EARItemRemovalReason Reason)
 		return;
 	}
 	ReceiveItemUnregistered(Reason);
+	if (ItemOwner.IsValid())
+	{
+		if (UARStaggerComponent* Stagger = ItemOwner->GetStaggerComponent())
+		{
+			for (const FARSuperArmorHandle& Handle : OwnSuperArmorHandles)
+			{
+				Stagger->RemoveSuperArmor(Handle);
+			}
+		}
+		if (UARStatusEffectComponent* Status = ItemOwner->GetStatusEffectComponent())
+		{
+			for (const FARCCImmunityHandle& Handle : OwnCCImmunityHandles)
+			{
+				Status->RemoveCCImmunity(Handle);
+			}
+		}
+	}
+	OwnSuperArmorHandles.Reset();
+	OwnCCImmunityHandles.Reset();
 	RemoveAllOwnItemModifiers();
 	for (const TPair<FGameplayTag, FARItemUIState>& Pair : UIStates)
 	{
@@ -112,6 +133,72 @@ int32 UARLoadoutItemInstance::RemoveAllOwnItemModifiers()
 	}
 	OwnModifierHandles.Reset();
 	return Removed;
+}
+
+FARSuperArmorHandle UARLoadoutItemInstance::ApplyItemSuperArmor(const FARSuperArmorSpec& Spec, bool& bSuccess)
+{
+	bSuccess = false;
+	if (!bRegistered || !ItemOwner.IsValid() || !ItemOwner->GetStaggerComponent())
+	{
+		return FARSuperArmorHandle();
+	}
+	FARSuperArmorSpec OwnedSpec = Spec;
+	OwnedSpec.Source = MakeOwnedSource(Spec.Source);
+	UARStaggerComponent* Stagger = ItemOwner->GetStaggerComponent();
+	OwnSuperArmorHandles.RemoveAll([Stagger](FARSuperArmorHandle Handle)
+	{
+		return !Stagger->IsSuperArmorHandleActive(Handle);
+	});
+	const FARSuperArmorHandle Handle = Stagger->AddSuperArmor(OwnedSpec, bSuccess);
+	if (bSuccess)
+	{
+		OwnSuperArmorHandles.Add(Handle);
+	}
+	return Handle;
+}
+
+bool UARLoadoutItemInstance::RemoveOwnItemSuperArmor(FARSuperArmorHandle Handle)
+{
+	if (!OwnSuperArmorHandles.Contains(Handle) || !ItemOwner.IsValid() || !ItemOwner->GetStaggerComponent())
+	{
+		return false;
+	}
+	const bool bRemoved = ItemOwner->GetStaggerComponent()->RemoveSuperArmor(Handle);
+	OwnSuperArmorHandles.Remove(Handle);
+	return bRemoved;
+}
+
+FARCCImmunityHandle UARLoadoutItemInstance::ApplyItemCCImmunity(const FARCCImmunitySpec& Spec, bool& bSuccess)
+{
+	bSuccess = false;
+	if (!bRegistered || !ItemOwner.IsValid() || !ItemOwner->GetStatusEffectComponent())
+	{
+		return FARCCImmunityHandle();
+	}
+	FARCCImmunitySpec OwnedSpec = Spec;
+	OwnedSpec.Source = MakeOwnedSource(Spec.Source);
+	UARStatusEffectComponent* Status = ItemOwner->GetStatusEffectComponent();
+	OwnCCImmunityHandles.RemoveAll([Status](FARCCImmunityHandle Handle)
+	{
+		return !Status->IsCCImmunityHandleActive(Handle);
+	});
+	const FARCCImmunityHandle Handle = Status->AddCCImmunity(OwnedSpec, bSuccess);
+	if (bSuccess)
+	{
+		OwnCCImmunityHandles.Add(Handle);
+	}
+	return Handle;
+}
+
+bool UARLoadoutItemInstance::RemoveOwnItemCCImmunity(FARCCImmunityHandle Handle)
+{
+	if (!OwnCCImmunityHandles.Contains(Handle) || !ItemOwner.IsValid() || !ItemOwner->GetStatusEffectComponent())
+	{
+		return false;
+	}
+	const bool bRemoved = ItemOwner->GetStatusEffectComponent()->RemoveCCImmunity(Handle);
+	OwnCCImmunityHandles.Remove(Handle);
+	return bRemoved;
 }
 
 bool UARLoadoutItemInstance::SetItemUIState(FGameplayTag StateId, float CurrentValue, float MaximumValue)

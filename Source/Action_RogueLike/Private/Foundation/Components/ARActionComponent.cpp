@@ -16,6 +16,7 @@ void UARActionComponent::BeginPlay()
 	Super::BeginPlay();
 	StatsComponent = GetOwner() ? GetOwner()->FindComponentByClass<UARStatsComponent>() : nullptr;
 	StaggerComponent = GetOwner() ? GetOwner()->FindComponentByClass<UARStaggerComponent>() : nullptr;
+	StatusEffectComponent = GetOwner() ? GetOwner()->FindComponentByClass<UARStatusEffectComponent>() : nullptr;
 	MovementComponent = GetOwner() ? GetOwner()->FindComponentByClass<UARMovementControlComponent>() : nullptr;
 }
 
@@ -270,6 +271,22 @@ FARSuperArmorHandle UARActionComponent::ApplyActionSuperArmor(FARActionHandle Ha
 	return Armor;
 }
 
+FARCCImmunityHandle UARActionComponent::ApplyActionCCImmunity(FARActionHandle Handle, const FARCCImmunitySpec& Spec, bool& bSuccess)
+{
+	bSuccess = false;
+	FARActiveAction* Action = FindActiveAction(Handle);
+	if (!Action || !StatusEffectComponent)
+	{
+		return FARCCImmunityHandle();
+	}
+	FARCCImmunityHandle Immunity = StatusEffectComponent->AddCCImmunity(Spec, bSuccess);
+	if (bSuccess)
+	{
+		Action->CCImmunityHandles.Add(Immunity);
+	}
+	return Immunity;
+}
+
 bool UARActionComponent::IsActionActive(FARActionHandle Handle) const
 {
 	return FindActiveAction(Handle) != nullptr;
@@ -309,6 +326,13 @@ void UARActionComponent::CleanupAction(FARActiveAction& Action)
 		for (const FARSuperArmorHandle& Armor : Action.SuperArmorHandles)
 		{
 			StaggerComponent->RemoveSuperArmor(Armor);
+		}
+	}
+	if (StatusEffectComponent)
+	{
+		for (const FARCCImmunityHandle& Immunity : Action.CCImmunityHandles)
+		{
+			StatusEffectComponent->RemoveCCImmunity(Immunity);
 		}
 	}
 	if (MovementComponent)

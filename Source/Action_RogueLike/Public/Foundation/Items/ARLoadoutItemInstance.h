@@ -1,25 +1,27 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UObject/Object.h"
+#include "Foundation/Items/ARItemInstance.h"
 #include "Foundation/Items/ARItemTypes.h"
+#include "Foundation/Combat/ARStaggerTypes.h"
+#include "Foundation/Status/ARStatusEffectTypes.h"
 #include "ARLoadoutItemInstance.generated.h"
 
 class AARPlayerCharacter;
-class UARLoadoutItemDefinition;
+class UARItemDefinition;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FARItemUIStateChangedSignature, FGuid, ItemInstanceId, const FARItemUIState&, State, bool, bRemoved);
 
 /** Concrete base is valid for data-only weapons/relics that only use Definition stat modifiers. */
 UCLASS(Blueprintable, BlueprintType)
-class ACTION_ROGUELIKE_API UARLoadoutItemInstance : public UObject
+class ACTION_ROGUELIKE_API UARLoadoutItemInstance : public UARItemInstance
 {
 	GENERATED_BODY()
 
 public:
 	virtual UWorld* GetWorld() const override;
 
-	void InitializeInstance(AARPlayerCharacter* InOwner, const UARLoadoutItemDefinition* InDefinition);
+	void InitializeInstance(AARPlayerCharacter* InOwner, const UARItemDefinition* InDefinition);
 	bool RegisterItem();
 	void UnregisterItem(EARItemRemovalReason Reason);
 
@@ -32,6 +34,7 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintPure, Category="AR|Item")
 	bool CanExecuteItemSkill(FName SkillId, FGameplayTag& FailureTag) const;
 
+	/** Content Blueprint implements the actual skill after the native input/cost transaction. */
 	UFUNCTION(BlueprintImplementableEvent, Category="AR|Item")
 	void ExecuteItemSkill(FName SkillId, FARActionHandle ActionHandle);
 
@@ -44,6 +47,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Item")
 	int32 RemoveAllOwnItemModifiers();
 
+	/** Item-owned guarantees are removed automatically when this runtime instance is unregistered. */
+	UFUNCTION(BlueprintCallable, Category="AR|Item|Guarantees")
+	FARSuperArmorHandle ApplyItemSuperArmor(const FARSuperArmorSpec& Spec, bool& bSuccess);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Item|Guarantees")
+	bool RemoveOwnItemSuperArmor(FARSuperArmorHandle Handle);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Item|Guarantees")
+	FARCCImmunityHandle ApplyItemCCImmunity(const FARCCImmunitySpec& Spec, bool& bSuccess);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Item|Guarantees")
+	bool RemoveOwnItemCCImmunity(FARCCImmunityHandle Handle);
+
 	UFUNCTION(BlueprintCallable, Category="AR|Item")
 	bool SetItemUIState(FGameplayTag StateId, float CurrentValue, float MaximumValue);
 
@@ -51,7 +67,7 @@ public:
 	bool RemoveItemUIState(FGameplayTag StateId);
 
 	UFUNCTION(BlueprintPure, Category="AR|Item") AARPlayerCharacter* GetItemOwner() const { return ItemOwner.Get(); }
-	UFUNCTION(BlueprintPure, Category="AR|Item") const UARLoadoutItemDefinition* GetItemDefinition() const { return Definition; }
+	UFUNCTION(BlueprintPure, Category="AR|Item") const UARItemDefinition* GetItemDefinition() const { return Definition; }
 	UFUNCTION(BlueprintPure, Category="AR|Item") FGuid GetInstanceId() const { return InstanceId; }
 	UFUNCTION(BlueprintPure, Category="AR|Item") bool IsRegistered() const { return bRegistered; }
 	UFUNCTION(BlueprintPure, Category="AR|Item") TArray<FARItemUIState> GetItemUIStates() const;
@@ -62,9 +78,11 @@ private:
 	FARSourceInfo MakeOwnedSource(const FARSourceInfo& RequestedSource) const;
 
 	UPROPERTY(Transient) TWeakObjectPtr<AARPlayerCharacter> ItemOwner;
-	UPROPERTY(Transient) TObjectPtr<const UARLoadoutItemDefinition> Definition = nullptr;
+	UPROPERTY(Transient) TObjectPtr<const UARItemDefinition> Definition = nullptr;
 	UPROPERTY(Transient) FGuid InstanceId;
 	UPROPERTY(Transient) TArray<FARStatModifierHandle> OwnModifierHandles;
+	UPROPERTY(Transient) TArray<FARSuperArmorHandle> OwnSuperArmorHandles;
+	UPROPERTY(Transient) TArray<FARCCImmunityHandle> OwnCCImmunityHandles;
 	UPROPERTY(Transient) TMap<FGameplayTag, FARItemUIState> UIStates;
 	bool bRegistered = false;
 };

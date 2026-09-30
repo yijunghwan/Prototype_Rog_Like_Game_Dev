@@ -624,6 +624,8 @@ code{font-family:ui-monospace,Consolas,monospace;color:#e8d6a6;font-size:.93em;o
         str(len(sections["7.3"])) + "개 이벤트 디스패처",
     ))
     head += """</div></header><main class="wrap"><div class="intro">
+<strong>아이템 통합 안내 (2026-09-30)</strong> 이 페이지의 아이템 Definition·획득 노드 표는 통합 전 스냅샷이다.
+현행 아이템 필드와 새 조회·획득 노드는 <a href="ITEM_DATA_ASSET_FIELD_GUIDE.html">통합 아이템 제작 가이드</a>를 확인한다.<br>
 <strong>범위</strong> 프로젝트 C++가 추가한 Foundation 및 기존 템플릿의 Blueprint 노드와 노출 필드를 다룬다.
 언리얼 엔진 기본 노드·엔진 상속 Details 전체와 바이너리 BP 그래프 내부 커스텀 변수는 포함하지 않는다.
 Details의 “조회 전용” 필드는 값 설정이 아니라 컴포넌트 참조다. 시그니처에서 비-const 참조 인자는 출력 핀으로 분류했다.

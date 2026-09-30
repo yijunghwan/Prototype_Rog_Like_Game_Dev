@@ -10,9 +10,8 @@ class UARActionComponent;
 class UARManaComponent;
 class UARStaminaComponent;
 class UARStatsComponent;
-class UARLoadoutItemDefinition;
+class UARItemDefinition;
 class UARLoadoutItemInstance;
-class UARWeaponDefinition;
 class AARLoadoutItemPickup;
 
 USTRUCT()
@@ -29,7 +28,7 @@ struct FARRegisteredSkillRecord
 
 struct FARPendingAcquisition
 {
-	TWeakObjectPtr<const UARLoadoutItemDefinition> Definition;
+	TWeakObjectPtr<const UARItemDefinition> Definition;
 	int32 Revision = 0;
 };
 
@@ -62,7 +61,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintCallable, Category="AR|Loadout")
-	FARLoadoutAcquisitionResult BeginLoadoutAcquisition(const UARLoadoutItemDefinition* Definition);
+	FARLoadoutAcquisitionResult BeginLoadoutAcquisition(const UARItemDefinition* Definition);
 
 	UFUNCTION(BlueprintCallable, Category="AR|Loadout")
 	UARLoadoutItemInstance* CommitLoadoutAcquisition(FARAcquisitionToken Token, FARRequestStatus& Status);
@@ -101,7 +100,7 @@ public:
 	bool GetLoadoutItemDisplayData(FGuid InstanceId, FARLoadoutItemDisplayData& DisplayData) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Loadout|UI")
-	bool GetLoadoutDefinitionDisplayData(const UARLoadoutItemDefinition* Definition, FARLoadoutItemDisplayData& DisplayData) const;
+	bool GetLoadoutDefinitionDisplayData(const UARItemDefinition* Definition, FARLoadoutItemDisplayData& DisplayData) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Loadout")
 	UARLoadoutItemInstance* GetEquippedWeapon() const { return EquippedWeapon; }
@@ -116,7 +115,7 @@ public:
 	FARWeaponEvolutionResult RequestWeaponEvolution();
 
 	UFUNCTION(BlueprintCallable, Category="AR|Loadout")
-	UARLoadoutItemInstance* CommitWeaponEvolution(FAREvolutionToken Token, const UARWeaponDefinition* Candidate, FARRequestStatus& Status);
+	UARLoadoutItemInstance* CommitWeaponEvolution(FAREvolutionToken Token, const UARItemDefinition* Candidate, FARRequestStatus& Status);
 
 	UPROPERTY(BlueprintAssignable, Category="AR|Loadout") FARLoadoutChangedSignature OnLoadoutChanged;
 	UPROPERTY(BlueprintAssignable, Category="AR|Loadout") FARRegisteredSkillsChangedSignature OnRegisteredSkillsChanged;
@@ -127,9 +126,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AR|Loadout|Drop", meta=(ClampMin="0.0")) float DropForwardDistance = 96.0f;
 
 private:
-	bool ValidateDefinition(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status) const;
-	bool ValidateEvolutionCandidate(const UARWeaponDefinition* Current, const UARWeaponDefinition* Candidate, FARRequestStatus& Status) const;
-	UARLoadoutItemInstance* CreateAndRegisterInstance(const UARLoadoutItemDefinition* Definition, FARRequestStatus& Status);
+	bool ValidateDefinition(const UARItemDefinition* Definition, FARRequestStatus& Status) const;
+	bool ValidateEvolutionCandidate(const UARItemDefinition* Current, const UARItemDefinition* Candidate, FARRequestStatus& Status) const;
+	UARLoadoutItemInstance* CreateAndRegisterInstance(const UARItemDefinition* Definition, FARRequestStatus& Status);
 	void UnregisterAndReleaseInstance(UARLoadoutItemInstance* Instance, EARItemRemovalReason Reason);
 	void RegisterSkills(UARLoadoutItemInstance* Instance);
 	void UnregisterSkills(UARLoadoutItemInstance* Instance);

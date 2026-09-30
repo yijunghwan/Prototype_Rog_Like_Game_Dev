@@ -1,13 +1,29 @@
 # 다음 에이전트용 작업 인계 — 현재 상태
 
-기준일: 2026-09-28
+## 2026-09-30 보장 효과 확장 (아래 아이템 통합 기록보다 최신)
+
+- 슈퍼아머는 기존 `UARStaggerComponent`의 핸들 기반 시스템을 유지한다. `UARLoadoutItemInstance::ApplyItemSuperArmor`로 부여하면 유물/무기 해제 시 해당 인스턴스가 준 핸들만 자동 회수된다.
+- CC 면역은 강인함 스탯과 분리된 `UARStatusEffectComponent`의 중첩 가능한 핸들 기반 보장 효과다. `ApplyCCImmunity` / `RemoveCCImmunity`, 아이템 소유 `ApplyItemCCImmunity` / `RemoveOwnItemCCImmunity`, 행동 소유 `ApplyActionCCImmunity`가 있다. 지속시간 `-1`은 무기한, `0`은 무효다. 마지막 핸들이 끝나야 면역이 사라진다.
+- 기절·속박 태그는 자동 CC다. 새 상태이상은 `UARStatusEffectDefinition::bIsCrowdControl`로 표시한다. 면역 중 새 CC는 적용 전에 `Blocked`로 거절되어 이동/행동 중단 이벤트가 발생하지 않는다. 이미 걸린 CC는 해제하지 않으며 비-CC는 정상 적용된다. 이 보장은 `bAffectedByTenacity` 및 일반 상태 면역 허용 플래그와 별개다.
+- 최종 Editor Win64 Development 빌드 성공, `AR.Foundation` 자동화 테스트 **32/32 통과**. 로그: `Saved/Logs/FoundationGuaranteesFinal.log`. 새 유물 에셋은 생성하지 않았으며, 커밋·푸시도 하지 않았다.
+
+## 2026-09-30 아이템 통합 변경 (이전 기록보다 우선)
+
+- 저작 가능한 아이템 데이터 에셋은 `UARItemDefinition` 하나다. `ItemTypeTag`는 Weapon/ActiveRelic/PassiveRelic/Consumable 중 하나, `ItemId`는 유형 내 고유한 양의 정수, `AdditionalTags`는 중복 허용 문자열 배열이다. 아이템별 `DefinitionTag`와 옛 종류별 Definition 클래스는 제거했다. 전투·입력·상태이상의 Gameplay Tag는 그대로 유지한다.
+- 무기·유물 런타임은 `UARLoadoutItemInstance`, 소모품 런타임은 `UARConsumableInstance` 자식 클래스로 분리된다. 둘 다 공통 Definition의 `RuntimeBehaviorClass`에 지정한다. 공통 `Try Acquire Item` 노드는 유형에 따라 기존 장비/소모품 컴포넌트로 보낸다.
+- `Find Item By Key`, `Find Items By Additional Tag`, `Count Owned Items By Additional Tag`, `Validate Item Catalog`가 추가됐다. Asset Manager는 `ARItem` 단일 유형으로 아이템 경로를 스캔한다.
+- 사용자가 삭제를 허용한 테스트 유물 에셋 5개(`R_P_Test_1` 포함)는 Windows 휴지통으로 이동했다. 테스트 전용 C++ 클래스/태그도 제거했다. 새 실제 콘텐츠 에셋은 아직 만들지 않았다.
+- 상세 제작법은 [통합 아이템 제작 가이드](Foundation/ITEM_DATA_ASSET_FIELD_GUIDE.html)를 우선한다. 이전 노드 카탈로그·한영 레퍼런스의 아이템 표는 아직 통합 전 스냅샷이다. 그 외 스탯·전투 표는 계속 참고 가능하다.
+- 마지막 카탈로그 검사 노드까지 포함한 Editor Win64 Development 빌드가 성공했고 `AR.Foundation` 자동화 테스트 30/30이 통과했다. 로그: `Saved/Logs/FoundationFinalItemUnification.log`. 실제 제작 아이템 에셋은 아직 없으므로 카탈로그가 저장된 콘텐츠를 찾는 양성 경로와 에디터 내 픽업 조작은 콘텐츠 생성 후 수동 검증이 필요하다.
+- 이 변경을 Git 커밋·푸시하지 않았다. 작업 시작 전부터 존재한 다른 사용자의 에셋·폴더 재정리 변경도 보존했다. 아래의 이전 업로드 지시는 과거 인계 기록으로만 취급하고 현재 요청의 승인으로 해석하지 않는다.
+
+기준일: 2026-09-29
 
 이 문서를 먼저 읽고 기존 문서와 실제 코드를 확인하면 현재 작업을 이어갈 수 있다. 이 문서는 프로젝트 상태 전달용이며, 특정 다음 기능의 구현을 자동으로 요청하는 문서는 아니다. 다음 작업 범위는 사용자의 새 요청에 따른다.
 
 ## 1. 프로젝트와 작업 원칙
 
-- 프로젝트 루트: `C:\Users\ghksd\Desktop\Action_RogLike\Prototype_Rog_Like_Game_Dev`
-- 상위 작업 폴더: `C:\Users\ghksd\Desktop\Action_RogLike`
+- 현재 프로젝트 루트: `C:\Users\ghksd\Desktop\game_dev\Action_RogueLike` (다른 PC에서는 `.uproject` 위치를 기준으로 찾는다).
 - 프로젝트 파일: `Action_RogueLike.uproject`
 - 엔진: Unreal Engine 5.8. 설치 경로 `C:\Program Files\Epic Games\UE_5.8`.
 - 모듈: `Action_RogueLike`. 에디터 빌드 타깃: `Action_RogueLikeEditor Win64 Development`.
@@ -27,7 +43,7 @@
 5. [Blueprint 제작 계획](Foundation/FOUNDATION_BLUEPRINT_PLAN.md): 콘텐츠 제작 방법과 연결 규약.
 6. [노드 목록](Foundation/FOUNDATION_BLUEPRINT_NODE_CATALOG.md) / [한영 HTML 레퍼런스](Foundation/FOUNDATION_REFERENCE_KO_EN.html): 노드·Details·입출력 참조.
 7. [칼리번·엑스칼리버 제작 가안](Content/Weapons/CALIBURN_EXCALIBUR_DESIGN_DRAFT.md): 사용자와 정리한 무기 기획. 아직 구현한 무기가 아니다.
-8. [임시 HUD 편집 안내](../Content/Game/Foundation/UI/README.md): 실제 Widget 외형 수정 방법.
+8. [임시 HUD 편집 안내](../Content/Game/Tests/UI/폴더%20설명!.md): 실제 Widget 외형 수정 방법.
 
 과거 문서의 “Content에는 경로만 있다”, “UI는 아직 없다” 등의 기록은 현재 상태와 다를 수 있다. 최신 보완 기록과 실제 에셋·코드를 기준으로 판단한다. 기획 문서와 구현 상태도 구분한다.
 
@@ -40,10 +56,10 @@
 - 사용자가 최종 검증 후 문서까지 포함한 GitHub 업로드를 요청했다. 검증 결과는 8절에 기록했다.
 - 원격 체크아웃은 최신 `origin/main`을 사용한다. 작업 시작 시 로컬 상태와 원격 버전을 확인하고 추가 편집을 보존한다.
 
-이번 인계 묶음의 주요 변경:
+2026-09-28 인계 묶음의 주요 변경(아래 경로는 2026-09-29 정리 후의 위치):
 
-- `Content/Game/Foundation/UI/README.md`
-- `Content/Game/Foundation/UI/WBP_TestResourceHUD.uasset` — 신규, 실제 Widget 에셋.
+- `Content/Game/Tests/UI/폴더 설명!.md`
+- `Content/Game/Tests/UI/WBP_TestResourceHUD.uasset` — 실제 Widget 에셋.
 - `Docs/Content/Weapons/CALIBURN_EXCALIBUR_DESIGN_DRAFT.md` — 신규.
 - 이 인계 문서 — 신규.
 - `Docs/Foundation/FOUNDATION_BLUEPRINT_NODE_CATALOG.md`
@@ -118,11 +134,11 @@
 
 실제 에셋:
 
-`Content/Game/Foundation/UI/WBP_TestResourceHUD.uasset`
+`Content/Game/Tests/UI/WBP_TestResourceHUD.uasset`
 
 언리얼 패키지:
 
-`/Game/Game/Foundation/UI/WBP_TestResourceHUD`
+`/Game/Game/Tests/UI/WBP_TestResourceHUD`
 
 - 부모 `UARResourceHUDWidget`.
 - 화면 왼쪽 위에 체력(빨강), 스태미나(초록), 마나(파랑)의 바와 현재값/최대값 표시.
@@ -174,8 +190,9 @@
 ## 7. 에셋 정리와 기본 맵
 
 - 새 게임 콘텐츠는 `Content/Game` 아래에 만든다.
-- 현재 기본 맵: `/Game/Game/Foundation/Test/Test_Level.Test_Level`.
-- 기본 게임모드: `/Game/Game/Foundation/Blueprints/BP_TestGameMode.BP_TestGameMode_C`.
+- 현재 기본 맵: `/Game/Game/Tests/Maps/Test_Level.Test_Level`.
+- 기본 게임모드: `/Game/Game/Tests/Blueprints/BP_TestGameMode.BP_TestGameMode_C`.
+- 콘텐츠 폴더는 `Foundation`(공용 기반), `Art`(임포트 그래픽), `Objects`(동작·정의), `Maps`(본편), `UI`(본편 화면), `Tests`(검증)로 구분한다. 편집 원본은 프로젝트 루트 `ArtSource`다. 각 폴더의 `폴더 설명!.md`에 용도를 기록한다.
 - 맵 파일은 `Test_Level.umap`이다. `.uasset`로 찾으면 없는 것으로 오판할 수 있다.
 - 템플릿 TopDown/Variant/Mannequin 등은 앞선 사용자 요청으로 게임 콘텐츠와 분리·제거했고 Git 변경까지 반영했다. 삭제 상태를 임의로 복구하지 않는다.
 - 당시 보관 폴더: `C:\Users\ghksd\Desktop\Action_RogLike\_UnrealTemplateArchive\Prototype_Rog_Like_Game_Dev` — 프로젝트 밖이며 GitHub에 포함되지 않는다.
@@ -206,13 +223,13 @@ Saved는 일반적으로 Git 대상이 아니므로 다른 체크아웃에는 �
 프로젝트 루트의 PowerShell 기준:
 
 ```powershell
-& 'C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat' Action_RogueLikeEditor Win64 Development '-Project=C:\Users\ghksd\Desktop\Action_RogLike\Prototype_Rog_Like_Game_Dev\Action_RogueLike.uproject' -WaitMutex -NoHotReload
+& 'C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat' Action_RogueLikeEditor Win64 Development '-Project=C:\Users\ghksd\Desktop\game_dev\Action_RogueLike\Action_RogueLike.uproject' -WaitMutex -NoHotReload
 ```
 
 Foundation 테스트:
 
 ```powershell
-& 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'C:\Users\ghksd\Desktop\Action_RogLike\Prototype_Rog_Like_Game_Dev\Action_RogueLike.uproject' -unattended -nop4 -nosplash -NullRHI -nosound -DDC-ForceMemoryCache '-ExecCmds=Automation RunTests AR.Foundation' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=C:\Users\ghksd\Desktop\Action_RogLike\Prototype_Rog_Like_Game_Dev\Saved\Automation\NextAgentFoundation' '-abslog=C:\Users\ghksd\Desktop\Action_RogLike\Prototype_Rog_Like_Game_Dev\Saved\Logs\NextAgentFoundation.log'
+& 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'C:\Users\ghksd\Desktop\game_dev\Action_RogueLike\Action_RogueLike.uproject' -unattended -nop4 -nosplash -NullRHI -nosound -DDC-ForceMemoryCache '-ExecCmds=Automation RunTests AR.Foundation' '-TestExit=Automation Test Queue Empty' '-ReportExportPath=C:\Users\ghksd\Desktop\game_dev\Action_RogueLike\Saved\Automation\NextAgentFoundation' '-abslog=C:\Users\ghksd\Desktop\game_dev\Action_RogueLike\Saved\Logs\NextAgentFoundation.log'
 ```
 
 대상을 좁히려면 `AR.Foundation.UI.ResourceHUDLiveUpdates` 등으로 바꾼다. UnrealEditor-Cmd의 종료 코드만 보고 성공 여부를 판단하지 말고 레포트의 failed와 errors를 확인한다. 샌드박스에서 캐시 접근·빌드가 거부되면 필요한 권한으로 실행한다. 일반적인 SDK 부족 출력과 실제 대상 테스트 실패를 구분한다.
@@ -235,3 +252,11 @@ HTML 재생성:
 4. UI는 기존 Widget을 편집하고, 무기는 가안의 확정 규칙과 미정 항목을 구분해 진행한다.
 5. 요청 범위를 구현·검증하고 기존 handoff와 관련 참조 문서에 변경을 기록한다.
 6. 명시적 요청 없이 커밋·푸시하지 않는다.
+
+## 11. 2026-09-29 콘텐츠 폴더 정리
+
+- `ArtSource`는 편집 원본, `Content/Game/Art`는 언리얼 임포트 그래픽, `Objects`는 동작·정의, `Maps`는 본편 레벨, `Tests`는 테스트 전용으로 나눴다. `Foundation`과 `UI`는 공용 기반과 본편 UI를 각각 유지한다.
+- 각 콘텐츠 폴더의 `폴더 설명!.md`에 용도를 기록했다. 기존 README도 같은 이름으로 옮겼으며, 그 내용은 새 경로에 맞게 갱신했다.
+- 실제 테스트 플레이어·입력·HUD·게임모드·맵은 `Tests`로 Unreal AssetTools/맵 저장 기능을 사용하여 옮겼다. C++·Config의 참조도 함께 갱신했다. C++ 에디터 Development 빌드 성공, 새 맵 열기 성공, `AR.Foundation` 29/29 성공(0 실패·0 경고). 검증 결과는 `Saved/Automation/ContentReorgFinal/index.json`이다.
+- 로컬에서 수정돼 있던 기존 `Test_Level.umap`은 `Saved/ContentReorgBackup/Test_Level.before_reorg.umap`에 작업 전 백업했다. 이 백업은 `Saved` 안에 있어 Git에 포함되지 않는다. 새 테스트 맵에 수정 내용이 보존된 것을 확인했고 구 경로 맵을 제거했다.
+- 이 폴더 정리 작업은 아직 커밋·푸시하지 않았다.

@@ -6,8 +6,7 @@
 
 class AARConsumablePickup;
 class AARLoadoutItemPickup;
-class UARConsumableDefinition;
-class UARLoadoutItemDefinition;
+class UARItemDefinition;
 
 UCLASS()
 class ACTION_ROGUELIKE_API UARWorldItemDropSubsystem : public UWorldSubsystem
@@ -16,10 +15,10 @@ class ACTION_ROGUELIKE_API UARWorldItemDropSubsystem : public UWorldSubsystem
 
 public:
 	UFUNCTION(BlueprintCallable, Category="AR|Pickup")
-	bool TrySpawnLoadoutPickup(const UARLoadoutItemDefinition* Definition, FVector DesiredLocation,
+	bool TrySpawnLoadoutPickup(const UARItemDefinition* Definition, FVector DesiredLocation,
 		TSubclassOf<AARLoadoutItemPickup> PickupClass, AActor* DropOwner, AARLoadoutItemPickup*& SpawnedPickup);
 
 	UFUNCTION(BlueprintCallable, Category="AR|Pickup")
-	bool TrySpawnConsumablePickup(UARConsumableDefinition* Definition, FVector DesiredLocation,
+	bool TrySpawnConsumablePickup(UARItemDefinition* Definition, FVector DesiredLocation,
 		TSubclassOf<AARConsumablePickup> PickupClass, AActor* DropOwner, AARConsumablePickup*& SpawnedPickup);
 };

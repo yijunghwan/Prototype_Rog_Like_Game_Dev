@@ -241,6 +241,16 @@ struct ACTION_ROGUELIKE_API FARSuperArmorHandle
 };
 
 USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARCCImmunityHandle
+{
+	GENERATED_BODY()
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Handle") FGuid Id;
+	bool IsValid() const { return Id.IsValid(); }
+	friend bool operator==(const FARCCImmunityHandle& A, const FARCCImmunityHandle& B) { return A.Id == B.Id; }
+	friend uint32 GetTypeHash(const FARCCImmunityHandle& Handle) { return GetTypeHash(Handle.Id); }
+};
+
+USTRUCT(BlueprintType)
 struct ACTION_ROGUELIKE_API FARMovementLockHandle
 {
 	GENERATED_BODY()

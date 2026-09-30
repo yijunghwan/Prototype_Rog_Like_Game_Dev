@@ -35,10 +35,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Combat")
 	static bool RemoveSuperArmor(AActor* Target, FARSuperArmorHandle Handle);
 
+	/** Guarantees that new crowd-control statuses have zero effective duration. */
+	UFUNCTION(BlueprintCallable, Category="AR|Combat|CC Immunity")
+	static FARCCImmunityHandle ApplyCCImmunity(AActor* Target, const FARCCImmunitySpec& Spec, bool& bSuccess);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Combat|CC Immunity")
+	static bool RemoveCCImmunity(AActor* Target, FARCCImmunityHandle Handle);
+
 	UFUNCTION(BlueprintCallable, Category="AR|Combat")
 	static FARStatusEffectResult ApplyStatusEffect(AActor* Target, const FARStatusEffectRequest& Request);
 
 	UFUNCTION(BlueprintCallable, Category="AR|Combat")
 	static bool RemoveStatusEffect(AActor* Target, FARStatusEffectHandle Handle);
 };
-

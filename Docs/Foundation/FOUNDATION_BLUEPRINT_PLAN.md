@@ -1,5 +1,7 @@
 # Foundation 블루프린트 설계서
 
+> **현행 보완 (2026-09-30):** 유물/무기 런타임에서 `Apply Item Super Armor`와 `Apply Item CC Immunity`를 사용하면 아이템 제거 시 자동 해제된다. 스킬 행동에만 붙일 때는 `Apply Action Super Armor` / `Apply Action CC Immunity`를 사용한다. CC 면역은 강인함 100 수정치가 아니라 새 CC의 적용을 사전에 차단하는 별도 보장 효과다. 지속시간 `-1`은 무기한이고, 이미 걸린 상태를 지우지는 않는다.
+
 > **상태:** 구현 전 Blueprint 계약서  
 > **상위 문서:** `FOUNDATION_SYSTEM_PLAN.md`, `FOUNDATION_CODE_ARCHITECTURE.md`  
 > **목적:** 콘텐츠 개발자가 Blueprint에서 무엇을 만들고, 어떤 C++ 노드에 어떤 값을 넣으며, 어떤 결과·이벤트를 받아야 하는지 정의한다. 이 문서는 실제 Blueprint 에셋을 아직 만들지 않는다.
@@ -38,14 +40,14 @@ Blueprint가 하는 일은 다음과 같다.
 | 종류 | 접두사 | 예시 | 위치 |
 |---|---|---|---|
 | 캐릭터 BP | `BP_` | `BP_ARPlayerBase` | `Content/Game/Foundation/Blueprints/Characters` |
-| 적 BP | `BP_` | `BP_Enemy_Slime` | `Content/Game/Characters/Enemies/[적이름]` |
-| 런타임 아이템 BP | `BP_` | `BP_WeaponRuntime_Example` | `Content/Game/Weapons/[무기]/Runtime` |
+| 적 BP | `BP_` | `BP_Enemy_Slime` | `Content/Game/Objects/Characters/Enemies/[적이름]` |
+| 런타임 아이템 BP | `BP_` | `BP_WeaponRuntime_Example` | `Content/Game/Objects/Items/Weapons/[무기]/Runtime` |
 | 픽업 BP | `BP_` | `BP_LoadoutItemPickup` | `Content/Game/Foundation/Blueprints/Pickups` |
 | Definition Data Asset | `DA_` | `DA_Weapon_Example` | 해당 콘텐츠의 `Data` |
-| 입력 에셋 | `IA_`, `IMC_` | `IA_Roll`, `IMC_Player` | `Content/Game/Foundation/Input` |
-| Widget | `WBP_` | `WBP_HUD` | `Content/Game/Foundation/UI` 또는 `Content/Game/UI` |
-| 테스트 BP | `BP_Test_` | `BP_Test_CombatDummy` | `Content/Game/Foundation/Test` |
-| Flipbook/Sprite/Texture | `FB_`, `SPR_`, `T_` | `FB_Player_Idle` | 콘텐츠별 `Art` |
+| 공용 입력 에셋 | `IA_`, `IMC_` | `IA_Roll`, `IMC_Player` | `Content/Game/Foundation/Input` (`IMC_Player` 테스트본은 `Tests/Player`) |
+| Widget | `WBP_` | `WBP_HUD` | `Content/Game/UI` (테스트 HUD는 `Tests/UI`) |
+| 테스트 BP | `BP_Test_` | `BP_Test_CombatDummy` | `Content/Game/Tests/Blueprints` |
+| Flipbook/Sprite/Texture | `FB_`, `SPR_`, `T_` | `FB_Player_Idle` | `Content/Game/Art`의 콘텐츠별 분류 |
 
 개별 무기/유물/적의 이름은 에셋 이름과 Data Asset ID에만 넣는다. Foundation 부모 BP와 C++ 노드 이름에는 콘텐츠 이름을 넣지 않는다.
 
@@ -88,7 +90,7 @@ CC 콘텐츠를 만들 때 `DA_Status_Root`는 기본 이동·구르기 차단, 
 
 | 값 | 형식 | 의미 |
 |---|---|---|
-| `ItemDefinition` | `UARLoadoutItemDefinition` 참조 | 획득할 아이템의 정적 정보 |
+| `ItemDefinition` | `UARItemDefinition` 참조 | 획득할 아이템의 정적 정보 |
 | `PickupVisual` | Sprite/Flipbook/Widget 등 | 월드 표시용, 규칙과 무관 |
 | `InteractionText` | Text | F 상호작용 안내 |
 
@@ -107,7 +109,7 @@ F 입력
 ### 3.4 `BP_ConsumablePickup`
 
 **부모/구현:** 일반 Actor + `IARInteractable`  
-**Details 입력:** `UARConsumableDefinition`, 월드 외형, 상호작용 텍스트.  
+**Details 입력:** `UARItemDefinition`(유형이 `Item.Type.Consumable`), 월드 외형, 상호작용 텍스트.
 **동작:** F 입력 → `Try Acquire Consumable(Definition)` → 성공 시 Destroy, 빈 슬롯 없음이면 유지. 동일 소모품도 각각 새 Instance로 획득한다.
 
 ### 3.5 `BP_ARCombatHitbox` (공용 또는 무기별 자식)
@@ -195,13 +197,13 @@ Runtime BP는 월드 Actor가 아니다. 장착 중인 플레이어의 런타임
 
 | 그룹 | 필드 | 데이터 타입/설명 |
 |---|---|---|
-| 식별 | `PrimaryAssetId`, `DefinitionTag`, Item Type Tag | 에셋 로드 ID, 게임 규칙 ID와 Weapon/Active/Passive 분류 |
+| 식별 | `ItemTypeTag`, `ItemId`, `AdditionalTags` | 네 유형 분류, 유형 내 고유 숫자 ID, 여러 아이템이 공유 가능한 계열 문자열. 로딩용 `PrimaryAssetId`는 별개 |
 | 표시 | 이름, 짧은/상세 설명, 아이콘 | 인벤토리/HUD용 정적 정보 |
 | 고정 효과 | `DefaultStatModifiers[]` | 스탯, Flat/Additive/Multiplicative, 값, 출처 정보 |
 | 스킬 | `SkillDefinitions[]` | Skill ID, Input Tag, 우선순위, 쿨다운, MP/스태미나 비용, Action 설정 |
 | 런타임 | `RuntimeBehaviorClass` | 실제 행동을 구현한 Runtime BP 클래스 |
 | UI | `UIStateDisplayDefinitions[]` | 게이지/숫자/소형 스택, HUD/상세 표시 위치 |
-| 무기 전용 | 진화 그룹/단계/다음 후보 | 무기 Definition에만 존재 |
+| 무기 전용 | 진화 그룹/단계/다음 후보 | 공통 Definition에 노출되나 무기 유형에서만 사용 |
 
 Definition의 “상세 설명”은 `FText`다. 제공 스탯 목록은 `DefaultStatModifiers`를 UI가 자동 변환해 표시한다. Runtime BP에서 조건부로 더해지는 효과는 설명 Text와 Runtime BP 모두에 의도적으로 기록해야 한다.
 
@@ -496,7 +498,7 @@ Widget 생성 직후 `Get HUD Snapshot`을 한 번 호출해 초기 화면을 �
 
 ### 2026-09-24 테스트 플레이어 대시 연결
 
-현재 테스트 플레이어 에셋은 `/Game/Game/Foundation/Test/test_Player/BP_test_Player`이다. `IA_Move`는 Axis2D와 Cumulative 누적을 사용하므로 두 방향키를 동시에 누르면 대각선 입력이 유지된다. `IA_Roll`은 기본 대시 입력으로 등록되어 있다. `BP_test_Player`에는 `Mouse Roll Action = IA_Roll_v2`, `Roll Duration = 0.20`이 설정되어 있다. 기존 키를 바꾸지 않은 `IMC_Player`이 기본 매핑이다.
+현재 테스트 플레이어 에셋은 `/Game/Game/Tests/Player/BP_test_Player`이다. `IA_Move`는 Axis2D와 Cumulative 누적을 사용하므로 두 방향키를 동시에 누르면 대각선 입력이 유지된다. `IA_Roll`은 기본 대시 입력으로 등록되어 있다. `BP_test_Player`에는 `Mouse Roll Action = IA_Roll_v2`, `Roll Duration = 0.20`이 설정되어 있다. 기존 키를 바꾸지 않은 `IMC_Player`이 기본 매핑이다.
 
 | 사용 목적 | 설정 |
 |---|---|

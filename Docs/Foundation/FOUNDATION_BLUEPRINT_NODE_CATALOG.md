@@ -4,6 +4,10 @@
 
 작성 기준: 2026-09-24, 현재 `Source`의 실제 선언과 구현.
 
+> 2026-09-30 아이템 통합 변경: 아래의 이전 아이템 클래스명·시그니처 표는 역사적 스냅샷이다. 현재 저작 가능한 데이터 에셋은 `UARItemDefinition` 하나이며, `DefinitionTag` 대신 `(ItemTypeTag, ItemId)`와 `AdditionalTags`를 사용한다. 정확한 현행 아이템 필드·조회·획득 노드는 [통합 아이템 제작 가이드](ITEM_DATA_ASSET_FIELD_GUIDE.html)와 `Source` 선언을 우선한다. 이 목록 전체를 새 API로 재생성하는 작업은 아직 하지 않았다.
+
+> 2026-09-30 보장 효과 추가: `Apply Item Super Armor`, `Remove Own Item Super Armor`, `Apply Item CC Immunity`, `Remove Own Item CC Immunity`, `Apply Action CC Immunity`, `Apply CC Immunity`, `Remove CC Immunity`가 현행 노드다. 두 보장 효과는 숫자 스탯 수정치가 아니며 소유 아이템/행동 종료 시 자동 정리된다. 아래의 옛 노드 표에 아직 반영되지 않은 항목은 통합 아이템 제작 가이드와 C++ 선언을 참조한다.
+
 ## 1. 검토 범위와 현재 상태
 
 `Source`의 C++ 헤더 70개, 구현 파일 60개, 빌드/타깃 C# 파일 3개를 읽었다. Foundation 런타임, 자동화 테스트, 기본 TopDown 및 Strategy/TwinStick 템플릿을 포함한다. 기존 Foundation 문서 4개와 코드를 대조했다. 최초 목록은 정적 코드 검토로 작성했으며, 이후 2026-09-24 보완 내용을 반영했다. 보완 후 빌드·자동화 테스트 결과는 handoff의 최신 기록을 따른다. `.uasset` 내부 Blueprint 그래프와 엔진이 제공하는 모든 상속 노드를 읽었다는 의미는 아니다.
@@ -19,10 +23,10 @@
 | 적/허수아비 | `AARBaseEnemy` 파생 BP | 외형, 추적/공격 AI, 공격 타이밍, 사망 연출·제거·드롭 |
 | 환경 공격원/함정 | Actor + `UARCombatSourceComponent` | 작동 주기·범위, 대미지 요청 구성, 충돌 처리 |
 | 공격 판정 | `AARActionHitboxActor` 파생 BP | Box/Sphere 등 충돌 컴포넌트, 오버랩 처리, 피해/경직 요청 |
-| 무기 | `UARWeaponDefinition` 데이터 에셋 + `UARLoadoutItemInstance` 파생 BP | 기본 보정, 스킬 정의, 스킬 실행 그래프, 진화 후보 |
-| 액티브 유물 | `UARActiveRelicDefinition` + 아이템 인스턴스 BP | 스킬 실행, 비용·쿨다운, 효과·UI 상태 |
-| 패시브 유물 | `UARPassiveRelicDefinition` + 필요시 아이템 인스턴스 BP | 고정 스탯 또는 전투 이벤트 구독, 조건부 효과, 해제 시 정리 |
-| 소모품 | `UARConsumableDefinition` + `UARConsumableInstance` 파생 BP | 사용 가능 판정과 실제 회복/버프 효과 |
+| 무기 | `UARItemDefinition`(Weapon) + `UARLoadoutItemInstance` 파생 BP | 기본 보정, 스킬 정의, 스킬 실행 그래프, 진화 후보 |
+| 액티브 유물 | `UARItemDefinition`(ActiveRelic) + 아이템 인스턴스 BP | 스킬 실행, 비용·쿨다운, 효과·UI 상태 |
+| 패시브 유물 | `UARItemDefinition`(PassiveRelic) + 필요시 아이템 인스턴스 BP | 고정 스탯 또는 전투 이벤트 구독, 조건부 효과, 해제 시 정리 |
+| 소모품 | `UARItemDefinition`(Consumable) + `UARConsumableInstance` 파생 BP | 사용 가능 판정과 실제 회복/버프 효과 |
 | 상태이상 | `UARStatusEffectDefinition` | 태그, 지속시간·중첩/갱신 정책과 스탯 효과 등 데이터 설정 |
 | 필드 아이템 | `AARLoadoutItemPickup`, `AARConsumablePickup` 파생 BP | 표시·충돌·Definition 지정, 할당 이벤트에 따른 외형 갱신 |
 | 문/상자/제단 | `IARInteractableInterface`를 구현한 BP | 상호작용 가능 여부·안내 문구·우선순위·실행 결과 |

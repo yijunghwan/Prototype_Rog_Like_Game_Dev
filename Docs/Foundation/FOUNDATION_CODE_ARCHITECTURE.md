@@ -1,5 +1,7 @@
 # Foundation 코드 아키텍처 설계서
 
+> **현행 보완 (2026-09-30):** `UARStaggerComponent`는 슈퍼아머 핸들을, `UARStatusEffectComponent`는 CC 면역 핸들을 소유한다. 무기·유물 런타임과 Action은 각각 자신이 발급받은 핸들을 수명 종료 시 자동 회수한다. 기절·속박은 자동 CC이며 향후 상태 Definition은 `bIsCrowdControl`로 분류한다. 이 보장 효과는 `Tenacity` 스탯 수정치와 별개다.
+
 > **상태:** 구현 전 코드 설계서  
 > **상위 문서:** `FOUNDATION_SYSTEM_PLAN.md`  
 > **Blueprint 계약:** `FOUNDATION_BLUEPRINT_PLAN.md`  
@@ -121,11 +123,8 @@ Action_RogueLike/
 │  │  │  ├─ ARActionBlueprintLibrary.h
 │  │  │  └─ ARAsyncActionDelay.h
 │  │  ├─ Items/
-│  │  │  ├─ ARLoadoutItemDefinition.h
-│  │  │  ├─ ARWeaponDefinition.h
-│  │  │  ├─ ARActiveRelicDefinition.h
-│  │  │  ├─ ARPassiveRelicDefinition.h
-│  │  │  ├─ ARConsumableDefinition.h
+│  │  │  ├─ ARItemDefinition.h
+│  │  │  ├─ ARItemInstance.h
 │  │  │  ├─ ARLoadoutItemInstance.h
 │  │  │  ├─ ARConsumableInstance.h
 │  │  │  └─ ARItemTypes.h
@@ -147,18 +146,14 @@ Action_RogueLike/
 │  ├─ Foundation/
 │  │  ├─ Blueprints/Characters/ Pickups/ World/
 │  │  ├─ Data/Items/ StatusEffects/ Camera/
-│  │  ├─ Input/
-│  │  ├─ UI/
-│  │  └─ Test/
-│  ├─ ArtShared/                 ← 여러 콘텐츠가 함께 쓰는 팔레트·머티리얼·공용 FX
-│  ├─ Characters/                ← Player/Enemies/[콘텐츠명]/Art·Blueprints·Data
-│  ├─ Weapons/                   ← [무기명]/Data·Runtime·Art·Projectiles
-│  ├─ Relics/                    ← Active/Passive/[유물명]/Data·Runtime·Art
-│  ├─ Consumables/               ← [소모품명]/Data·Runtime·Art
-│  ├─ World/                     ← Maps·Tilesets·Props·EnvironmentFX
-│  └─ UI/                        ← 게임 고유 Widget·UI 아트
+│  │  └─ Input/
+│  ├─ Art/                       ← 임포트 그래픽: Characters·Items·World·Shared·UI
+│  ├─ Objects/                   ← Characters·Items·World의 Blueprint·Definition
+│  ├─ Maps/                      ← Main·Rooms
+│  ├─ Tests/                     ← 테스트 맵·플레이어·게임모드·임시 HUD
+│  └─ UI/                        ← 본편 Widget Blueprint
 ├─ ArtSource/                    ← Aseprite/PSD와 원본 PNG. Content에 임포트하지 않음
-│  ├─ Shared/ Characters/ Weapons/ Relics/ Consumables/ World/ UI/
+│  └─ Shared/ Characters/ Items/ World/ UI/
 └─ Docs/Foundation/
    ├─ FOUNDATION_SYSTEM_PLAN.md
    ├─ FOUNDATION_CODE_ARCHITECTURE.md
@@ -172,7 +167,7 @@ Action_RogueLike/
 - 헤더는 전방 선언을 우선하고, 무거운 include는 `.cpp`에 둔다.
 - `ARDamageResolver`는 `UObject`가 아닌 순수 C++ 계산기다. Blueprint가 피해 공식을 우회할 수 없고 수식 자동화 테스트가 쉽다.
 - Data Asset, Runtime BP, Pickup BP, Widget은 `Content`에만 둔다.
-- 테스트 맵과 더미 에셋은 `Content/Game/Foundation/Test`에만 둔다.
+- 테스트 맵과 더미 에셋은 `Content/Game/Tests`에 둔다.
 
 ### Paper2D 도트 아트 저장 기준
 
@@ -181,9 +176,9 @@ Action_RogueLike/
 | 위치 | 넣는 것 | 목적 |
 |---|---|---|
 | `ArtSource/` | Aseprite/PSD 원본, 생성 직후 PNG, 레퍼런스, 작업 중 시트 | 언리얼이 임포트하지 않는 원본 작업 보관소 |
-| `Content/Game/` | 임포트된 Texture, Paper Sprite, Paper Flipbook, Material, 실제 UI 아이콘 | 언리얼이 참조하고 패키징하는 게임 에셋 |
+| `Content/Game/Art/` | 임포트된 Texture, Paper Sprite, Paper Flipbook, Material, 실제 UI 아이콘 | 언리얼이 참조하고 패키징하는 게임 그래픽 |
 
-기본 캐릭터 프레임과 월드 타일이 32×32이라는 뜻이지, 모든 이미지 파일이 32×32이어야 한다는 뜻은 아니다. 예를 들어 8프레임 걷기 애니메이션은 `256×32` PNG 스프라이트 시트 하나로 저장하고, 언리얼에서 Texture → Paper Sprite들 → Flipbook 순으로 만든다. 긴 무기, 검 궤적, 폭발, 대형 마법은 별도 Sprite/Flipbook 레이어와 더 큰 캔버스를 허용한다. 같은 캐릭터/무기/유물이 쓰는 시트·스프라이트·플립북은 해당 콘텐츠의 `Art` 폴더 안에 함께 둔다.
+기본 캐릭터 프레임과 월드 타일이 32×32이라는 뜻이지, 모든 이미지 파일이 32×32이어야 한다는 뜻은 아니다. 예를 들어 8프레임 걷기 애니메이션은 `256×32` PNG 스프라이트 시트 하나로 저장하고, 언리얼에서 Texture → Paper Sprite들 → Flipbook 순으로 만든다. 긴 무기, 검 궤적, 폭발, 대형 마법은 별도 Sprite/Flipbook 레이어와 더 큰 캔버스를 허용한다. 같은 캐릭터/무기/유물이 쓰는 시트·스프라이트·플립북은 `Content/Game/Art`의 해당 분류에 함께 둔다.
 
 초기 픽셀·타일 좌표 규격은 다음으로 고정한다.
 
@@ -193,7 +188,7 @@ Action_RogueLike/
 - 캐릭터는 타일 한 칸씩 스냅하지 않고 XY 실수 좌표로 연속 이동한다. 타일 좌표가 필요할 때만 `Floor((WorldPosition - MapOrigin) / 64)`로 변환한다.
 - 방은 개별 타일 Actor의 집합이 아니라 Paper TileMap과 단순 충돌을 가진 방 모듈로 제작한다. 방 크기와 출입구 위치는 64 UU 격자 배수에 맞춘다.
 
-전 프로젝트가 함께 쓰는 팔레트, 공용 머티리얼, 공통 충격/피격 FX만 `Content/Game/ArtShared`에 둔다. 재사용 가능성이 막연하다는 이유로 모든 Texture를 Shared에 넣지 않는다.
+전 프로젝트가 함께 쓰는 팔레트, 공용 머티리얼, 공통 충격/피격 FX만 `Content/Game/Art/Shared`에 둔다. 재사용 가능성이 막연하다는 이유로 모든 Texture를 Shared에 넣지 않는다.
 
 ---
 
@@ -287,7 +282,7 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 
 `UARInteractionComponent`는 Player 주변의 `ARInteractable` 채널을 조회해 거리, 우선순위, 선택적 시야 검사를 통과한 현재 후보를 보관한다. F 입력은 이 Component의 `TryInteract`만 호출한다. 상점·픽업·NPC는 `IARInteractable`을 구현하고, UI 생성은 직접 하지 않고 UI Manager에 요청한다.
 
-`AARGameMode`는 새 Foundation Player/Controller를 기본 클래스로 지정한다. 현재 프로젝트 기본 맵은 `/Game/Game/Foundation/Test/Test_Level`, 기본 GameMode는 `/Game/Game/Foundation/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 사용하지 않는다.
+`AARGameMode`는 새 Foundation Player/Controller를 기본 클래스로 지정한다. 현재 프로젝트 기본 맵은 `/Game/Game/Tests/Maps/Test_Level`, 기본 GameMode는 `/Game/Game/Tests/Blueprints/BP_TestGameMode`이다. 기존 TopDown 템플릿은 사용하지 않는다.
 
 적의 일반 경로 이동은 `AARAIController`가 담당한다. `ARMoveToActor`/`ARMoveToLocation`과 Behavior Tree `Move To`가 공통 `MoveTo` 검사에서 `UARMovementControlComponent::CanBasicMove()`를 확인한다. 이동 잠금 이벤트가 기본 이동 불가로 바뀌면 AI Controller는 진행 중인 경로를 취소하고 속도를 멈춘다. 해제 시 자동 재개하지 않고 AI가 목표를 재평가한다. 공격·돌진 등 액션 소유 이동은 기존 Action Handle 경로를 사용하므로 속박의 기본 이동 제한과 분리된다.
 
@@ -554,26 +549,25 @@ Combat Subsystem의 한 요청은 검증·계산·보호막/체력 반영·자�
 ### Definition 계층
 
 ```text
-UARLoadoutItemDefinition (추상 UPrimaryDataAsset)
-├─ UARWeaponDefinition
-├─ UARActiveRelicDefinition
-└─ UARPassiveRelicDefinition
-
-UARConsumableDefinition (UPrimaryDataAsset)
+UARItemDefinition (구체 UPrimaryDataAsset)
+├─ Item.Type.Weapon
+├─ Item.Type.ActiveRelic
+├─ Item.Type.PassiveRelic
+└─ Item.Type.Consumable
 ```
 
-Definition의 공통 필드는 Asset Manager가 제공하는 `PrimaryAssetId`, 게임 규칙용 `DefinitionTag`, Item Type Tag, 표시 이름, 짧은/상세 설명, UI 아이콘, 기본 스탯 수정치, Skill Definitions, Runtime Behavior Class, UI State Display Definitions이다. `PrimaryAssetId`는 로드·저장, `DefinitionTag`는 규칙·검색, `FText` 이름은 표시 전용으로 역할을 분리한다. Weapon Definition에만 진화 그룹/단계/다음 후보 정보를 둔다. 사용하지 않는 빈 필드는 공통 부모에 넣지 않는다. Project Asset Manager에는 `ARLoadoutItem`, `ARConsumable`, `ARStatusEffect` 타입과 `/Game/Game/...` 스캔 경로가 등록되어 있다.
+하나의 저작 가능한 Definition에 `ItemTypeTag`, 양의 `ItemId`, 복수의 문자열 `AdditionalTags`, 표시 이름·설명·아이콘, 기본 스탯 수정치, Skill Definitions, Runtime Behavior Class, UI State Display Definitions를 둔다. `(ItemTypeTag, ItemId)`가 게임 규칙상의 고유 조회 키다. `AdditionalTags`는 여러 Definition이 공유할 수 있는 계열명이다. `PrimaryAssetId`는 `ARItem:에셋파일명` 형식의 로딩 ID이며 게임 규칙 ID와 별개다. `DefinitionTag`는 아이템에서 제거했다. 진화 필드는 같은 클래스에 존재하지만 무기에만 적용한다. Project Asset Manager는 단일 `ARItem` 타입으로 두 아이템 경로를 스캔하며 상태이상용 `ARStatusEffect` 타입은 유지한다.
 
 ### Runtime Instance 계층
 
 ```text
-UARLoadoutItemInstance (추상 Blueprintable UObject)
-├─ BP_WeaponRuntime_Base
-├─ BP_ActiveRelicRuntime_Base
-└─ BP_PassiveRelicRuntime_Base
-
-UARConsumableInstance (추상 Blueprintable UObject)
-└─ BP_ConsumableRuntime_Base
+UARItemInstance (공통 UObject)
+├─ UARLoadoutItemInstance (무기·유물)
+│  ├─ BP_WeaponRuntime_Base
+│  ├─ BP_ActiveRelicRuntime_Base
+│  └─ BP_PassiveRelicRuntime_Base
+└─ UARConsumableInstance (소모품)
+   └─ BP_ConsumableRuntime_Base
 ```
 
 Loadout/Consumable Component는 `UPROPERTY(Transient)` 슬롯·배열로 Instance를 강하게 소유하며 Instance의 Outer가 된다. Instance는 Owner Character를 약하게, 장착 중인 Definition을 `TObjectPtr<const ...>`로 강하게 참조한다. Instance는 `FGuid` Instance ID, 자기 Modifier Handle, 등록 Skill Handle, 쿨다운, UI 상태, 이벤트 구독 Handle만 소유한다. 제거와 EndPlay에서 구독을 먼저 해제하고 Component 소유 참조를 마지막에 제거한다.
@@ -780,7 +774,7 @@ Widget은 매 프레임 Component를 순회하지 않는다. 아래 이벤트를
 
 ### Test Map
 
-`Content/Game/Foundation/Test`에는 Combat Dummy, Stagger/그로기 Dummy, DOT 테스트 패널, 아이템 장착/진화 상자, Action 취소 디버그 Widget을 둔다. 콘텐츠 버그는 먼저 여기서 Foundation 문제인지 BP 문제인지 재현한다.
+`Content/Game/Tests`에는 Combat Dummy, Stagger/그로기 Dummy, DOT 테스트 패널, 아이템 장착/진화 상자, Action 취소 디버그 Widget을 둔다. 콘텐츠 버그는 먼저 여기서 Foundation 문제인지 BP 문제인지 재현한다.
 
 ---
 

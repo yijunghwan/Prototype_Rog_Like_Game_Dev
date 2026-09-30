@@ -169,6 +169,15 @@ bool UARStaggerComponent::RemoveSuperArmor(FARSuperArmorHandle Handle)
 	return Removed > 0;
 }
 
+bool UARStaggerComponent::IsSuperArmorHandleActive(FARSuperArmorHandle Handle) const
+{
+	const double Now = GetNow();
+	return ActiveSuperArmor.ContainsByPredicate([Handle, Now](const FARActiveSuperArmor& Armor)
+	{
+		return Armor.Handle == Handle && (Armor.ExpireAt < 0.0 || Armor.ExpireAt > Now);
+	});
+}
+
 int32 UARStaggerComponent::RemoveSuperArmorBySource(EARModifierSourceCategory Category, FName SourceId)
 {
 	const bool bWasActive = IsSuperArmorActive();

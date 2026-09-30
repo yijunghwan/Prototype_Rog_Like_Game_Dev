@@ -1,14 +1,14 @@
 #include "Foundation/Items/ARConsumableInstance.h"
 
 #include "Foundation/Characters/ARPlayerCharacter.h"
-#include "Foundation/Items/ARConsumableDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
 
 UWorld* UARConsumableInstance::GetWorld() const
 {
 	return ConsumableOwner.IsValid() ? ConsumableOwner->GetWorld() : nullptr;
 }
 
-void UARConsumableInstance::InitializeInstance(AARPlayerCharacter* InOwner, UARConsumableDefinition* InDefinition)
+void UARConsumableInstance::InitializeInstance(AARPlayerCharacter* InOwner, UARItemDefinition* InDefinition)
 {
 	ConsumableOwner = InOwner;
 	Definition = InDefinition;

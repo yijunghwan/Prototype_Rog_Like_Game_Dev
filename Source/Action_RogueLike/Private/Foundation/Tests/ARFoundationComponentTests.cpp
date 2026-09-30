@@ -17,6 +17,7 @@
 #include "Foundation/Actions/ARActionTypes.h"
 #include "Foundation/AI/ARAIController.h"
 #include "Foundation/Blueprint/ARResourceBlueprintLibrary.h"
+#include "Foundation/Blueprint/ARItemCatalogBlueprintLibrary.h"
 #include "Foundation/Characters/ARBaseEnemy.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Combat/ARCombatSubsystem.h"
@@ -32,9 +33,9 @@
 #include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Components/ARUIManagerComponent.h"
 #include "Foundation/Core/ARGameplayTags.h"
-#include "Foundation/Items/ARConsumableDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
+#include "Foundation/Items/ARItemInstance.h"
 #include "Foundation/Items/ARConsumableInstance.h"
-#include "Foundation/Items/ARLoadoutItemDefinition.h"
 #include "Foundation/Items/ARLoadoutItemInstance.h"
 #include "Foundation/Interaction/ARItemPickupActors.h"
 #include "Foundation/Interfaces/ARCombatTargetInterface.h"
@@ -114,6 +115,16 @@ namespace ARFoundationTests
 		Skill.ResourceCost.Mana = ManaCost;
 		Skill.ActionRequest.ActionTag = ARGameplayTags::Action_Roll;
 		return Skill;
+	}
+
+	UARItemDefinition* MakeItem(FGameplayTag TypeTag, TSubclassOf<UARItemInstance> RuntimeClass, FName Name = NAME_None)
+	{
+		static int32 NextTestItemId = 1;
+		UARItemDefinition* Definition = NewObject<UARItemDefinition>(GetTransientPackage(), Name);
+		Definition->ItemTypeTag = TypeTag;
+		Definition->ItemId = NextTestItemId++;
+		Definition->RuntimeBehaviorClass = RuntimeClass;
+		return Definition;
 	}
 
 	void BeginCombatActor(AARBaseCharacter* Character, float MaxHealth)
@@ -391,10 +402,8 @@ bool FARLoadoutDropAtomicTest::RunTest(const FString& Parameters)
 	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
 	Loadout->BeginPlay();
 
-	UARPassiveRelicDefinition* Definition = NewObject<UARPassiveRelicDefinition>();
-	Definition->DefinitionTag = ARGameplayTags::Item_Type_PassiveRelic;
-	Definition->ItemTypeTag = ARGameplayTags::Item_Type_PassiveRelic;
-	Definition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+	UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
 	const FARLoadoutAcquisitionResult Begin = Loadout->BeginLoadoutAcquisition(Definition);
 	FARRequestStatus CommitStatus;
 	UARLoadoutItemInstance* Instance = Loadout->CommitLoadoutAcquisition(Begin.Token, CommitStatus);
@@ -410,6 +419,178 @@ bool FARLoadoutDropAtomicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARUnifiedItemIdentityTest,
+	"AR.Foundation.Items.UnifiedIdentityAndRouting",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARUnifiedItemIdentityTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	ARFoundationTests::BeginPlayerSkillSystems(Player);
+	Player->GetConsumableComponent()->BeginPlay();
+
+	UARItemDefinition* Passive = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* Active = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* Consumable = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_Consumable, UARConsumableInstance::StaticClass());
+	// The same number is allowed across different types; the composite key identifies each one.
+	Passive->ItemId = 42;
+	Active->ItemId = 42;
+	Consumable->ItemId = 42;
+	Passive->AdditionalTags = {TEXT("Fire"), TEXT("Stamina")};
+	Active->AdditionalTags = {TEXT("Fire")};
+	Consumable->AdditionalTags = {TEXT("Fire")};
+	TestTrue(TEXT("Free-form label lookup trims and ignores case"), Passive->HasAdditionalTag(TEXT(" fire ")));
+	TestFalse(TEXT("Unrelated label does not match"), Passive->HasAdditionalTag(TEXT("Ice")));
+	TestTrue(TEXT("Common acquisition routes a passive relic"),
+		UARItemCatalogBlueprintLibrary::TryAcquireItem(Player, Passive).IsSuccess());
+	TestTrue(TEXT("Common acquisition routes an active relic"),
+		UARItemCatalogBlueprintLibrary::TryAcquireItem(Player, Active).IsSuccess());
+	TestTrue(TEXT("Common acquisition routes a consumable"),
+		UARItemCatalogBlueprintLibrary::TryAcquireItem(Player, Consumable).IsSuccess());
+	TestEqual(TEXT("Owned Fire count includes all item instances"),
+		UARItemCatalogBlueprintLibrary::CountOwnedItemsByAdditionalTag(Player, TEXT("Fire"), FGameplayTag()), 3);
+	TestEqual(TEXT("Type filter counts only passive relic copies"),
+		UARItemCatalogBlueprintLibrary::CountOwnedItemsByAdditionalTag(Player, TEXT("Fire"), ARGameplayTags::Item_Type_PassiveRelic), 1);
+	TestTrue(TEXT("A second copy is acquired independently"),
+		UARItemCatalogBlueprintLibrary::TryAcquireItem(Player, Passive).IsSuccess());
+	TestEqual(TEXT("Duplicate passive copies are counted twice"),
+		UARItemCatalogBlueprintLibrary::CountOwnedItemsByAdditionalTag(Player, TEXT("Fire"), ARGameplayTags::Item_Type_PassiveRelic), 2);
+
+	UARItemDefinition* Invalid = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARConsumableInstance::StaticClass());
+	TestFalse(TEXT("Wrong runtime family is rejected"),
+		UARItemCatalogBlueprintLibrary::TryAcquireItem(Player, Invalid).IsSuccess());
+	Invalid->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+	Invalid->ItemId = 0;
+	TestFalse(TEXT("Unassigned numeric ID is rejected"),
+		UARItemCatalogBlueprintLibrary::TryAcquireItem(Player, Invalid).IsSuccess());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARItemOwnedGuaranteeCleanupTest,
+	"AR.Foundation.Items.OwnedGuaranteeCleanup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARItemOwnedGuaranteeCleanupTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	Player->GetStatsComponent()->BeginPlay();
+	Player->GetStaggerComponent()->BeginPlay();
+	Player->GetStatusEffectComponent()->BeginPlay();
+
+	UARItemDefinition* FirstDefinition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* SecondDefinition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARLoadoutItemInstance* First = NewObject<UARLoadoutItemInstance>(Player);
+	UARLoadoutItemInstance* Second = NewObject<UARLoadoutItemInstance>(Player);
+	First->InitializeInstance(Player, FirstDefinition);
+	Second->InitializeInstance(Player, SecondDefinition);
+	TestTrue(TEXT("Both item instances register"), First->RegisterItem() && Second->RegisterItem());
+
+	FARSuperArmorSpec Armor;
+	Armor.Duration = -1.0f;
+	FARCCImmunitySpec Immunity;
+	Immunity.Duration = -1.0f;
+	bool bFirstArmor = false, bSecondArmor = false, bFirstImmunity = false, bSecondImmunity = false;
+	First->ApplyItemSuperArmor(Armor, bFirstArmor);
+	Second->ApplyItemSuperArmor(Armor, bSecondArmor);
+	First->ApplyItemCCImmunity(Immunity, bFirstImmunity);
+	Second->ApplyItemCCImmunity(Immunity, bSecondImmunity);
+	TestTrue(TEXT("Both items grant their own guarantees"), bFirstArmor && bSecondArmor && bFirstImmunity && bSecondImmunity);
+	First->UnregisterItem(EARItemRemovalReason::Manual);
+	TestTrue(TEXT("Second item keeps super armor after first is removed"), Player->GetStaggerComponent()->IsSuperArmorActive());
+	TestTrue(TEXT("Second item keeps CC immunity after first is removed"), Player->GetStatusEffectComponent()->IsCCImmunityActive());
+	Second->UnregisterItem(EARItemRemovalReason::Manual);
+	TestFalse(TEXT("Final item removal clears super armor"), Player->GetStaggerComponent()->IsSuperArmorActive());
+	TestFalse(TEXT("Final item removal clears CC immunity"), Player->GetStatusEffectComponent()->IsCCImmunityActive());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARCCImmunityGuaranteeTest,
+	"AR.Foundation.Status.CCImmunityGuarantee",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARCCImmunityGuaranteeTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	UARStatsComponent* Stats = nullptr;
+	UARActionComponent* Action = nullptr;
+	UARStaggerComponent* Stagger = nullptr;
+	UARStatusEffectComponent* Status = nullptr;
+	AActor* Target = ARFoundationTests::MakeActorWithComponents(TestWorld.World, Stats, Action, Stagger, Status);
+	if (!TestNotNull(TEXT("Target created"), Target)) return false;
+
+	UARStatusEffectDefinition* Stun = NewObject<UARStatusEffectDefinition>();
+	Stun->StatusTag = ARGameplayTags::Status_Stun;
+	Stun->BaseDuration = 4.0f;
+	Stun->bAffectedByTenacity = false;
+	Stun->bCanBeImmune = false;
+	FARStatusEffectRequest Request;
+	Request.Definition = Stun;
+
+	FARCCImmunitySpec Spec;
+	Spec.Duration = -1.0f;
+	bool bAddedFirst = false;
+	bool bAddedSecond = false;
+	const FARCCImmunityHandle First = Status->AddCCImmunity(Spec, bAddedFirst);
+	const FARCCImmunityHandle Second = Status->AddCCImmunity(Spec, bAddedSecond);
+	TestTrue(TEXT("Independent CC immunity handles are granted"), bAddedFirst && bAddedSecond && First.IsValid() && Second.IsValid());
+	TestEqual(TEXT("CC immunity rejects stun even when tenacity and ordinary immunity are bypassed"),
+		Status->ApplyStatusEffect(Request).Result, EARRequestResult::Blocked);
+	TestFalse(TEXT("Blocked CC never enters the active status list"), Status->HasStatus(ARGameplayTags::Status_Stun));
+	TestFalse(TEXT("Blocked CC does not lock movement"), Status->BlocksBasicMovement());
+	TestTrue(TEXT("Removing one handle succeeds"), Status->RemoveCCImmunity(First));
+	TestTrue(TEXT("Second handle keeps the guarantee active"), Status->IsCCImmunityActive());
+	TestEqual(TEXT("Stun remains blocked by the second handle"), Status->ApplyStatusEffect(Request).Result, EARRequestResult::Blocked);
+	TestTrue(TEXT("Removing the final handle succeeds"), Status->RemoveCCImmunity(Second));
+	TestFalse(TEXT("Guarantee ends with final handle"), Status->IsCCImmunityActive());
+	Spec.Duration = 0.0f;
+	bool bInvalidAdded = true;
+	TestFalse(TEXT("Zero duration is invalid"), Status->AddCCImmunity(Spec, bInvalidAdded).IsValid());
+	TestFalse(TEXT("Zero duration reports failure"), bInvalidAdded);
+
+	Spec.Duration = 0.5f;
+	bool bTimedAdded = false;
+	Status->AddCCImmunity(Spec, bTimedAdded);
+	TestTrue(TEXT("Timed guarantee starts"), bTimedAdded && Status->IsCCImmunityActive());
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.75f);
+	TestFalse(TEXT("Timed guarantee expires"), Status->IsCCImmunityActive());
+	TestEqual(TEXT("Stun applies normally after immunity expires"), Status->ApplyStatusEffect(Request).Result, EARRequestResult::Success);
+	Status->ClearAllStatusEffects();
+
+	// A valid non-CC tag serves as a sentinel; real non-CC definitions use their own status tags.
+	UARStatusEffectDefinition* NonCC = NewObject<UARStatusEffectDefinition>();
+	NonCC->StatusTag = ARGameplayTags::Damage_Attribute_Fire;
+	NonCC->BaseDuration = 2.0f;
+	Spec.Duration = -1.0f;
+	bool bNonCCGuardAdded = false;
+	const FARCCImmunityHandle Guard = Status->AddCCImmunity(Spec, bNonCCGuardAdded);
+	TestTrue(TEXT("Guard for non-CC test is active"), bNonCCGuardAdded && Guard.IsValid());
+	Request.Definition = NonCC;
+	TestEqual(TEXT("CC immunity does not block an ordinary status"), Status->ApplyStatusEffect(Request).Result, EARRequestResult::Success);
+	Status->ClearAllStatusEffects();
+	NonCC->bIsCrowdControl = true;
+	TestEqual(TEXT("Custom status marked as CC is blocked"), Status->ApplyStatusEffect(Request).Result, EARRequestResult::Blocked);
+	Status->RemoveCCImmunity(Guard);
+	Spec.Source.Category = EARModifierSourceCategory::Relic;
+	Spec.Source.SourceId = FName(TEXT("OneRelicInstance"));
+	bool bSourceAdded = false;
+	Status->AddCCImmunity(Spec, bSourceAdded);
+	TestTrue(TEXT("Source-owned immunity applies"), bSourceAdded && Status->IsCCImmunityActive());
+	TestEqual(TEXT("Source removal only removes the matching immunity"),
+		Status->RemoveCCImmunityBySource(EARModifierSourceCategory::Relic, FName(TEXT("OneRelicInstance"))), 1);
+	TestFalse(TEXT("Source removal clears its final guarantee"), Status->IsCCImmunityActive());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARConsumableDropAtomicTest,
 	"AR.Foundation.Items.ConsumableDropAtomic",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -422,10 +603,8 @@ bool FARConsumableDropAtomicTest::RunTest(const FString& Parameters)
 	UARConsumableComponent* Consumables = Player->GetConsumableComponent();
 	Consumables->BeginPlay();
 
-	UARConsumableDefinition* Definition = NewObject<UARConsumableDefinition>();
-	Definition->DefinitionTag = ARGameplayTags::Item_Type_Consumable;
-	Definition->ItemTypeTag = ARGameplayTags::Item_Type_Consumable;
-	Definition->RuntimeBehaviorClass = UARConsumableInstance::StaticClass();
+	UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_Consumable, UARConsumableInstance::StaticClass());
 	const FARConsumableAcquisitionResult Acquire = Consumables->TryAcquireConsumable(Definition);
 	TestTrue(TEXT("Consumable acquisition succeeds"), Acquire.Status.IsSuccess());
 
@@ -451,14 +630,10 @@ bool FARLoadoutAcquisitionRevisionTest::RunTest(const FString& Parameters)
 	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
 	Loadout->BeginPlay();
 
-	UARPassiveRelicDefinition* FirstDefinition = NewObject<UARPassiveRelicDefinition>();
-	FirstDefinition->DefinitionTag = ARGameplayTags::Item_Type_PassiveRelic;
-	FirstDefinition->ItemTypeTag = ARGameplayTags::Item_Type_PassiveRelic;
-	FirstDefinition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
-	UARPassiveRelicDefinition* SecondDefinition = NewObject<UARPassiveRelicDefinition>();
-	SecondDefinition->DefinitionTag = ARGameplayTags::Item_Type_PassiveRelic;
-	SecondDefinition->ItemTypeTag = ARGameplayTags::Item_Type_PassiveRelic;
-	SecondDefinition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+	UARItemDefinition* FirstDefinition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* SecondDefinition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
 
 	const FARLoadoutAcquisitionResult FirstRequest = Loadout->BeginLoadoutAcquisition(FirstDefinition);
 	const FARLoadoutAcquisitionResult SecondRequest = Loadout->BeginLoadoutAcquisition(SecondDefinition);
@@ -484,10 +659,8 @@ bool FARSkillPriorityTransactionTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Player spawned"), Player);
 	ARFoundationTests::BeginPlayerSkillSystems(Player);
 
-	UARPassiveRelicDefinition* Definition = NewObject<UARPassiveRelicDefinition>();
-	Definition->DefinitionTag = ARGameplayTags::Item_Type_PassiveRelic;
-	Definition->ItemTypeTag = ARGameplayTags::Item_Type_PassiveRelic;
-	Definition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+	UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
 	Definition->DisplayName = FText::FromString(TEXT("Transaction Relic"));
 	FARStatModifierSpec ProvidedAttackPower;
 	ProvidedAttackPower.StatType = EARStatType::AttackPower;
@@ -546,10 +719,8 @@ bool FARConsumableSlotReductionTest::RunTest(const FString& Parameters)
 	UARConsumableComponent* Consumables = Player->GetConsumableComponent();
 	Consumables->BeginPlay();
 
-	UARConsumableDefinition* Definition = NewObject<UARConsumableDefinition>();
-	Definition->DefinitionTag = ARGameplayTags::Item_Type_Consumable;
-	Definition->ItemTypeTag = ARGameplayTags::Item_Type_Consumable;
-	Definition->RuntimeBehaviorClass = UARConsumableInstance::StaticClass();
+	UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_Consumable, UARConsumableInstance::StaticClass());
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
 		TestTrue(TEXT("Each initial consumable fits in its own slot"), Consumables->TryAcquireConsumable(Definition).Status.IsSuccess());
@@ -567,7 +738,7 @@ bool FARConsumableSlotReductionTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("Overflow items are preserved as world pickups"), SpawnedPickupCount, 2);
 
-	UARConsumableDefinition* UsedDefinition = nullptr;
+	UARItemDefinition* UsedDefinition = nullptr;
 	const FARRequestStatus UseStatus = Consumables->TryUseConsumableSlot(0, UsedDefinition);
 	TestTrue(TEXT("Retained consumable can be used"), UseStatus.IsSuccess());
 	TestTrue(TEXT("Use returns the consumed definition"), UsedDefinition == Definition);
@@ -807,6 +978,11 @@ bool FARActionFullCleanupTest::RunTest(const FString& Parameters)
 	bool bArmorApplied = false;
 	Action->ApplyActionSuperArmor(Handle, Armor, bArmorApplied);
 	TestTrue(TEXT("Action-owned super armor applies"), bArmorApplied && Stagger->IsSuperArmorActive());
+	FARCCImmunitySpec Immunity;
+	Immunity.Duration = -1.0f;
+	bool bImmunityApplied = false;
+	Action->ApplyActionCCImmunity(Handle, Immunity, bImmunityApplied);
+	TestTrue(TEXT("Action-owned CC immunity applies"), bImmunityApplied && Player->GetStatusEffectComponent()->IsCCImmunityActive());
 
 	AActor* HitboxActor = TestWorld.World->SpawnActor<AActor>();
 	TestTrue(TEXT("Action accepts an owned hitbox actor"), Action->RegisterActionHitbox(Handle, HitboxActor));
@@ -814,6 +990,7 @@ bool FARActionFullCleanupTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Cancelled action is no longer active"), Action->IsActionActive(Handle));
 	TestEqual(TEXT("Cancellation removes the temporary stat modifier"), Stats->GetFinalStat(EARStatType::AttackPower), 100.0f);
 	TestFalse(TEXT("Cancellation removes action-owned super armor"), Stagger->IsSuperArmorActive());
+	TestFalse(TEXT("Cancellation removes action-owned CC immunity"), Player->GetStatusEffectComponent()->IsCCImmunityActive());
 	TestTrue(TEXT("Cancellation releases the movement lock"), Movement->CanBasicMove());
 	TestTrue(TEXT("Cancellation destroys the registered hitbox actor"), HitboxActor->IsActorBeingDestroyed());
 	TestFalse(TEXT("A cancelled action handle cannot request more forced movement"),
@@ -875,9 +1052,8 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Current screen closes"), UI->CloseCurrentScreen());
 	TestFalse(TEXT("Closing the screen restores gameplay input"), Player->IsGameplayInputBlocked());
 
-	UARPassiveRelicDefinition* UnownedDefinition = NewObject<UARPassiveRelicDefinition>();
-	UnownedDefinition->DefinitionTag = ARGameplayTags::Item_Type_PassiveRelic;
-	UnownedDefinition->ItemTypeTag = ARGameplayTags::Item_Type_PassiveRelic;
+	UARItemDefinition* UnownedDefinition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_PassiveRelic, UARLoadoutItemInstance::StaticClass());
 	UnownedDefinition->DisplayName = FText::FromString(TEXT("Unowned preview relic"));
 	FARStatModifierSpec ProvidedStat;
 	ProvidedStat.StatType = EARStatType::AttackPower;
@@ -893,11 +1069,9 @@ bool FARPlayerUISnapshotAndBlockingTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Definition preview includes provided stats"), PreviewData.ProvidedStats.Num(), 1);
 	TestEqual(TEXT("Definition preview includes declared skills"), PreviewData.Skills.Num(), 1);
 
-	UARConsumableDefinition* ConsumableDefinition = NewObject<UARConsumableDefinition>();
-	ConsumableDefinition->DefinitionTag = ARGameplayTags::Item_Type_Consumable;
-	ConsumableDefinition->ItemTypeTag = ARGameplayTags::Item_Type_Consumable;
+	UARItemDefinition* ConsumableDefinition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_Consumable, UARConsumableInstance::StaticClass());
 	ConsumableDefinition->DisplayName = FText::FromString(TEXT("Preview potion"));
-	ConsumableDefinition->RuntimeBehaviorClass = UARConsumableInstance::StaticClass();
 	FARConsumableDisplayData ConsumablePreview;
 	TestTrue(TEXT("Unowned consumable definition provides shop display data"),
 		Player->GetConsumableComponent()->GetConsumableDefinitionDisplayData(ConsumableDefinition, ConsumablePreview));
@@ -936,7 +1110,7 @@ bool FARPlayerPostHitInvulnerabilityTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Post-hit invulnerability is disabled by default"),
 		Player->GetPostHitInvulnerabilityDuration(), 0.0f);
 	UClass* TestPlayerBlueprintClass = LoadClass<AARPlayerCharacter>(
-		nullptr, TEXT("/Game/Game/Foundation/Test/test_Player/BP_test_Player.BP_test_Player_C"));
+		nullptr, TEXT("/Game/Game/Tests/Player/BP_test_Player.BP_test_Player_C"));
 	TestNotNull(TEXT("Test player Blueprint class loads"), TestPlayerBlueprintClass);
 	if (TestPlayerBlueprintClass)
 	{
@@ -997,21 +1171,19 @@ bool FARWeaponEvolutionRulesTest::RunTest(const FString& Parameters)
 
 	auto MakeWeapon = [](const TCHAR* Name, int32 Stage, FName Group)
 	{
-		UARWeaponDefinition* Definition = NewObject<UARWeaponDefinition>(GetTransientPackage(), FName(Name));
-		Definition->DefinitionTag = ARGameplayTags::Item_Type_Weapon;
-		Definition->ItemTypeTag = ARGameplayTags::Item_Type_Weapon;
-		Definition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+		UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+			ARGameplayTags::Item_Type_Weapon, UARLoadoutItemInstance::StaticClass(), FName(Name));
 		Definition->EvolutionGroupId = Group;
 		Definition->EvolutionStage = Stage;
 		return Definition;
 	};
 
 	const FName EvolutionGroup(TEXT("Test.Caliburn"));
-	UARWeaponDefinition* Stage1 = MakeWeapon(TEXT("TestWeaponStage1"), 1, EvolutionGroup);
-	UARWeaponDefinition* Stage2 = MakeWeapon(TEXT("TestWeaponStage2"), 2, EvolutionGroup);
-	UARWeaponDefinition* Stage3A = MakeWeapon(TEXT("TestWeaponStage3A"), 3, EvolutionGroup);
-	UARWeaponDefinition* Stage3B = MakeWeapon(TEXT("TestWeaponStage3B"), 3, EvolutionGroup);
-	UARWeaponDefinition* WrongGroup = MakeWeapon(TEXT("TestWeaponWrongGroup"), 3, TEXT("Test.Other"));
+	UARItemDefinition* Stage1 = MakeWeapon(TEXT("TestWeaponStage1"), 1, EvolutionGroup);
+	UARItemDefinition* Stage2 = MakeWeapon(TEXT("TestWeaponStage2"), 2, EvolutionGroup);
+	UARItemDefinition* Stage3A = MakeWeapon(TEXT("TestWeaponStage3A"), 3, EvolutionGroup);
+	UARItemDefinition* Stage3B = MakeWeapon(TEXT("TestWeaponStage3B"), 3, EvolutionGroup);
+	UARItemDefinition* WrongGroup = MakeWeapon(TEXT("TestWeaponWrongGroup"), 3, TEXT("Test.Other"));
 	Stage1->NextEvolutionCandidates.Add(Stage2);
 	Stage2->NextEvolutionCandidates.Add(Stage3A);
 	Stage2->NextEvolutionCandidates.Add(WrongGroup);
@@ -1135,16 +1307,14 @@ bool FARInventoryConsumableUseTest::RunTest(const FString& Parameters)
 	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
 	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
 	Player->DispatchBeginPlay();
-	UARConsumableDefinition* Definition = NewObject<UARConsumableDefinition>();
-	Definition->DefinitionTag = ARGameplayTags::Item_Type_Consumable;
-	Definition->ItemTypeTag = ARGameplayTags::Item_Type_Consumable;
-	Definition->RuntimeBehaviorClass = UARConsumableInstance::StaticClass();
+	UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_Consumable, UARConsumableInstance::StaticClass());
 	UARConsumableComponent* Consumables = Player->GetConsumableComponent();
 	UARUIManagerComponent* UI = Player->GetUIManagerComponent();
 	TestTrue(TEXT("Consumable acquired"), Consumables->TryAcquireConsumable(Definition).Status.IsSuccess());
 	UI->OpenScreen(EARUIScreen::Inventory);
 	TestTrue(TEXT("Inventory still blocks gameplay hotkeys"), Player->IsGameplayInputBlocked());
-	UARConsumableDefinition* UsedDefinition = nullptr;
+	UARItemDefinition* UsedDefinition = nullptr;
 	TestTrue(TEXT("Inventory can directly use a consumable"), Consumables->TryUseConsumableSlot(0, UsedDefinition).IsSuccess());
 	TestTrue(TEXT("Use returns the definition"), UsedDefinition == Definition);
 	TestFalse(TEXT("Used item is removed"), Consumables->GetConsumableSlots()[0].bOccupied);
@@ -1327,7 +1497,7 @@ bool FARResourceHUDLiveUpdateTest::RunTest(const FString& Parameters)
 	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
 	Player->DispatchBeginPlay();
 	UClass* HUDClass = LoadClass<UARResourceHUDWidget>(nullptr,
-		TEXT("/Game/Game/Foundation/UI/WBP_TestResourceHUD.WBP_TestResourceHUD_C"));
+		TEXT("/Game/Game/Tests/UI/WBP_TestResourceHUD.WBP_TestResourceHUD_C"));
 	if (!TestNotNull(TEXT("Editable Designer HUD asset loads"), HUDClass)) return false;
 	UARResourceHUDWidget* HUD = CreateWidget<UARResourceHUDWidget>(TestWorld.World, HUDClass);
 	if (!TestNotNull(TEXT("HUD widget created"), HUD)) return false;

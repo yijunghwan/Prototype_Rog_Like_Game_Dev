@@ -295,7 +295,7 @@ void AARPlayerCharacter::HandleConsumablePressed(const FInputActionValue& Value,
 {
 	if (!IsGameplayInputBlocked() && ConsumableComponent)
 	{
-		UARConsumableDefinition* UsedDefinition = nullptr;
+		UARItemDefinition* UsedDefinition = nullptr;
 		ConsumableComponent->TryUseConsumableSlot(SlotIndex, UsedDefinition);
 	}
 }

@@ -86,6 +86,25 @@ bool UARCombatBlueprintLibrary::RemoveSuperArmor(AActor* Target, FARSuperArmorHa
 	return false;
 }
 
+FARCCImmunityHandle UARCombatBlueprintLibrary::ApplyCCImmunity(AActor* Target, const FARCCImmunitySpec& Spec, bool& bSuccess)
+{
+	bSuccess = false;
+	if (UARStatusEffectComponent* Status = Target ? Target->FindComponentByClass<UARStatusEffectComponent>() : nullptr)
+	{
+		return Status->AddCCImmunity(Spec, bSuccess);
+	}
+	return FARCCImmunityHandle();
+}
+
+bool UARCombatBlueprintLibrary::RemoveCCImmunity(AActor* Target, FARCCImmunityHandle Handle)
+{
+	if (UARStatusEffectComponent* Status = Target ? Target->FindComponentByClass<UARStatusEffectComponent>() : nullptr)
+	{
+		return Status->RemoveCCImmunity(Handle);
+	}
+	return false;
+}
+
 FARStatusEffectResult UARCombatBlueprintLibrary::ApplyStatusEffect(AActor* Target, const FARStatusEffectRequest& Request)
 {
 	if (UARStatusEffectComponent* Status = Target ? Target->FindComponentByClass<UARStatusEffectComponent>() : nullptr)
@@ -105,4 +124,3 @@ bool UARCombatBlueprintLibrary::RemoveStatusEffect(AActor* Target, FARStatusEffe
 	}
 	return false;
 }
-

@@ -7,6 +7,15 @@
 
 class UARStatusEffectDefinition;
 
+/** A guarantee against new crowd-control applications. Negative duration lasts until removed. */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARCCImmunitySpec
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Immunity") float Duration = -1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Immunity") FARSourceInfo Source;
+};
+
 USTRUCT(BlueprintType)
 struct ACTION_ROGUELIKE_API FARStatusEffectRequest
 {
@@ -41,4 +50,3 @@ struct ACTION_ROGUELIKE_API FARStatusEffectView
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Status") FARSourceInfo Source;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Status") float RemainingTime = 0.0f;
 };
-

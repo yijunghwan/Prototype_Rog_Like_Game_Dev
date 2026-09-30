@@ -5,10 +5,12 @@
 #include "Foundation/Actions/ARActionTypes.h"
 #include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Combat/ARStaggerTypes.h"
+#include "Foundation/Status/ARStatusEffectTypes.h"
 #include "ARActionComponent.generated.h"
 
 class UARMovementControlComponent;
 class UARStaggerComponent;
+class UARStatusEffectComponent;
 
 USTRUCT()
 struct FARActiveAction
@@ -19,6 +21,7 @@ struct FARActiveAction
 	UPROPERTY() FARActionRequest Request;
 	UPROPERTY() TArray<FARStatModifierHandle> StatModifiers;
 	UPROPERTY() TArray<FARSuperArmorHandle> SuperArmorHandles;
+	UPROPERTY() TArray<FARCCImmunityHandle> CCImmunityHandles;
 	UPROPERTY() TArray<FARMovementLockHandle> MovementLockHandles;
 	UPROPERTY() TArray<TWeakObjectPtr<AActor>> HitboxActors;
 };
@@ -56,6 +59,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Action") bool RegisterActionHitbox(FARActionHandle Handle, AActor* HitboxActor);
 	UFUNCTION(BlueprintCallable, Category="AR|Action") FARStatModifierHandle ApplyActionStatModifier(FARActionHandle Handle, const FARStatModifierSpec& Spec, bool& bSuccess);
 	UFUNCTION(BlueprintCallable, Category="AR|Action") FARSuperArmorHandle ApplyActionSuperArmor(FARActionHandle Handle, const FARSuperArmorSpec& Spec, bool& bSuccess);
+	UFUNCTION(BlueprintCallable, Category="AR|Action") FARCCImmunityHandle ApplyActionCCImmunity(FARActionHandle Handle, const FARCCImmunitySpec& Spec, bool& bSuccess);
 
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsActionActive(FARActionHandle Handle) const;
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsRollBlocked() const;
@@ -73,6 +77,7 @@ private:
 
 	UPROPERTY(Transient) TObjectPtr<UARStatsComponent> StatsComponent;
 	UPROPERTY(Transient) TObjectPtr<UARStaggerComponent> StaggerComponent;
+	UPROPERTY(Transient) TObjectPtr<UARStatusEffectComponent> StatusEffectComponent;
 	UPROPERTY(Transient) TObjectPtr<UARMovementControlComponent> MovementComponent;
 	UPROPERTY(Transient) TArray<FARActiveAction> ActiveActions;
 	int64 NextActionSerial = 1;

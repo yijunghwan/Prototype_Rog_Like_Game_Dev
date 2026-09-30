@@ -4,8 +4,8 @@
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Components/ARConsumableComponent.h"
 #include "Foundation/Components/ARLoadoutComponent.h"
-#include "Foundation/Items/ARConsumableDefinition.h"
-#include "Foundation/Items/ARLoadoutItemDefinition.h"
+#include "Foundation/Items/ARItemDefinition.h"
+#include "Foundation/Blueprint/ARItemCatalogBlueprintLibrary.h"
 
 namespace
 {
@@ -45,6 +45,23 @@ bool AARItemPickupBase::RequiresInteractionLineOfSight_Implementation() const
 	return bRequiresLineOfSight;
 }
 
+bool AARItemPickup::CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const
+{
+	if (!Super::CanInteract_Implementation(Interactor, FailureReason) || !ItemDefinition)
+	{
+		FailureReason = NSLOCTEXT("ARInteraction", "InvalidUnifiedPickup", "획득할 아이템 정보가 없습니다.");
+		return false;
+	}
+	return true;
+}
+
+FARRequestStatus AARItemPickup::Interact_Implementation(AARPlayerCharacter* Interactor)
+{
+	const FARRequestStatus Status = UARItemCatalogBlueprintLibrary::TryAcquireItem(Interactor, ItemDefinition);
+	if (Status.IsSuccess()) Destroy();
+	return Status;
+}
+
 bool AARLoadoutItemPickup::CanInteract_Implementation(AARPlayerCharacter* Interactor, FText& FailureReason) const
 {
 	if (!Super::CanInteract_Implementation(Interactor, FailureReason) || !ItemDefinition)
@@ -55,7 +72,7 @@ bool AARLoadoutItemPickup::CanInteract_Implementation(AARPlayerCharacter* Intera
 	return true;
 }
 
-void AARLoadoutItemPickup::AssignItemDefinition(const UARLoadoutItemDefinition* Definition)
+void AARLoadoutItemPickup::AssignItemDefinition(const UARItemDefinition* Definition)
 {
 	ItemDefinition = Definition;
 	ReceiveItemDefinitionAssigned();
@@ -91,7 +108,7 @@ bool AARConsumablePickup::CanInteract_Implementation(AARPlayerCharacter* Interac
 	return true;
 }
 
-void AARConsumablePickup::AssignConsumableDefinition(UARConsumableDefinition* Definition)
+void AARConsumablePickup::AssignConsumableDefinition(UARItemDefinition* Definition)
 {
 	ConsumableDefinition = Definition;
 	ReceiveConsumableDefinitionAssigned();

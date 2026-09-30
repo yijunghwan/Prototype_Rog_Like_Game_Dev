@@ -4,7 +4,7 @@
 #include "Foundation/Core/ARFoundationTypes.h"
 #include "ARConsumableTypes.generated.h"
 
-class UARConsumableDefinition;
+class UARItemDefinition;
 class AARConsumablePickup;
 class UTexture2D;
 
@@ -26,7 +26,7 @@ struct ACTION_ROGUELIKE_API FARConsumableSlotSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 SlotIndex = INDEX_NONE;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bOccupied = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARConsumableDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARItemDefinition> Definition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bOverflowSlot = false;
 };
 
@@ -38,9 +38,10 @@ struct ACTION_ROGUELIKE_API FARConsumableDisplayData
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 SlotIndex = INDEX_NONE;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid InstanceId;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARConsumableDefinition> Definition = nullptr;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag DefinitionTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<const UARItemDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 ItemId = 0;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag ItemTypeTag;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TArray<FString> AdditionalTags;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText ShortDescription;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DetailedDescription;
@@ -62,7 +63,7 @@ struct ACTION_ROGUELIKE_API FARConsumableDropRequest
 {
 	GENERATED_BODY()
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARConsumableDefinition> Definition = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UARItemDefinition> Definition = nullptr;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FVector SuggestedLocation = FVector::ZeroVector;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 PreviousSlotIndex = INDEX_NONE;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) bool bCausedBySlotReduction = false;

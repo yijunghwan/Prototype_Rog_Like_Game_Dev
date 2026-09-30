@@ -22,6 +22,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Display") TSoftObjectPtr<UTexture2D> Icon;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Rules", meta=(ClampMin="0.0")) float BaseDuration = 1.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Rules") bool bAffectedByTenacity = true;
+	/** Stun and root tags are CC automatically; enable this for future custom crowd-control statuses. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Rules") bool bIsCrowdControl = false;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Rules") bool bCanBeImmune = true;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Rules") bool bBlocksBasicMovement = true;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Rules") bool bBlocksAllMovement = true;

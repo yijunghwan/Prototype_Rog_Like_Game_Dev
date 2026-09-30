@@ -1,5 +1,7 @@
 # 전투 기반 시스템 계획서
 
+> **현행 보완 (2026-09-30):** 슈퍼아머와 CC 면역은 강인함 숫자와 별도의 핸들 기반 보장 효과다. 슈퍼아머는 경직만 막고 그로기 피해는 받는다. CC 면역은 새 기절·속박 및 Definition에 CC로 표시한 상태의 적용을 시작 전에 차단한다. 이미 걸린 상태는 해제하지 않는다. 아이템·행동 소유 효과는 각 수명 종료 시 자동 회수된다. 자세한 현행 노드는 [통합 아이템 제작 가이드](ITEM_DATA_ASSET_FIELD_GUIDE.html)와 실제 C++를 우선한다.
+
 > **담당 범위:** 플레이어·공통 캐릭터·전투 기반 시스템  
 > **문서 상태:** 구현 전 계획서  
 > **목적:** 다른 개발자의 적·맵·콘텐츠 작업과 분리된 상태에서, 모든 전투 콘텐츠가 공통으로 사용할 확장 가능한 기반을 정의한다.
@@ -721,21 +723,20 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 ### 무기 데이터 에셋과 런타임 객체
 
-무기 정의는 `UARLoadoutItemDefinition`을 상속한 `UARWeaponDefinition` 데이터 에셋이다. 공통 데이터 에셋 항목과 무기 전용 항목은 아래와 같다.
+현재 구현에서 무기를 포함한 모든 아이템 정의는 `UARItemDefinition` 데이터 에셋이다. 이 절의 하위 표에 남은 종류별 Definition/DefinitionTag 표현은 초기 설계 기록이며, 제작 시에는 [통합 아이템 제작 가이드](ITEM_DATA_ASSET_FIELD_GUIDE.html)와 실제 C++ 필드를 우선한다.
 
 | 구분 | 항목 | 규칙 |
 |---|---|---|
-| 공통 식별 | `DefinitionTag` | 게임 규칙과 조회에 사용하는 안정적인 고유 Gameplay Tag. 예: `Item.Weapon.Sword.Basic` |
+| 공통 식별 | `ItemTypeTag`, `ItemId`, `AdditionalTags` | 유형별 양의 숫자 ID가 고유 키이며, 문자열 계열 태그는 여러 정의가 공유할 수 있다. |
 | 에셋 식별 | `PrimaryAssetId` | Asset Manager가 Definition을 로드하는 정식 에셋 ID. 저장·비동기 로딩에서 사용하며 표시 이름으로 대체하지 않음 |
-| 공통 분류 | `ItemTags` | `Weapon.Melee`, `Weapon.Sword`, `Element.Fire` 같은 세부 분류. 무기/액티브/패시브의 큰 분류는 데이터 에셋 클래스가 확정한다. |
-| 공통 UI | `DisplayName`, `ShortDescription`, `UIIcon` | 모두 UI용 정적 정보. 텍스트는 `FText`를 사용한다. |
-| 공통 설명 | `DescriptionSections[]` | 일반, 패시브, 특이사항 등 제목·본문(`FText`)을 가진 문단 목록. 제공 스탯과 스킬 설명은 중복 작성하지 않고 자동 생성한다. |
+| 공통 분류 | `ItemTypeTag` | 무기·액티브·패시브·소모품 네 유형 중 하나를 선택한다. |
+| 공통 UI | `DisplayName`, `ShortDescription`, `DetailedDescription`, `Icon` | 모두 UI용 정적 정보. 텍스트는 `FText`를 사용한다. |
 | 공통 고정 효과 | `DefaultStatModifiers[]` | 장착 중 자동 적용되는 고정 스탯 수정치. UI의 `제공 스탯` 항목도 이 목록에서 자동 생성한다. |
 | 공통 스킬 | `SkillDefinitions[]` | 기본 제공 스킬 목록. 배열 길이가 기본 스킬 수이며 별도 스킬 수 필드는 두지 않는다. |
 | 공통 런타임 | `RuntimeBehaviorClass` | `UARLoadoutItemInstance`를 상속한 실제 행동 Blueprint 클래스. |
 | 무기 진화 | `EvolutionGroupId` | 같은 진화 계열을 묶는 식별자. |
-| 무기 진화 | `EvolutionTier` | 무기의 현재 진화 단계. 프로토타입 검은 1~3단계다. |
-| 무기 진화 | `EvolutionOptions[]` | 다음 단계 `UARWeaponDefinition` 참조 목록. 0개면 진화 종료, 1개면 즉시 진화, 2개 이상이면 선택 UI를 연다. 모든 선택지는 동일 진화 그룹인지 검증한다. |
+| 무기 진화 | `EvolutionStage` | 무기의 현재 진화 단계. 프로토타입 검은 1~3단계다. |
+| 무기 진화 | `NextEvolutionCandidates[]` | 다음 단계 `UARItemDefinition` 무기 참조 목록. 0개면 진화 종료, 1개면 즉시 진화, 2개 이상이면 선택 UI를 연다. 같은 그룹·다음 단계인지 검증한다. |
 
 무기의 월드 스프라이트·플립북, 휘두르기 애니메이션, 실제 히트박스와 투사체 생성은 데이터 에셋이 아닌 `RuntimeBehaviorClass`의 BP에 둔다. 데이터 에셋은 무엇을 보여 주고 어떤 정적 규칙을 갖는지, 런타임 BP는 장착 중 어떻게 동작하는지를 담당한다.
 
@@ -762,7 +763,7 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 ### 패시브 유물
 
-- `UARLoadoutItemDefinition`을 상속한 `UARPassiveRelicDefinition` 데이터 에셋을 사용한다. 초기 단계에는 공통 필드 외의 필수 전용 필드를 추가하지 않는다.
+- `UARItemDefinition`에 `Item.Type.PassiveRelic`을 지정한다. 별도 패시브 Definition 자식 클래스는 만들지 않는다.
 - 개수 제한 없이 누적한다.
 - 획득 즉시 고정 스탯 또는 규칙을 보정한다.
 - 예시: 탄환 관통, 경직력 증가, 구르기 후 강화 공격, 처치 시 회복
@@ -771,14 +772,14 @@ MP는 초당 재생량을 소수점까지 누적해 처리한다.
 
 ### 액티브 유물
 
-- `UARLoadoutItemDefinition`을 상속한 `UARActiveRelicDefinition` 데이터 에셋을 사용한다. 초기 단계에는 공통 필드 외의 필수 전용 필드를 추가하지 않는다.
+- `UARItemDefinition`에 `Item.Type.ActiveRelic`을 지정한다. 별도 액티브 Definition 자식 클래스는 만들지 않는다.
 - 최대 2개를 장착한다.
 - 직접 키를 눌러 사용한다.
 - 재사용 대기시간 또는 충전 규칙을 지원한다.
 - 예시: 긴급 회복, 보호막, 광역 폭발
 - 스킬 수가 적더라도 `SkillDefinitions[]`를 공유하며, MP·스태미나 비용과 쿨다운 및 UI 정보는 각 스킬 정의에 기록한다. 최대 2개라는 제한은 데이터 에셋이 아니라 Player의 `UARLoadoutComponent`가 관리한다.
 
-패시브와 액티브의 차이는 데이터 에셋 클래스, 장착 제한, 스킬 등록 여부, HUD 표시 위치로 구분한다. 충전 횟수·특수 소모품 같은 액티브 유물 전용 정적 규칙이 실제로 필요해질 때만 전용 필드를 추가한다.
+패시브와 액티브의 차이는 공통 데이터 에셋의 `ItemTypeTag`, 장착 제한, 스킬 등록 여부, HUD 표시 위치로 구분한다.
 
 ### 확장 원칙
 
@@ -908,7 +909,7 @@ LoadoutItem은 UI에 `LoadoutItemDisplayData`를 제공한다. 이미지·이름
 
 ### 소모품 슬롯과 사용
 
-포션을 포함한 소모품은 무기·유물과 같은 데이터 에셋 + 런타임 Blueprint 객체 패턴을 사용하지만, 장착 아이템이 아닌 별도 소모품 시스템으로 관리한다. `UARConsumableDefinition`은 식별 코드, 표시 이름, 짧은·상세 설명, UI 아이콘, `RuntimeBehaviorClass`를 가지며, `UARConsumableInstance`는 슬롯 하나에 든 실제 독립 소모품이다. 동일 Definition도 서로 다른 슬롯에 독립적으로 보관할 수 있다.
+포션을 포함한 소모품도 공통 `UARItemDefinition` 에셋을 사용하며 `Item.Type.Consumable`로 분류한다. 다만 장착 아이템이 아닌 별도 소모품 컴포넌트가 관리하고 런타임 클래스는 `UARConsumableInstance` 계열이다. 동일 Definition도 서로 다른 슬롯에 독립적으로 보관할 수 있다.
 
 - `UARConsumableComponent`는 Player의 현재 슬롯과 최종 `최대 소모품 슬롯 수`를 관리한다. 초기 슬롯 수는 3이며, 이 최대치는 Details 값 및 추후 수정치로 증가하거나 감소할 수 있다.
 - 한 슬롯에는 소모품 인스턴스 하나만 보관한다. 여러 개를 수량으로 합치거나 스택으로 표현하지 않는다.
@@ -1319,9 +1320,7 @@ HUD 위젯은 생성 시 `Get HUD Snapshot`을 한 번 호출하고 이후 `On H
 | 소모품 월드 획득 | `BP_ConsumablePickup` | `IARInteractable` 기반 F 상호작용 Actor. Consumable Definition을 공통 소모품 획득 요청에 전달 |
 | 데이터 | `FARCombatDamageRequest` / `FARCombatDamageResult` | 피해 요청과 결과 |
 | 데이터 | `UARStatusEffectDefinition` | 상태이상 데이터 에셋 |
-| 데이터 | `UARLoadoutItemDefinition` | 무기·액티브·패시브의 공통 Definition Data Asset. 식별·UI·설명·고정 스탯·스킬·런타임 클래스·UI 상태 정의 보관 |
-| 데이터 | `UARWeaponDefinition` / `UARActiveRelicDefinition` / `UARPassiveRelicDefinition` | 공통 Definition을 상속한 종류별 데이터 에셋. 무기만 진화 필드를 추가 |
-| 데이터 | `UARConsumableDefinition` | 소모품의 식별·UI·설명·런타임 사용 클래스 정의를 보관하는 Data Asset |
+| 데이터 | `UARItemDefinition` | 무기·액티브·패시브·소모품 통합 Data Asset. `ItemTypeTag`와 양의 `ItemId`가 검색 키, `AdditionalTags`는 중복 가능한 계열 문자열. 진화 필드는 무기에서만 사용 |
 | 데이터 | `FARSkillDefinition` | 스킬 식별·입력 태그·InputPriority·자원 비용·쿨다운·행동·HUD 정적 정보 |
 | 데이터 | `FARUIStateDisplayDefinition` / `FARItemUIState` | 아이템별 UI 상태의 표시 정의와 실제 런타임 값 |
 | UI 데이터 | `FARLoadoutItemDisplayData` / `FARRegisteredSkillUIData` | 인벤토리 상세와 등록된 스킬 HUD에 전달하는 읽기 전용 데이터 |
