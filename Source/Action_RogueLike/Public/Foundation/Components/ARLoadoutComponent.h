@@ -41,8 +41,14 @@ struct FARPendingEvolution
 
 struct FARActiveSkillGroupRecord
 {
-	FGameplayTag InputTag;
 	TArray<FARActionHandle> ActionHandles;
+};
+
+/** Weak routing record; lifetime ownership remains with the loadout, not the notification map. */
+struct FARActiveItemSkillExecution
+{
+	TWeakObjectPtr<UARLoadoutItemInstance> Instance;
+	FName SkillId = NAME_None;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARLoadoutChangedSignature, int32, Revision);
@@ -80,6 +86,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="AR|Loadout")
 	FARRequestStatus HandleSkillInput(FGameplayTag InputTag, FARSkillGroupHandle& GroupHandle);
+
+	/** One-based active relic slot and one-based skill number. Direct-tag skills are not routed here. */
+	UFUNCTION(BlueprintCallable, Category="AR|Loadout")
+	FARRequestStatus HandleActiveRelicSlotInput(int32 ActiveRelicSlot, int32 SkillIndex, FARSkillGroupHandle& GroupHandle);
 
 	UFUNCTION(BlueprintPure, Category="AR|Loadout")
 	TArray<FARRegisteredSkillUIData> GetRegisteredSkillUIData() const;
@@ -132,6 +142,7 @@ private:
 	void UnregisterAndReleaseInstance(UARLoadoutItemInstance* Instance, EARItemRemovalReason Reason);
 	void RegisterSkills(UARLoadoutItemInstance* Instance);
 	void UnregisterSkills(UARLoadoutItemInstance* Instance);
+	FARRequestStatus ExecuteSkillCandidates(TArray<FARRegisteredSkillRecord*>& Candidates, FARSkillGroupHandle& GroupHandle);
 	FARRegisteredSkillRecord* FindSkill(FARRegisteredSkillHandle Handle);
 	const FARRegisteredSkillRecord* FindSkill(FARRegisteredSkillHandle Handle) const;
 	const UARLoadoutItemInstance* FindItemInstance(FGuid InstanceId) const;
@@ -156,5 +167,8 @@ private:
 	TMap<FGuid, FARPendingAcquisition> PendingAcquisitions;
 	TMap<FGuid, FARPendingEvolution> PendingEvolutions;
 	TMap<FGuid, FARActiveSkillGroupRecord> ActiveSkillGroups;
+	TMap<FARActionHandle, FARActiveItemSkillExecution> ActiveItemSkillExecutions;
+	bool bDispatchingSkillExecution = false;
+	bool bEndingPlay = false;
 	int32 LoadoutRevision = 0;
 };

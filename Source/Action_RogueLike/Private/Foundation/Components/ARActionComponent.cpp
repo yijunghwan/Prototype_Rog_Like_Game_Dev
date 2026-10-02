@@ -34,11 +34,6 @@ FARRequestStatus UARActionComponent::CanStartAction(const FARActionRequest& Requ
 		Status.Result = EARRequestResult::InvalidOwner;
 		return Status;
 	}
-	if (!Request.ActionTag.IsValid())
-	{
-		Status.Result = EARRequestResult::InvalidDefinition;
-		return Status;
-	}
 	if (const UARHealthComponent* Health = GetOwner()->FindComponentByClass<UARHealthComponent>(); Health && Health->IsDead())
 	{
 		Status.Result = EARRequestResult::Dead;

@@ -71,6 +71,37 @@ TSharedRef<SWidget> UARResourceHUDWidget::RebuildWidget()
 {
 	BuildDefaultLayout(WidgetTree);
 	HealthBar = Cast<UProgressBar>(WidgetTree->FindWidget(TEXT("HealthBar")));
+	ShieldBar = Cast<UProgressBar>(WidgetTree->FindWidget(TEXT("ShieldBar")));
+	// Keep existing Designer assets intact. Insert the shield layer before Slate builds the overlay.
+	if (HealthBar && !ShieldBar)
+	{
+		if (UOverlay* HealthOverlay = Cast<UOverlay>(HealthBar->GetParent()))
+		{
+			ShieldBar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), TEXT("ShieldBar"));
+			ShieldBar->SetWidgetStyle(HealthBar->GetWidgetStyle());
+			ShieldBar->SetFillColorAndOpacity(FLinearColor(0.55f, 0.55f, 0.55f));
+			ShieldBar->SetBarFillType(HealthBar->GetBarFillType());
+			ShieldBar->SetBarFillStyle(HealthBar->GetBarFillStyle());
+			ShieldBar->SetBorderPadding(HealthBar->GetBorderPadding());
+			ShieldBar->SetPercent(0.0f);
+			ShieldBar->SetVisibility(ESlateVisibility::HitTestInvisible);
+			UOverlaySlot* ShieldSlot = Cast<UOverlaySlot>(HealthOverlay->InsertChildAt(
+				HealthOverlay->GetChildIndex(HealthBar), ShieldBar));
+			ShieldSlot->SetHorizontalAlignment(HAlign_Fill);
+			ShieldSlot->SetVerticalAlignment(VAlign_Fill);
+			if (const UOverlaySlot* HealthSlot = Cast<UOverlaySlot>(HealthBar->Slot))
+			{
+				ShieldSlot->SetPadding(HealthSlot->GetPadding());
+			}
+		}
+	}
+	if (HealthBar && ShieldBar)
+	{
+		// The red fill must not hide the gray layer with an opaque background.
+		FProgressBarStyle HealthStyle = HealthBar->GetWidgetStyle();
+		HealthStyle.BackgroundImage.TintColor = FSlateColor(FLinearColor::Transparent);
+		HealthBar->SetWidgetStyle(HealthStyle);
+	}
 	StaminaBar = Cast<UProgressBar>(WidgetTree->FindWidget(TEXT("StaminaBar")));
 	ManaBar = Cast<UProgressBar>(WidgetTree->FindWidget(TEXT("ManaBar")));
 	HealthValue = Cast<UTextBlock>(WidgetTree->FindWidget(TEXT("HealthValue")));
@@ -161,6 +192,28 @@ void UARResourceHUDWidget::ApplySnapshot(const FARPlayerHUDSnapshot& Snapshot)
 		}
 	};
 	Update(HealthBar, HealthValue, Snapshot.Health);
+	const float CurrentHealth = FMath::Max(0.0f, Snapshot.Health.Current);
+	const float CurrentShield = FMath::Max(0.0f, Snapshot.Shield);
+	if (ShieldBar)
+	{
+		// Show shield immediately after HP. Expand the visual scale only if their sum exceeds max HP.
+		const float DisplayMaximum = FMath::Max(Snapshot.Health.Maximum, CurrentHealth + CurrentShield);
+		ShieldBar->SetPercent(DisplayMaximum > 0.0f
+			? FMath::Clamp((CurrentHealth + CurrentShield) / DisplayMaximum, 0.0f, 1.0f) : 0.0f);
+		if (HealthBar) HealthBar->SetPercent(DisplayMaximum > 0.0f
+			? FMath::Clamp(CurrentHealth / DisplayMaximum, 0.0f, 1.0f) : 0.0f);
+	}
+	if (HealthValue && CurrentShield > 0.0f)
+	{
+		FNumberFormattingOptions Format;
+		Format.MaximumFractionalDigits = 0;
+		HealthValue->SetText(FText::Format(NSLOCTEXT("ARHUD", "HealthWithShield", "{0} / {1}  + {2}"),
+			FText::AsNumber(CurrentHealth, &Format), FText::AsNumber(Snapshot.Health.Maximum, &Format),
+			FText::AsNumber(CurrentShield, &Format)));
+	}
+	if (HealthValue) HealthValue->SetToolTipText(FText::Format(
+		NSLOCTEXT("ARHUD", "HealthShieldTooltip", "Health: {0} / {1}\nShield: {2}"),
+		FText::AsNumber(CurrentHealth), FText::AsNumber(Snapshot.Health.Maximum), FText::AsNumber(CurrentShield)));
 	Update(StaminaBar, StaminaValue, Snapshot.Stamina);
 	Update(ManaBar, ManaValue, Snapshot.Mana);
 

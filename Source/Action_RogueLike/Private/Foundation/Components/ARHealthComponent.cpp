@@ -78,7 +78,7 @@ bool UARHealthComponent::ApplyResolvedDamage(FARCombatDamageResult& InOutResult)
 
 	if (!FMath::IsNearlyEqual(ShieldBefore, GetCurrentShield()))
 	{
-		OnShieldChanged.Broadcast(GetOwner(), GetCurrentShield(), -ActualShieldDamage, FARShieldHandle(), EARResourceChangeReason::Damage);
+		NotifyShieldChanged(ShieldBefore, -ActualShieldDamage, FARShieldHandle(), EARResourceChangeReason::Damage);
 	}
 	if (!FMath::IsNearlyEqual(HealthBefore, CurrentHealth))
 	{
@@ -151,15 +151,17 @@ bool UARHealthComponent::RemoveShield(FARShieldHandle Handle, float& RemovedAmou
 	{
 		return false;
 	}
+	const float Before = GetCurrentShield();
 	RemovedAmount = ActiveShields[Index].RemainingAmount;
 	ActiveShields.RemoveAt(Index);
-	OnShieldChanged.Broadcast(GetOwner(), GetCurrentShield(), -RemovedAmount, Handle, EARResourceChangeReason::Other);
+	NotifyShieldChanged(Before, -RemovedAmount, Handle, EARResourceChangeReason::Other);
 	RefreshShieldTickState();
 	return true;
 }
 
 int32 UARHealthComponent::RemoveShieldsBySource(EARModifierSourceCategory Category, FName SourceId, EARShieldLifetimeFilter LifetimeFilter, float& RemovedAmount)
 {
+	const float Before = GetCurrentShield();
 	RemovedAmount = 0.0f;
 	int32 RemovedCount = 0;
 	for (int32 Index = ActiveShields.Num() - 1; Index >= 0; --Index)
@@ -179,7 +181,7 @@ int32 UARHealthComponent::RemoveShieldsBySource(EARModifierSourceCategory Catego
 	}
 	if (RemovedCount > 0)
 	{
-		OnShieldChanged.Broadcast(GetOwner(), GetCurrentShield(), -RemovedAmount, FARShieldHandle(), EARResourceChangeReason::Other);
+		NotifyShieldChanged(Before, -RemovedAmount, FARShieldHandle(), EARResourceChangeReason::Other);
 	}
 	RefreshShieldTickState();
 	return RemovedCount;
@@ -220,6 +222,20 @@ void UARHealthComponent::HandleFinalStatChanged(AActor* Target, EARStatType Stat
 	const float Before = CurrentHealth;
 	CurrentHealth = FMath::Min(CurrentHealth, NewValue);
 	OnHealthChanged.Broadcast(GetOwner(), CurrentHealth, NewValue, CurrentHealth - Before, EARResourceChangeReason::MaxChanged);
+}
+
+void UARHealthComponent::NotifyShieldChanged(float Before, float Delta, FARShieldHandle Handle, EARResourceChangeReason Reason)
+{
+	// Capture the transition before callbacks can apply/remove another shield. A shield
+	// added by a changed/broken observer is a new shield, not a reversal of this break.
+	const float After = GetCurrentShield();
+	const bool bBroken = Before > 0.0f && After <= 0.0f && Delta < 0.0f;
+	OnShieldChanged.Broadcast(GetOwner(), After, Delta, Handle, Reason);
+	if (bBroken)
+	{
+		OnShieldBrokenNative.Broadcast(GetOwner(), Before, Reason);
+		OnShieldBroken.Broadcast(GetOwner(), Before, Reason);
+	}
 }
 
 float UARHealthComponent::ConsumeShieldLifo(float Amount)

@@ -38,6 +38,10 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category="AR|Item")
 	void ExecuteItemSkill(FName SkillId, FARActionHandle ActionHandle);
 
+	/** Only this instance's executed skills are notified, after native action cleanup. Not a normal-end event. */
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Item|Skill", meta=(DisplayName="On Item Skill Cancelled"))
+	void ReceiveItemSkillCancelled(FName SkillId, FARActionHandle ActionHandle, EARActionCancelReason Reason);
+
 	UFUNCTION(BlueprintCallable, Category="AR|Item")
 	FARStatModifierHandle ApplyItemStatModifier(const FARStatModifierSpec& Spec, bool& bSuccess);
 

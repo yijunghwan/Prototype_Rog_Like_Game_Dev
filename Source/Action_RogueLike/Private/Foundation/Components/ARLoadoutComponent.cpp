@@ -77,11 +77,7 @@ void UARLoadoutComponent::BeginPlay()
 
 void UARLoadoutComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (ActionComponent)
-	{
-		ActionComponent->OnActionEnded.RemoveDynamic(this, &UARLoadoutComponent::HandleActionEnded);
-		ActionComponent->OnActionCancelled.RemoveDynamic(this, &UARLoadoutComponent::HandleActionCancelled);
-	}
+	bEndingPlay = true;
 	TArray<UARLoadoutItemInstance*> Instances;
 	if (EquippedWeapon) Instances.Add(EquippedWeapon);
 	for (UARLoadoutItemInstance* Instance : ActiveRelics) Instances.Add(Instance);
@@ -90,6 +86,14 @@ void UARLoadoutComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		UnregisterAndReleaseInstance(Instance, EARItemRemovalReason::OwnerDestroyed);
 	}
+	// Keep the cancellation route alive until owned actions have been cancelled.
+	if (ActionComponent)
+	{
+		ActionComponent->OnActionEnded.RemoveDynamic(this, &UARLoadoutComponent::HandleActionEnded);
+		ActionComponent->OnActionCancelled.RemoveDynamic(this, &UARLoadoutComponent::HandleActionCancelled);
+	}
+	ActiveItemSkillExecutions.Reset();
+	ActiveSkillGroups.Reset();
 	EquippedWeapon = nullptr;
 	ActiveRelics.Reset();
 	PassiveRelics.Reset();
@@ -240,25 +244,56 @@ FARRequestStatus UARLoadoutComponent::HandleSkillInput(FGameplayTag InputTag, FA
 {
 	FARRequestStatus Status;
 	GroupHandle = FARSkillGroupHandle();
-	if (!InputTag.IsValid() || !PlayerOwner || PlayerOwner->IsGameplayInputBlocked())
+	if (!InputTag.IsValid())
 	{
 		Status.Result = EARRequestResult::Blocked;
 		return Status;
 	}
-	if (!ActiveSkillGroups.IsEmpty())
-	{
-		Status.Result = EARRequestResult::Blocked;
-		return Status;
-	}
-
 	TArray<FARRegisteredSkillRecord*> Candidates;
 	for (FARRegisteredSkillRecord& Skill : RegisteredSkills)
 	{
-		if (Skill.Definition.InputTag == InputTag && Skill.Instance && Skill.Instance->IsRegistered())
+		if (Skill.Definition.InputMode == EARSkillInputMode::DirectTag
+			&& Skill.Definition.InputTag == InputTag && Skill.Instance && Skill.Instance->IsRegistered())
 		{
 			Candidates.Add(&Skill);
 		}
 	}
+	return ExecuteSkillCandidates(Candidates, GroupHandle);
+}
+
+FARRequestStatus UARLoadoutComponent::HandleActiveRelicSlotInput(int32 ActiveRelicSlot, int32 SkillIndex, FARSkillGroupHandle& GroupHandle)
+{
+	FARRequestStatus Status;
+	GroupHandle = FARSkillGroupHandle();
+	if (ActiveRelicSlot <= 0 || SkillIndex <= 0 || !ActiveRelics.IsValidIndex(ActiveRelicSlot - 1))
+	{
+		Status.Result = EARRequestResult::InvalidHandle;
+		return Status;
+	}
+	UARLoadoutItemInstance* EquippedRelic = ActiveRelics[ActiveRelicSlot - 1];
+	TArray<FARRegisteredSkillRecord*> Candidates;
+	for (FARRegisteredSkillRecord& Skill : RegisteredSkills)
+	{
+		if (Skill.Instance == EquippedRelic && Skill.Instance && Skill.Instance->IsRegistered()
+			&& Skill.Definition.InputMode == EARSkillInputMode::ActiveRelicSlot
+			&& Skill.Definition.SlotSkillIndex == SkillIndex)
+		{
+			Candidates.Add(&Skill);
+		}
+	}
+	return ExecuteSkillCandidates(Candidates, GroupHandle);
+}
+
+FARRequestStatus UARLoadoutComponent::ExecuteSkillCandidates(TArray<FARRegisteredSkillRecord*>& Candidates, FARSkillGroupHandle& GroupHandle)
+{
+	FARRequestStatus Status;
+	GroupHandle = FARSkillGroupHandle();
+	if (bEndingPlay || bDispatchingSkillExecution || !PlayerOwner || PlayerOwner->IsGameplayInputBlocked() || !ActiveSkillGroups.IsEmpty())
+	{
+		Status.Result = EARRequestResult::Blocked;
+		return Status;
+	}
+	TGuardValue<bool> DispatchGuard(bDispatchingSkillExecution, true);
 	Candidates.Sort([](const FARRegisteredSkillRecord& A, const FARRegisteredSkillRecord& B)
 	{
 		return A.Definition.InputPriority < B.Definition.InputPriority;
@@ -374,15 +409,31 @@ FARRequestStatus UARLoadoutComponent::HandleSkillInput(FGameplayTag InputTag, FA
 	}
 
 	FARActiveSkillGroupRecord& Group = ActiveSkillGroups.Add(GroupHandle.Id);
-	Group.InputTag = InputTag;
 	Group.ActionHandles = StartedHandles;
 	const float CooldownReduction = StatsComponent ? StatsComponent->GetFinalStat(EARStatType::CooldownReduction) : 0.0f;
+	TArray<FARActiveItemSkillExecution> ExecutionsToDispatch;
+	ExecutionsToDispatch.Reserve(Accepted.Num());
 	for (int32 Index = 0; Index < Accepted.Num(); ++Index)
 	{
 		FARRegisteredSkillRecord* Skill = Accepted[Index];
 		Skill->CooldownTotal = FMath::Max(Skill->Definition.MinimumCooldown, Skill->Definition.BaseCooldown * (1.0f - FMath::Clamp(CooldownReduction, 0.0f, 100.0f) / 100.0f));
 		Skill->CooldownEndsAt = GetNow() + Skill->CooldownTotal;
-		Skill->Instance->ExecuteItemSkill(Skill->Definition.SkillId, StartedHandles[Index]);
+		FARActiveItemSkillExecution& Execution = ExecutionsToDispatch.AddDefaulted_GetRef();
+		Execution.Instance = Skill->Instance;
+		Execution.SkillId = Skill->Definition.SkillId;
+	}
+	// Blueprint callbacks may remove items/skills or cancel other actions. Do not retain array pointers across them.
+	for (int32 Index = 0; Index < ExecutionsToDispatch.Num(); ++Index)
+	{
+		const FARActiveItemSkillExecution Execution = ExecutionsToDispatch[Index];
+		UARLoadoutItemInstance* Instance = Execution.Instance.Get();
+		const FARActionHandle Handle = StartedHandles[Index];
+		if (Instance && Instance->IsRegistered() && ActionComponent->IsActionActive(Handle))
+		{
+			// Register before dispatch so cancellation inside ExecuteItemSkill is delivered too.
+			ActiveItemSkillExecutions.Add(Handle, Execution);
+			Instance->ExecuteItemSkill(Execution.SkillId, Handle);
+		}
 	}
 	OnRegisteredSkillsChanged.Broadcast();
 	Status.Result = EARRequestResult::Success;
@@ -399,7 +450,14 @@ TArray<FARRegisteredSkillUIData> UARLoadoutComponent::GetRegisteredSkillUIData()
 		UI.RegisteredHandle = Skill.Handle;
 		UI.ItemInstanceId = Skill.Instance->GetInstanceId();
 		UI.SkillId = Skill.Definition.SkillId;
-		UI.InputTag = Skill.Definition.InputTag;
+		UI.InputMode = Skill.Definition.InputMode;
+		UI.InputTag = Skill.Definition.InputMode == EARSkillInputMode::DirectTag ? Skill.Definition.InputTag : FGameplayTag();
+		if (Skill.Definition.InputMode == EARSkillInputMode::ActiveRelicSlot)
+		{
+			const int32 SlotIndex = ActiveRelics.IndexOfByKey(Skill.Instance);
+			UI.ActiveRelicSlot = SlotIndex == INDEX_NONE ? 0 : SlotIndex + 1;
+			UI.SlotSkillIndex = Skill.Definition.SlotSkillIndex;
+		}
 		UI.DisplayName = Skill.Definition.SkillDisplayName;
 		UI.Description = Skill.Definition.SkillDescription;
 		UI.Icon = Skill.Definition.SkillIcon;
@@ -621,7 +679,12 @@ bool UARLoadoutComponent::ValidateDefinition(const UARItemDefinition* Definition
 	TSet<FName> SkillIds;
 	for (const FARSkillDefinition& Skill : Definition->SkillDefinitions)
 	{
-		if (Skill.SkillId.IsNone() || !Skill.InputTag.IsValid() || !Skill.ActionRequest.ActionTag.IsValid()
+		const bool bValidInput = Skill.InputMode == EARSkillInputMode::DirectTag
+			? Skill.InputTag.IsValid()
+			: Skill.InputMode == EARSkillInputMode::ActiveRelicSlot
+				&& Definition->ItemTypeTag == ARGameplayTags::Item_Type_ActiveRelic
+				&& Skill.SlotSkillIndex > 0;
+		if (Skill.SkillId.IsNone() || !bValidInput
 			|| !FMath::IsFinite(Skill.BaseCooldown) || !FMath::IsFinite(Skill.MinimumCooldown)
 			|| !FMath::IsFinite(Skill.ResourceCost.Mana) || !FMath::IsFinite(Skill.ResourceCost.Stamina)
 			|| Skill.BaseCooldown < 0.0f || Skill.MinimumCooldown < 0.0f || Skill.ResourceCost.Mana < 0.0f || Skill.ResourceCost.Stamina < 0.0f
@@ -677,6 +740,8 @@ UARLoadoutItemInstance* UARLoadoutComponent::CreateAndRegisterInstance(const UAR
 void UARLoadoutComponent::UnregisterAndReleaseInstance(UARLoadoutItemInstance* Instance, EARItemRemovalReason Reason)
 {
 	if (!Instance) return;
+	// Cancellation cleanup must not start another skill on the item being removed.
+	TGuardValue<bool> DispatchGuard(bDispatchingSkillExecution, true);
 	if (ActionComponent) ActionComponent->CancelActionsByItemInstance(Instance->GetInstanceId(), EARActionCancelReason::ItemRemoved);
 	UnregisterSkills(Instance);
 	Instance->UnregisterItem(Reason);
@@ -768,12 +833,23 @@ void UARLoadoutComponent::HandleItemUIStateChanged(FGuid ItemInstanceId, const F
 
 void UARLoadoutComponent::HandleActionEnded(FARActionHandle Handle)
 {
+	ActiveItemSkillExecutions.Remove(Handle);
 	RemoveActionFromSkillGroups(Handle);
 }
 
 void UARLoadoutComponent::HandleActionCancelled(FARActionHandle Handle, EARActionCancelReason Reason)
 {
+	FARActiveItemSkillExecution Execution;
+	const bool bExecutedItemSkill = ActiveItemSkillExecutions.RemoveAndCopyValue(Handle, Execution);
 	RemoveActionFromSkillGroups(Handle);
+	// Remove routing before invoking content; re-entrant/duplicate broadcasts cannot notify twice.
+	if (bExecutedItemSkill)
+	{
+		if (UARLoadoutItemInstance* Instance = Execution.Instance.Get())
+		{
+			Instance->ReceiveItemSkillCancelled(Execution.SkillId, Handle, Reason);
+		}
+	}
 }
 
 void UARLoadoutComponent::RemoveActionFromSkillGroups(FARActionHandle Handle)

@@ -18,13 +18,13 @@
 #include "Foundation/Components/ARMovementControlComponent.h"
 #include "Foundation/Components/ARStaminaComponent.h"
 #include "Foundation/Components/ARStatsComponent.h"
-#include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Player/ARPlayerController.h"
 
 AARPlayerCharacter::AARPlayerCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	CombatTeam = EARCombatTeam::Player;
+	GetStatsComponent()->BaseStats.Add(EARStatType::Money, 0.0f);
 	StaminaComponent = CreateDefaultSubobject<UARStaminaComponent>(TEXT("StaminaComponent"));
 	ManaComponent = CreateDefaultSubobject<UARManaComponent>(TEXT("ManaComponent"));
 	LoadoutComponent = CreateDefaultSubobject<UARLoadoutComponent>(TEXT("LoadoutComponent"));
@@ -106,6 +106,14 @@ void AARPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 			{
 				EnhancedInput->BindAction(Binding.InputAction, ETriggerEvent::Started, this,
 					&AARPlayerCharacter::HandleSkillPressed, Binding.InputTag);
+			}
+		}
+		for (const FARActiveRelicSlotInputBinding& Binding : ActiveRelicSlotInputBindings)
+		{
+			if (Binding.InputAction && Binding.ActiveRelicSlot > 0 && Binding.SkillIndex > 0)
+			{
+				EnhancedInput->BindAction(Binding.InputAction, ETriggerEvent::Started, this,
+					&AARPlayerCharacter::HandleActiveRelicSlotPressed, Binding.ActiveRelicSlot, Binding.SkillIndex);
 			}
 		}
 		if (InventoryAction)
@@ -230,7 +238,6 @@ bool AARPlayerCharacter::TryStartRoll(bool bForceMouseDirection)
 	if (!StaminaComponent->CanAfford(Cost)) return false;
 
 	FARActionRequest Request;
-	Request.ActionTag = ARGameplayTags::Action_Roll;
 	Request.bIsRollAction = true;
 	Request.bBlockBasicMovementWhileActive = true;
 	Request.CancelRules.bCancelOnStagger = true;
@@ -288,6 +295,15 @@ void AARPlayerCharacter::HandleSkillPressed(const FInputActionValue& Value, FGam
 	{
 		FARSkillGroupHandle GroupHandle;
 		LoadoutComponent->HandleSkillInput(InputTag, GroupHandle);
+	}
+}
+
+void AARPlayerCharacter::HandleActiveRelicSlotPressed(const FInputActionValue& Value, int32 ActiveRelicSlot, int32 SkillIndex)
+{
+	if (!IsGameplayInputBlocked() && LoadoutComponent)
+	{
+		FARSkillGroupHandle GroupHandle;
+		LoadoutComponent->HandleActiveRelicSlotInput(ActiveRelicSlot, SkillIndex, GroupHandle);
 	}
 }
 

@@ -1,10 +1,16 @@
 # Foundation Blueprint 노드 목록과 테스트 콘텐츠 제작 안내
 
+> **현행 추가 (2026-10-03):** 플레이어 전용 Money(번호47, 기본0) 및 Operation의 Permanent Flat(번호4)을 추가했다. 기존 enum 번호는 보존한다. 일반 Apply Stat Modifier에서만 기본값을 직접 증감하며 버프 기록 없이 Success 반환, 성공 시에도 빈 핸들이다. 부족한 기본 돈 잔액 차감·무효 수치 실패; Duration/Source/HUD/Tenacity/Stack Group 무시, Stack Only/Guarantee 거절. 아이템/액션/DA 기본 효과 및 컴포넌트 보정 등록은 Permanent Flat 거절. Get Final Stat/OnFinalStatChanged/플레이어의 전체 스탯 조회에 반영, 적·환경의 Money 적용 거절/전체 목록 제외. 자동 세이브·돈 UI·상점은 미구현. [기본값 수정 참고서](../Guides/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
+
+> **현행 추가 (2026-10-03):** `Apply Crowd Control`은 DA 없이 Target Actor / CC Type(Stun·Root) / Duration(초, >0) / Affected By Tenacity(기본 true)를 받는 간편 CC 노드다. Success와 상태 핸들(Return Value)을 출력하며 Source / Failure Reason / Applied Duration은 고급 핀이다. 기존 상태·면역·동일 태그 긴 시간 갱신·종료 알림을 재사용한다. 기존 `Apply Status Effect`/`Remove Status Effect`와 CC 면역 노드는 유지한다. [적 제작 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#apply-crowd-control).
+
 한국어/영어 스탯 이름, Details 필드의 용도, 전체 노드 입력·출력을 한 화면에서 검색하려면 [Foundation 한·영 HTML 레퍼런스](FOUNDATION_REFERENCE_KO_EN.html)를 사용한다. 이 HTML은 Scripts/generate_foundation_html_reference.py로 현재 목록과 C++ 선언에서 생성한다.
 
 작성 기준: 2026-09-24, 현재 `Source`의 실제 선언과 구현.
 
-> 2026-09-30 아이템 통합 변경: 아래의 이전 아이템 클래스명·시그니처 표는 역사적 스냅샷이다. 현재 저작 가능한 데이터 에셋은 `UARItemDefinition` 하나이며, `DefinitionTag` 대신 `(ItemTypeTag, ItemId)`와 `AdditionalTags`를 사용한다. 정확한 현행 아이템 필드·조회·획득 노드는 [통합 아이템 제작 가이드](ITEM_DATA_ASSET_FIELD_GUIDE.html)와 `Source` 선언을 우선한다. 이 목록 전체를 새 API로 재생성하는 작업은 아직 하지 않았다.
+> **현행 보완 (2026-10-02):** ARBaseCharacter 자식(적·플레이어)은 `On Character Death`, `On Groggy Gauge Depleted`, `On Shield Broken`, `On Damage Applied`, `On Action Cancelled`, `On Status Removed`를 직접 이벤트로 구현한다. 등장 초기화는 기존 `Event BeginPlay`. 기존 Bind 디스패처는 유지하지만 같은 처리를 두 방식에 중복 연결하지 않는다. 실드 파괴는 총합 양수→0의 피해/수동 제거만 알리고 만료·우회는 제외한다. [적 이벤트 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events), [현재 자원 회복 노드](../Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing)를 참조한다.
+
+> 2026-09-30 아이템 통합 변경: 아래의 이전 아이템 클래스명·시그니처 표는 역사적 스냅샷이다. 현재 저작 가능한 데이터 에셋은 `UARItemDefinition` 하나이며, `DefinitionTag` 대신 `(ItemTypeTag, ItemId)`와 `AdditionalTags`를 사용한다. 정확한 현행 아이템 필드·조회·획득 노드는 [아이템 에셋 제작 가이드](../Guides/ITEM_ASSET_CREATION_GUIDE_KO.html)와 `Source` 선언을 우선한다. 이 목록 전체를 새 API로 재생성하는 작업은 아직 하지 않았다.
 
 > 2026-09-30 보장 효과 추가: `Apply Item Super Armor`, `Remove Own Item Super Armor`, `Apply Item CC Immunity`, `Remove Own Item CC Immunity`, `Apply Action CC Immunity`, `Apply CC Immunity`, `Remove CC Immunity`가 현행 노드다. 두 보장 효과는 숫자 스탯 수정치가 아니며 소유 아이템/행동 종료 시 자동 정리된다. 아래의 옛 노드 표에 아직 반영되지 않은 항목은 통합 아이템 제작 가이드와 C++ 선언을 참조한다.
 
@@ -63,7 +69,7 @@
 | 적 AI 경로 이동 | `ARMoveToActor`, `ARMoveToLocation`, `CanRequestBasicMove` | NavMesh 목표 요청과 CC 이동 잠금 검사. Behavior Tree `Move To`도 같은 Controller 검사를 거침 |
 | 이동 제한 | `AcquireMovementLock`, `ReleaseMovementLock`, `CanBasicMove`, `CanMoveAtAll` | 기본 이동/전체 이동 잠금 관리 |
 | 경직·그로기 | `ApplyStaggerAndGroggyDamage`, `AddSuperArmor`, `ResetGroggyGauge` | 피해와 별개의 경직·그로기 처리 |
-| 상태이상 | `ApplyStatusEffect`, `RemoveStatusEffect`, `HasStatus`, `GetActiveStatusEffects` | 상태 등록·해제·조회 및 이동/행동 차단 상태 조회 |
+| 상태이상 | `ApplyCrowdControl`, `ApplyStatusEffect`, `RemoveStatusEffect`, `HasStatus`, `GetActiveStatusEffects` | DA 없는 기본 CC 또는 DA 기반 사용자 정의 상태 등록·해제·조회 및 이동/행동 차단 상태 조회 |
 | 장비 획득 | `BeginLoadoutAcquisition`, `CommitLoadoutAcquisition`, `CancelLoadoutAcquisition` | 획득 요청과 필요한 교체 확인, 확정·취소 |
 | 장비 버리기 | `DiscardLoadoutItem` | 해제와 월드 픽업 드롭 처리 |
 | 스킬 | `HandleSkillInput`, `GetRegisteredSkillUIData`, `GetSkillCooldownState` | 입력 태그에 해당하는 스킬 그룹 실행, 비용/쿨다운 관리 |
@@ -89,6 +95,7 @@
 5. 히트박스 초기화 → 이벤트 연결 → 충돌 활성화 순으로 준비한다. 오버랩 대상은 `CanDamageTarget` 확인 후 `TryAcceptTarget`으로 중복을 거른다.
 6. 수락된 대상에 `ApplyCombatDamage`, 필요하면 별도로 `ApplyStaggerAndGroggyDamage`를 호출한다. 피해 계산 호출만으로 경직 요청까지 자동 적용되는 것으로 가정하지 않는다.
 7. 공격·후딜이 끝나면 `EndAction`한다. 실행 이벤트를 비워 두거나 종료하지 않으면 활성 행동이 남을 수 있다.
+8. 자체 타이머·연출의 취소 정리는 런타임 `On Item Skill Cancelled(SkillId, ActionHandle, Reason)` 이벤트에 연결한다. 별도 Bind 없이 실행한 아이템 인스턴스에만 전달되며 액션 자동 정리 후 호출된다. 정상 EndAction·사전 거절에는 호출되지 않는다. ActionDelay.Cancelled와 같은 정리를 중복 실행하지 않도록 책임을 정한다.
 
 ### 패시브 유물
 
@@ -137,7 +144,7 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | 드롭 | OnConsumableDropRequested는 초과 슬롯 아이템의 실제 생성 뒤 알림이다. 이름만 보고 다시 Spawn하면 중복 드롭이 된다. 일반 버리기 결과에도 생성된 픽업 참조가 들어 있다. |
 | 픽업 초기화 | 런타임 드롭의 Definition 할당 이벤트는 deferred spawn의 FinishSpawning 이전에 호출된다. 그 시점에 Construction Script가 만든 표시 컴포넌트가 준비되었다고 가정하지 않는다. |
 | 입력 유지 | 스킬 입력은 Started에 연결되어 있다. 버튼을 누르고 있는 동안 반복 공격하는 동작은 별도 구현이 필요하다. |
-| UI 알림 | 독립적인 OnShieldBroken이나 쿨다운 자연 만료 이벤트는 없다. 실제 제공되는 변경 이벤트/시간 조회를 조합한다. HUD 스냅샷 알림도 조준/자원 변화로 자주 올 수 있다. |
+| UI 알림 | OnShieldBroken은 피해/수동 제거로 총 실드가 0이 된 경우를 알린다(시간 만료 제외). 쿨다운 자연 만료 전용 이벤트는 없으므로 시간 조회를 조합한다. HUD 스냅샷 알림도 조준/자원 변화로 자주 올 수 있다. |
 | 템플릿 재사용 | 기존 TwinStick 피해/점수/스폰 및 Strategy 선택/이동은 Foundation 전투와 별도 체계다. 그대로 붙여도 새 스탯·피해·아이템 효과로 자동 연결되지 않는다. |
 
 테스트 제작 순서는 플레이어+허수아비+근접 무기 → 회복 소모품 → 스탯 패시브 → 액티브 공격 → 환경 DOT/상태이상 → 획득·교체·진화·UI 순이 적당하다. 먼저 작은 방 하나에서 피해·비용·쿨다운·취소·드롭이 일관되게 연결되는지 확인하면 콘텐츠 수를 늘릴 때 원인을 찾기 쉽다.
@@ -192,6 +199,12 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [AARBaseCharacter](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:40>) | `GetStaggerComponent` | 조회 | `UARStaggerComponent* GetStaggerComponent() const` |
 | [AARBaseCharacter](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:41>) | `GetActionComponent` | 조회 | `UARActionComponent* GetActionComponent() const` |
 | [AARBaseCharacter](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:42>) | `GetMovementControlComponent` | 조회 | `UARMovementControlComponent* GetMovementControlComponent() const` |
+| [AARBaseCharacter](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:50>) | `ReceiveCharacterDeath` / On Character Death | 구현 이벤트 | `void ReceiveCharacterDeath(const FARCombatDamageResult& KillingDamage)` |
+| [AARBaseCharacter](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:52>) | `ReceiveGroggyGaugeDepleted` / On Groggy Gauge Depleted | 구현 이벤트 | `void ReceiveGroggyGaugeDepleted()` |
+| [AARBaseCharacter](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:55>) | `ReceiveShieldBroken` / On Shield Broken | 구현 이벤트 | `void ReceiveShieldBroken(float PreviousShield, EARResourceChangeReason Reason)` |
+| [AARBaseCharacter](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:57>) | `ReceiveDamageApplied` / On Damage Applied | 구현 이벤트 | `void ReceiveDamageApplied(const FARCombatDamageResult& DamageResult)` |
+| [AARBaseCharacter](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:59>) | `ReceiveActionCancelled` / On Action Cancelled | 구현 이벤트 | `void ReceiveActionCancelled(FARActionHandle ActionHandle, EARActionCancelReason Reason)` |
+| [AARBaseCharacter](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h:61>) | `ReceiveStatusRemoved` / On Status Removed | 구현 이벤트 | `void ReceiveStatusRemoved(const FARStatusEffectView& Status)` |
 
 #### AR|Combat
 
@@ -202,8 +215,10 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:23>) | `ApplyDamageOverTime` | 호출 | `static FARDotHandle ApplyDamageOverTime(const UObject* WorldContextObject, const FARDamageOverTimeSpec& Spec, bool& bSuccess, EARRequestResult& FailureReason)` |
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:26>) | `RemoveDamageOverTime` | 호출 | `static bool RemoveDamageOverTime(const UObject* WorldContextObject, FARDotHandle Handle)` |
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:29>) | `ApplyStaggerAndGroggyDamage` | 호출 | `static FARStaggerResult ApplyStaggerAndGroggyDamage(const FARStaggerRequest& Request)` |
+| [UARCombatBlueprintLibrary](C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h) | `ApplyStaggerAndGroggyDamageFromResult` / Apply Stagger And Groggy Damage From Result | 호출 | `static FARStaggerResult ApplyStaggerAndGroggyDamageFromResult(const FARCombatDamageResult& DamageResult, float BaseStaggerDamage, float StaggerMultiplier, float BaseGroggyDamage, const FARSourceInfo& Source, FName EffectName)` — 피해 Return Value 직접 연결, Applied/유효 타격 내부 검사, 수치 기본 0/1/0, Source/Effect Name 고급 핀 |
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:32>) | `ApplySuperArmor` | 호출 | `static FARSuperArmorHandle ApplySuperArmor(AActor* Target, const FARSuperArmorSpec& Spec, bool& bSuccess)` |
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:35>) | `RemoveSuperArmor` | 호출 | `static bool RemoveSuperArmor(AActor* Target, FARSuperArmorHandle Handle)` |
+| [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h>) | `ApplyCrowdControl` | 호출 | `static FARStatusEffectHandle ApplyCrowdControl(AActor* Target, EARCrowdControlType CCType, float Duration, bool bAffectedByTenacity, bool& bSuccess, EARRequestResult& FailureReason, float& AppliedDuration, const FARSourceInfo& Source)` |
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:38>) | `ApplyStatusEffect` | 호출 | `static FARStatusEffectResult ApplyStatusEffect(AActor* Target, const FARStatusEffectRequest& Request)` |
 | [UARCombatBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h:41>) | `RemoveStatusEffect` | 호출 | `static bool RemoveStatusEffect(AActor* Target, FARStatusEffectHandle Handle)` |
 | [UARCombatSubsystem](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Combat/ARCombatSubsystem.h:32>) | `CanDamageTarget` | 조회 | `bool CanDamageTarget(AActor* Attacker, AActor* Target, EARRequestResult& FailureReason) const` |
@@ -303,6 +318,7 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:29>) | `ReceiveItemUnregistered` / On Item Unregistered | 구현 이벤트 | `void ReceiveItemUnregistered(EARItemRemovalReason Reason)` |
 | [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:32>) | `CanExecuteItemSkill` | 구현 이벤트(기본 구현 있음)/호출 가능 | `bool CanExecuteItemSkill(FName SkillId, FGameplayTag& FailureTag) const` |
 | [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:35>) | `ExecuteItemSkill` | 구현 이벤트 | `void ExecuteItemSkill(FName SkillId, FARActionHandle ActionHandle)` |
+| [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:43>) | `ReceiveItemSkillCancelled` / On Item Skill Cancelled | 구현 이벤트 | `void ReceiveItemSkillCancelled(FName SkillId, FARActionHandle ActionHandle, EARActionCancelReason Reason)` |
 | [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:38>) | `ApplyItemStatModifier` | 호출 | `FARStatModifierHandle ApplyItemStatModifier(const FARStatModifierSpec& Spec, bool& bSuccess)` |
 | [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:41>) | `RemoveOwnItemModifier` | 호출 | `bool RemoveOwnItemModifier(FARStatModifierHandle Handle)` |
 | [UARLoadoutItemInstance](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h:44>) | `RemoveAllOwnItemModifiers` | 호출 | `int32 RemoveAllOwnItemModifiers()` |
@@ -471,7 +487,7 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:15>) | `RemoveStatModifier` | 호출 | `static bool RemoveStatModifier(AActor* Target, FARStatModifierHandle Handle)` |
 | [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:16>) | `RemoveStatModifiersBySource` | 호출 | `static int32 RemoveStatModifiersBySource(AActor* Target, EARModifierSourceCategory Category, FName SourceId)` |
 | [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:17>) | `ClearStatModifiers` | 호출 | `static int32 ClearStatModifiers(AActor* Target, EARModifierSourceCategory Category = EARModifierSourceCategory::All)` |
-| [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:18>) | `RemoveOneStatModifierStack` | 호출 | `static bool RemoveOneStatModifierStack(AActor* Target, EARModifierSourceCategory Category, FName SourceId, EARModifierStackRemovalPolicy Policy, FARStatModifierHandle& RemovedHandle)` |
+| [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:20>) | `RemoveStatModifierStacks` | 호출 | `static bool RemoveStatModifierStacks(AActor* Target, EARModifierSourceCategory Category, FName SourceId, int32 Count, int32& RemovedCount, EARModifierStackRemovalPolicy Policy = EARModifierStackRemovalPolicy::Oldest, bool bRequireFullCount = true)` |
 | [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:19>) | `GetFinalStat` | 조회 | `static float GetFinalStat(AActor* Target, EARStatType StatType)` |
 | [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:20>) | `GetStatBreakdown` | 조회 | `static FARStatBreakdown GetStatBreakdown(AActor* Target, EARStatType StatType)` |
 | [UARStatsBlueprintLibrary](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h:21>) | `GetAllFinalStatViews` | 조회 | `static TArray<FARFinalStatView> GetAllFinalStatViews(AActor* Target)` |
@@ -480,7 +496,7 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:97>) | `RemoveStatModifier` | 호출 | `bool RemoveStatModifier(FARStatModifierHandle Handle)` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:100>) | `RemoveModifiers` | 호출 | `int32 RemoveModifiers(EARModifierSourceCategory Category, FName SourceId)` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:103>) | `ClearModifiers` | 호출 | `int32 ClearModifiers(EARModifierSourceCategory Category = EARModifierSourceCategory::All)` |
-| [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:106>) | `RemoveOneModifierStack` | 호출 | `bool RemoveOneModifierStack(EARModifierSourceCategory Category, FName SourceId, EARModifierStackRemovalPolicy Policy, FARStatModifierHandle& RemovedHandle)` |
+| [UARStatsComponent](<C:/Users/ghksd/Desktop/game_dev/Action_RogueLike/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:145>) | `RemoveModifierStacks` | 호출 | `bool RemoveModifierStacks(EARModifierSourceCategory Category, FName SourceId, int32 Count, int32& RemovedCount, TArray<FARStatModifierHandle>& RemovedHandles, EARModifierStackRemovalPolicy Policy = EARModifierStackRemovalPolicy::Oldest, bool bRequireFullCount = true)` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:109>) | `GetFinalStat` | 조회 | `float GetFinalStat(EARStatType StatType) const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:112>) | `GetBaseStat` | 조회 | `float GetBaseStat(EARStatType StatType) const` |
 | [UARStatsComponent](<C:/Users/ghksd/Desktop/Action_RogLike/Prototype_Rog_Like_Game_Dev/Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h:115>) | `GetStatBreakdown` | 조회 | `FARStatBreakdown GetStatBreakdown(EARStatType StatType) const` |
@@ -644,6 +660,7 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 |---|---|---|
 | `OnHealthChanged` | `AActor*, Target, float, CurrentHealth, float, MaxHealth, float, Delta, EARResourceChangeReason, Reason` | AR\|Health |
 | `OnShieldChanged` | `AActor*, Target, float, CurrentShield, float, Delta, FARShieldHandle, Handle, EARResourceChangeReason, Reason` | AR\|Health |
+| `OnShieldBroken` | `AActor*, Target, float, PreviousShield, EARResourceChangeReason, Reason` | AR\|Health |
 | `OnDamageApplied` | `AActor*, Target, const FARCombatDamageResult&, Result` | AR\|Health |
 | `OnDeath` | `AActor*, Target, const FARCombatDamageResult&, KillingDamage` | AR\|Health |
 
@@ -928,7 +945,6 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 
 | 필드 선언/기본값 | BP 접근 | 카테고리 |
 |---|---|---|
-| `FGameplayTag ActionTag` | 읽기/쓰기 | (카테고리 미지정) |
 | `FARActionCancelRules CancelRules` | 읽기/쓰기 | (카테고리 미지정) |
 | `bool bBlockRollWhileActive = false` | 읽기/쓰기 | (카테고리 미지정) |
 | `bool bBlockBasicMovementWhileActive = false` | 읽기/쓰기 | (카테고리 미지정) |
@@ -959,6 +975,8 @@ UIManager는 Widget을 생성하지 않는다. 화면 열기/닫기 요청을 �
 | `bool bApplyOnHitEffects = true` | 읽기/쓰기 | (카테고리 미지정) |
 | `FARSourceInfo Source` | 읽기/쓰기 | (카테고리 미지정) |
 | `FName DamageName = NAME_None` | 읽기/쓰기 | (카테고리 미지정) |
+| `float DamageNameInterval = 0.2f` | 읽기/쓰기 | 동일 대상 + DamageName의 재피격 간격(초). 무시 체크 시 편집 비활성 |
+| `bool bIgnoreDamageNameInterval = false` | 읽기/쓰기 | 제한 검사·기록을 모두 생략. 기존 제한을 지우거나 연장하지 않음 |
 | `FGameplayTag AttackTag` | 읽기/쓰기 | (카테고리 미지정) |
 
 #### FARCombatDamageResult
@@ -1980,7 +1998,8 @@ MaxHealth,
 	FireDamageAmplification,
 	MagicDamageAmplification,
 	GroggyDamageAmplification,
-	PhysicalDamageTakenIncrease,
+	OverallDamageTakenIncrease = 46,
+	PhysicalDamageTakenIncrease = 27,
 	FireDamageTakenIncrease,
 	MagicDamageTakenIncrease,
 	Tenacity,
@@ -1999,7 +2018,7 @@ MaxHealth,
 	ManaRecoveryPerSecond,
 	MaxConsumableSlots,
 	CooldownReduction,
-	Count UMETA(Hidden)
+	Count = 47 UMETA(Hidden)
 ~~~
 
 #### EARUIScreen

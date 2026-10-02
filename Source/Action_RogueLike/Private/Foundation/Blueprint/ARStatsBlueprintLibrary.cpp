@@ -4,14 +4,25 @@ namespace
 {
 	UARStatsComponent* FindStats(AActor* Target)
 	{
-		return Target ? Target->FindComponentByClass<UARStatsComponent>() : nullptr;
+		return IsValid(Target) ? Target->FindComponentByClass<UARStatsComponent>() : nullptr;
 	}
 }
 
 FARStatModifierHandle UARStatsBlueprintLibrary::ApplyStatModifier(AActor* Target, const FARStatModifierSpec& Spec, bool& bSuccess)
 {
 	bSuccess = false;
-	if (UARStatsComponent* Stats = FindStats(Target)) return Stats->AddStatModifier(Spec, bSuccess);
+	if (UARStatsComponent* Stats = FindStats(Target))
+	{
+		if (Spec.Operation == EARStatModifierOperation::PermanentFlat)
+		{
+			if (!Spec.bStackOnly && !Spec.bGuaranteeInvulnerability && !Spec.bGuaranteeEvasion)
+			{
+				bSuccess = Stats->ApplyPermanentFlat(Spec.StatType, Spec.Value);
+			}
+			return FARStatModifierHandle();
+		}
+		return Stats->AddStatModifier(Spec, bSuccess);
+	}
 	return FARStatModifierHandle();
 }
 
@@ -33,8 +44,17 @@ int32 UARStatsBlueprintLibrary::ClearStatModifiers(AActor* Target, EARModifierSo
 	return 0;
 }
 
+bool UARStatsBlueprintLibrary::RemoveStatModifierStacks(AActor* Target, EARModifierSourceCategory Category, FName SourceId, int32 Count, int32& RemovedCount, EARModifierStackRemovalPolicy Policy, bool bRequireFullCount)
+{
+	RemovedCount = 0;
+	TArray<FARStatModifierHandle> RemovedHandles;
+	if (UARStatsComponent* Stats = FindStats(Target)) return Stats->RemoveModifierStacks(Category, SourceId, Count, RemovedCount, RemovedHandles, Policy, bRequireFullCount);
+	return false;
+}
+
 bool UARStatsBlueprintLibrary::RemoveOneStatModifierStack(AActor* Target, EARModifierSourceCategory Category, FName SourceId, EARModifierStackRemovalPolicy Policy, FARStatModifierHandle& RemovedHandle)
 {
+	RemovedHandle = FARStatModifierHandle();
 	if (UARStatsComponent* Stats = FindStats(Target)) return Stats->RemoveOneModifierStack(Category, SourceId, Policy, RemovedHandle);
 	return false;
 }

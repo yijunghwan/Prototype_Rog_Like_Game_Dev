@@ -7,6 +7,14 @@
 
 class UARStatusEffectDefinition;
 
+/** Built-in CC presets for DA-free applications. */
+UENUM(BlueprintType)
+enum class EARCrowdControlType : uint8
+{
+	Stun UMETA(DisplayName="Stun"),
+	Root UMETA(DisplayName="Root")
+};
+
 /** A guarantee against new crowd-control applications. Negative duration lasts until removed. */
 USTRUCT(BlueprintType)
 struct ACTION_ROGUELIKE_API FARCCImmunitySpec

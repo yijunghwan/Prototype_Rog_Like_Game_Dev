@@ -72,7 +72,8 @@ FARCombatDamageResult FARDamageResolver::Resolve(
 		}
 		if (Request.bApplyAmplification)
 		{
-			Damage *= FMath::Max(0.0f, 1.0f + Defense.AttributeDamageTakenIncrease / 100.0f);
+			const float TotalDamageTakenIncrease = Defense.OverallDamageTakenIncrease + Defense.AttributeDamageTakenIncrease;
+			Damage *= FMath::Max(0.0f, 1.0f + TotalDamageTakenIncrease / 100.0f);
 		}
 		Damage *= Defense.OverallRemainingDamageMultiplier;
 		Damage *= Defense.AttributeRemainingDamageMultiplier;
@@ -90,4 +91,3 @@ FARCombatDamageResult FARDamageResolver::Resolve(
 	Result.FailureReason = EARRequestResult::Success;
 	return Result;
 }
-

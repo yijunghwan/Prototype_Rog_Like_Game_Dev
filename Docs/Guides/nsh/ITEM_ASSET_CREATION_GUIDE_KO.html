@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>아이템 에셋 제작 가이드 · Action RogueLike</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#151e31; --panel2:#1d2940; --line:#34425b; --text:#edf4ff; --muted:#b8c8df; --accent:#8ed8ff; --good:#9cebc5; --warn:#ffd38a; --bad:#ffabac; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 system-ui,"Malgun Gothic",sans-serif; }
+    a { color:var(--accent); }
+    code { padding:.08em .32em; border-radius:4px; background:#2a3954; overflow-wrap:anywhere; }
+    .wrap { width:min(1160px,calc(100% - 32px)); margin:auto; }
+    header { padding:46px 0 35px; background:linear-gradient(125deg,#153a55,#18253e 65%,#111827); border-bottom:1px solid var(--line); }
+    h1 { font-size:clamp(2rem,4vw,3.2rem); line-height:1.18; margin:0 0 12px; }
+    h2 { font-size:1.62rem; margin:0 0 15px; }
+    h3 { font-size:1.22rem; margin:24px 0 9px; }
+    h4 { font-size:1.05rem; margin:17px 0 7px; }
+    p { margin:8px 0 13px; }
+    ul,ol { padding-left:1.4em; }
+    li { margin:5px 0; }
+    .lead,.muted { color:var(--muted); }
+    .eyebrow { color:var(--good); font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:.83rem; }
+    nav { position:sticky; top:0; z-index:3; background:#10182aeb; border-bottom:1px solid var(--line); backdrop-filter:blur(10px); }
+    nav .wrap { display:flex; gap:18px; overflow-x:auto; white-space:nowrap; padding:10px 0; font-size:.92rem; }
+    nav a { text-decoration:none; color:var(--muted); }
+    nav a:hover { color:var(--accent); }
+    main { padding:27px 0 65px; }
+    .chapter { margin:0 0 12px; background:var(--panel); border:1px solid var(--line); border-radius:14px; scroll-margin-top:65px; overflow:hidden; }
+    .chapter[open] { border-color:#5c96ba; }
+    .chapter>summary { display:flex; align-items:center; gap:13px; padding:18px 24px; cursor:pointer; font-size:1.2rem; font-weight:750; list-style:none; background:var(--panel2); }
+    .chapter>summary::-webkit-details-marker { display:none; }
+    .chapter>summary::after { content:"＋"; margin-left:auto; color:var(--accent); font-size:1.45rem; line-height:1; }
+    .chapter[open]>summary::after { content:"−"; }
+    .chapter>summary:hover { background:#263855; }
+    .chapter>summary:focus-visible,button:focus-visible,nav a:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+    .chapter-content { padding:18px 28px 27px; border-top:1px solid var(--line); }
+    .chapter-content>:first-child { margin-top:0; }
+    .chapter-number { color:var(--good); font-size:.88rem; font-weight:800; min-width:2.3em; }
+    .guide-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0 0 20px; }
+    .guide-actions p { color:var(--muted); margin:0 auto 0 0; }
+    .guide-actions button { border:1px solid #5b88a8; border-radius:7px; padding:8px 13px; color:var(--text); background:#244260; font:inherit; cursor:pointer; }
+    .guide-actions button:hover { background:#315a80; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
+    .card { padding:16px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; }
+    .card h3 { margin:0 0 7px; }
+    .card p:last-child { margin-bottom:0; }
+    .scroll { overflow-x:auto; margin:12px 0; }
+    table { border-collapse:collapse; width:100%; min-width:690px; }
+    th,td { padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { color:var(--accent); background:#22314b; }
+    tbody tr:nth-child(even) { background:#19243a; }
+    .matrix th:first-child { width:29%; }
+    .field th:first-child { width:26%; }
+    .yes { color:var(--good); font-weight:700; }
+    .maybe { color:var(--warn); font-weight:700; }
+    .no { color:var(--bad); font-weight:700; }
+    .note { padding:11px 15px; margin:14px 0; background:#2b2a2a; border-left:4px solid var(--warn); border-radius:5px; }
+    .note.good { background:#19312e; border-left-color:var(--good); }
+    .note.bad { background:#39262d; border-left-color:var(--bad); }
+    .step { display:inline-block; min-width:1.7em; margin-right:7px; border-radius:99px; background:#305274; color:white; font-size:.85rem; font-weight:700; text-align:center; }
+    .formula { display:block; padding:12px; margin:10px 0; background:#0d1728; border:1px solid var(--line); border-radius:7px; overflow-x:auto; }
+    .small { font-size:.91rem; }
+    footer { padding:22px 0 38px; border-top:1px solid var(--line); color:var(--muted); font-size:.88rem; }
+    @media (max-width:650px) { .chapter>summary { padding:15px 16px; font-size:1.05rem; } .chapter-content { padding:16px; } }
+    @media print { :root { color-scheme:light; --bg:#fff; --panel:#fff; --panel2:#f4f7fa; --line:#c7d0da; --text:#172232; --muted:#475569; --accent:#075b8e; --good:#146044; --warn:#755000; --bad:#8c2530; } nav,.guide-actions { display:none; } header { background:#fff; } .chapter { break-inside:avoid; } .chapter-content { display:block; } a { color:#075b8e; } code,.formula { background:#f0f3f6; } }
+  </style>
+<link rel="stylesheet" href="../assets/guide.css">
+</head>
+<body data-guide-ui="shared">
+<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common">공통</a><a href="../index.html#item" aria-current="true">아이템</a><a href="../index.html#enemy">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="ITEM_ASSET_CREATION_GUIDE_KO.html" aria-current="page">데이터 에셋</a><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">런타임 기본</a><a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬</a></div></div></nav><!-- GUIDE PORTAL END -->
+<header><div class="wrap">
+  <div class="eyebrow">Action RogueLike · 제작자용</div>
+  <h1>아이템 에셋 제작 가이드</h1>
+  <p class="lead">무기, 액티브 유물, 패시브 유물, 소모품을 만드는 공통 데이터 에셋과 각 항목의 의미를 현재 프로젝트 코드 기준으로 설명합니다. <strong>정보를 담는 데이터 에셋</strong>과 <strong>실제 동작을 만드는 런타임 블루프린트</strong>를 구분해서 읽으세요.</p>
+</div></header>
+<nav aria-label="목차"><div class="wrap">
+  <a href="#start">제작 순서</a><a href="#types">유형별 사용표</a><a href="#identity">Identity</a><a href="#display">Display</a><a href="#stats">Stats</a><a href="#skills">Skills</a><a href="#runtime">Runtime</a><a href="#ui">UI</a><a href="#guarantees">보장 효과</a><a href="#evolution">Evolution</a><a href="#catalog">검색·획득</a><a href="#checks">검증</a>
+</div></nav>
+<main class="wrap"><div class="guide-tools"><label for="node-search">노드·내용 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 필드, 수명…" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button></div><p id="search-result" class="search-result" role="status" aria-live="polite"></p>
+  <div class="guide-actions"><p>궁금한 항목을 누르면 설명이 펼쳐집니다. 아래 버튼으로 한꺼번에 열거나 닫을 수도 있습니다.</p><button type="button" id="expand-all">모두 펼치기</button><button type="button" id="collapse-all">모두 접기</button></div>
+  <details class="chapter" id="start"><summary><span class="chapter-number">00</span> 어디서 무엇을 만들까?</summary><div class="chapter-content">
+    <div class="grid">
+      <div class="card"><h3>데이터 에셋</h3><p>네 종류 모두 <code>Data Asset → ARItemDefinition</code>을 만듭니다. 이름, 유형, ID, 아이콘, 장착 시 기본 스탯, 스킬 등록 정보 등을 보관합니다.</p></div>
+      <div class="card"><h3>런타임 블루프린트</h3><p>무기·유물은 <code>ARLoadoutItemInstance</code>를 부모로, 소모품은 <code>ARConsumableInstance</code>를 부모로 만듭니다. 타이머, 조건부 효과, 공격, 실제 사용 효과를 구현합니다.</p></div>
+      <div class="card"><h3>픽업·획득 경로</h3><p>맵에 떨어뜨릴 때는 <code>ARItemPickup</code> 계열 객체에 정의 에셋을 지정합니다. 상점·보상 등은 <code>Try Acquire Item</code>으로 같은 정의를 획득시킬 수 있습니다.</p></div>
+    </div>
+    <ol>
+      <li><span class="step">1</span><code>Content/Game/Objects/Items/Weapons</code>, <code>Relics/Active</code>, <code>Relics/Passive</code>, <code>Consumables</code> 중 해당 폴더 아래에 아이템 전용 폴더를 만듭니다. <code>Data</code>에는 정의 에셋, <code>Runtime</code>에는 동작 BP를 둡니다.</li>
+      <li><span class="step">2</span>콘텐츠 브라우저에서 우클릭 → <strong>기타(Miscellaneous) → 데이터 에셋(Data Asset)</strong> → 부모 클래스로 <code>ARItemDefinition</code> 선택. 표시 메뉴 이름은 언리얼 버전에 따라 약간 다를 수 있습니다.</li>
+      <li><span class="step">3</span>아래 Identity와 Display를 채웁니다. 필요하면 Stats·Skills·UI·Evolution을 설정합니다.</li>
+      <li><span class="step">4</span>유형에 맞는 런타임 BP를 만들거나 데이터만 있는 장비·유물은 기본 <code>ARLoadoutItemInstance</code> 클래스를 선택하고, <code>Runtime Behavior Class</code>에 연결합니다.</li>
+      <li><span class="step">5</span>에셋을 저장하고 획득 테스트를 합니다. 저장되지 않은 새 에셋은 카탈로그 검색에서 누락될 수 있습니다.</li>
+    </ol>
+    <div class="note">에셋 파일 이름은 <code>DA_...</code>, 런타임 BP는 <code>BP_...</code>처럼 구분하면 편합니다. 내부 Primary Asset ID는 <code>ARItem:에셋파일명</code>이므로 <strong>폴더가 달라도 데이터 에셋 파일 이름은 전체 프로젝트에서 중복되지 않게</strong> 짓는 편이 안전합니다. 게임 규칙의 검색 키는 별도로 <code>(Item Type Tag, Item Id)</code>입니다.</div>
+  </div></details>
+
+  <details class="chapter" id="types"><summary><span class="chapter-number">01</span> 아이템 유형별로 무엇을 쓰나?</summary><div class="chapter-content">
+    <p class="muted">‘선택’은 그 아이템이 실제로 해당 기능을 제공할 때만 설정합니다. ‘비움’은 필드가 Details에 보이더라도 현재 시스템에서는 사용하지 않는다는 뜻입니다.</p>
+    <div class="scroll"><table class="matrix"><thead><tr><th>설정</th><th>무기</th><th>액티브 유물</th><th>패시브 유물</th><th>소모품</th></tr></thead><tbody>
+      <tr><td><code>Identity / Display</code></td><td class="yes">필수</td><td class="yes">필수</td><td class="yes">필수</td><td class="yes">필수</td></tr>
+      <tr><td><code>Default Stat Modifiers</code></td><td class="maybe">선택</td><td class="maybe">선택</td><td class="maybe">선택</td><td class="no">비움: 자동 적용 안 됨</td></tr>
+      <tr><td><code>Skill Definitions</code></td><td class="maybe">공격·스킬에 사용</td><td class="maybe">발동 스킬에 사용</td><td class="maybe">입력 스킬이 있을 때만</td><td class="no">비움: 등록 안 됨</td></tr>
+      <tr><td><code>Runtime Behavior Class</code></td><td class="yes">Loadout 계열</td><td class="yes">Loadout 계열</td><td class="yes">Loadout 계열</td><td class="yes">Consumable 계열</td></tr>
+      <tr><td><code>UI State Display Definitions</code></td><td class="maybe">전용 게이지·스택 시</td><td class="maybe">전용 게이지·스택 시</td><td class="maybe">전용 게이지·스택 시</td><td class="no">비움: 현재 연결 안 됨</td></tr>
+      <tr><td><code>Evolution</code></td><td class="maybe">진화 무기일 때</td><td class="no">비움</td><td class="no">비움</td><td class="no">비움</td></tr>
+    </tbody></table></div>
+    <p>현재 장착 규칙은 무기 1개, 액티브 유물 2개, 패시브 유물 수 제한 없음입니다. 소모품은 기본 3칸이며 <code>MaxConsumableSlots</code> 스탯으로 칸 수가 바뀔 수 있습니다. 소모품 한 칸에는 한 개가 들어가고 사용하면 사라집니다.</p>
+    <div class="note good">에디터 Details에서는 유형에 맞지 않는 카테고리를 숨깁니다. <code>Evolution</code>은 무기일 때만 보이고, 소모품에서는 현재 자동 적용되지 않는 <code>Stats</code>·<code>Skills</code>·<code>UI</code>도 보이지 않습니다. 유형을 바꿔도 기존 데이터가 지워지는 것은 아니며, 다시 해당 유형으로 돌리면 나타납니다.</div>
+  </div></details>
+
+  <details class="chapter" id="identity"><summary><span class="chapter-number">02</span> Identity — 무엇인지 식별하기</summary><div class="chapter-content">
+    <div class="scroll"><table class="field"><thead><tr><th>필드</th><th>무엇을 적나?</th><th>실제 역할 / 주의점</th></tr></thead><tbody>
+      <tr><td><code>Item Type Tag</code></td><td>프로젝트에 등록된 네 Gameplay Tag 중 하나를 선택합니다: <code>Item.Type.Weapon</code>, <code>Item.Type.ActiveRelic</code>, <code>Item.Type.PassiveRelic</code>, <code>Item.Type.Consumable</code>.</td><td>획득할 때 어느 시스템으로 보낼지 정하는 <strong>종류</strong>입니다. 개별 아이템을 나타내는 값이 아닙니다. 종류가 다르면 허용되는 런타임 부모 클래스도 달라집니다.</td></tr>
+      <tr><td><code>Item Id</code></td><td>사람이 입력하는 양의 정수. <code>0</code>은 미지정이므로 사용하지 않습니다.</td><td><code>(Item Type Tag, Item Id)</code> 조합이 고유 검색 키입니다. 같은 유형에서 ID가 겹치면 카탈로그 조회가 실패합니다. 다른 유형끼리는 같은 정수를 쓸 수 있습니다.</td></tr>
+      <tr><td><code>Additional Tags</code></td><td>선택적 문자열 배열. 예: <code>Fire</code>, <code>Sword</code>, <code>Starter</code>.</td><td>계열 검색·보유 수 집계에 씁니다. 여러 아이템이 같은 문자열을 가져도 됩니다. 비교 시 대소문자와 앞뒤 공백은 무시합니다. <strong>Gameplay Tag가 아니므로</strong> 프로젝트 설정에 등록할 필요가 없습니다.</td></tr>
+    </tbody></table></div>
+    <div class="note good">예: 패시브 유물의 <code>Item Type Tag = Item.Type.PassiveRelic</code>, <code>Item Id = 101</code>, <code>Additional Tags = [Stamina, Growth]</code>. <code>Find Item By Key(PassiveRelic, 101)</code>는 하나를 찾고, <code>Find Items By Additional Tag("Growth")</code>는 여러 개를 찾을 수 있습니다.</div>
+  </div></details>
+
+  <details class="chapter" id="display"><summary><span class="chapter-number">03</span> Display — 플레이어에게 보여줄 정보</summary><div class="chapter-content">
+    <div class="scroll"><table class="field"><thead><tr><th>필드</th><th>의미</th><th>작성 팁</th></tr></thead><tbody>
+      <tr><td><code>Display Name</code></td><td>인벤토리 등에서 보여줄 아이템 이름입니다. <code>Item Id</code>나 에셋 파일 이름과는 별개입니다.</td><td>플레이어가 읽을 이름을 입력합니다. 다국어 표시 가능한 <code>FText</code>입니다.</td></tr>
+      <tr><td><code>Short Description</code></td><td>짧은 소개 문구입니다. 목록이나 짧은 툴팁용 데이터입니다.</td><td>한두 문장으로 핵심만 씁니다. 입력했다고 효과가 자동 구현되지는 않습니다.</td></tr>
+      <tr><td><code>Detailed Description</code></td><td>상세 설명문. 여러 줄로 작성할 수 있습니다.</td><td>제공 스탯은 <code>Default Stat Modifiers</code>로부터 별도 표시 데이터를 만들 수 있으므로 설명문에 숫자를 중복 기입하면 밸런스 수정 시 어긋날 수 있습니다. 조건부 효과와 사용법 위주로 적습니다.</td></tr>
+      <tr><td><code>Icon</code></td><td>인벤토리·아이템 표시용 <code>Texture2D</code> 참조입니다.</td><td>월드에 떨어진 물체의 스프라이트나 캐릭터가 든 무기 그림을 자동 설정하지는 않습니다. 그 시각 요소는 각각 픽업·런타임 BP에서 다룹니다.</td></tr>
+    </tbody></table></div>
+    <div class="note">여기는 <strong>표시 데이터</strong>입니다. 실제 화면에 어디에 그릴지는 해당 UI 위젯이 결정합니다. 현재 픽업 객체의 기본 상호작용 문구는 별도 속성인 <code>Interaction Prompt</code>이고, <code>Display Name</code>을 입력했다고 자동으로 바뀌지는 않습니다.</div>
+  </div></details>
+
+  <details class="chapter" id="stats"><summary><span class="chapter-number">04</span> Stats — 장착 즉시 자동 적용할 스탯</summary><div class="chapter-content">
+    <p><code>Default Stat Modifiers</code>는 배열입니다. 무기·액티브·패시브 유물을 획득하면 각 항목이 자동 적용되고, 해당 아이템이 제거되면 자동 회수됩니다. 소모품은 이 배열을 자동 적용하지 않으므로 비워 두세요. 시간 경과·피격 조건·사용 시 효과는 런타임 BP에서 구현합니다.</p>
+    <h3>배열 원소 하나(<code>FARStatModifierSpec</code>)의 모든 필드</h3>
+    <div class="scroll"><table class="field"><thead><tr><th>필드</th><th>뜻</th><th>설정 방법 / 주의점</th></tr></thead><tbody>
+      <tr><td><code>Stat Type</code></td><td>변경할 스탯 종류</td><td>예: <code>Max Stamina</code>, <code>Max Health</code>, <code>Attack Power</code>. 실제 최종값은 플레이어의 기본 스탯과 다른 효과까지 합쳐 계산됩니다.</td></tr>
+      <tr><td><code>Operation</code></td><td>값을 계산하는 방식</td><td><code>Flat</code>: 고정값 더하기. <code>AdditivePercent</code>: 합연산 % 더하기. <code>Multiplicative</code>: 마지막에 곱할 배율. <code>IndependentDamageReduction</code>: 일부 피해 감소율 스탯에서만 쓰는 독립 피해 감소. <code>Permanent Flat</code>은 일반 Apply Stat Modifier 전용이며 이 DA 기본 효과/아이템·액션 귀속에서는 사용 불가입니다.</td></tr>
+      <tr><td><code>Value</code></td><td>변경량</td><td><code>Flat 10</code>은 +10, <code>AdditivePercent 20</code>은 +20%, <code>Multiplicative 1.2</code>는 ×1.2입니다. 독립 피해 감소는 <code>50</code>을 적으면 50% 감소이며 <code>0.5</code>가 아닙니다.</td></tr>
+      <tr><td><code>Duration</code></td><td>초 단위 지속시간</td><td>런타임 적용에서는 <code>-1</code>이 무기한, 양수는 해당 초 동안입니다. <code>0</code>은 거부됩니다. <strong>Default Stat Modifiers는 등록 시 무조건 -1로 바꿔 적용</strong>되므로 이곳에 시간을 적어도 장착 중 영구입니다.</td></tr>
+      <tr><td><code>Source → Category</code></td><td>출처 분류</td><td>런타임 아이템 적용 시 무기는 <code>Weapon</code>, 유물은 <code>Relic</code>으로 자동 지정됩니다. 여기서 <code>Other</code>로 보여도 아이템 등록 시 실제 분류는 바뀝니다.</td></tr>
+      <tr><td><code>Source → Source Id</code></td><td>효과 묶음·검색에 쓸 이름</td><td>서로 다른 효과에는 서로 다른 이름을 지정합니다. 직접 입력한 값은 아이템 적용 시 보존됩니다. 같은 ID는 조회·HUD 묶음 기준이 됩니다.</td></tr>
+      <tr><td><code>Source → Display Name</code></td><td>출처를 사람이 읽을 이름</td><td>비우면 아이템의 <code>Display Name</code>으로 보완됩니다. 개별 효과 이름이 필요하면 따로 적습니다. HUD의 <code>HUD Name</code>이 설정됐다면 HUD에서는 그것을 우선 사용합니다.</td></tr>
+      <tr><td><code>Stack Only</code></td><td>스탯 변경 없이 중첩 한 개만 기록</td><td>숫자 표시·중첩 카운터 전용일 때 켭니다. 켜면 <code>Stat Type / Operation / Value</code>가 실제 스탯을 변경하지 않습니다. 무적·회피 보장과 함께 쓸 수 없습니다.</td></tr>
+      <tr><td><code>Stack Group Handle</code></td><td>여러 수정치를 중첩 한 개로 묶는 핸들</td><td>런타임 BP에서 첫 <code>Apply Item Stat Modifier</code>의 반환 핸들을 다음 효과에 넣을 때 사용합니다. 독립 중첩을 늘릴 때는 비웁니다. 기본 수정치에서는 직접 입력값이 무시되고 같은 <code>Source Id</code>끼리 등록 시 자동으로 한 묶음이 됩니다.</td></tr>
+      <tr><td><code>Affected By Tenacity</code></td><td>강인함으로 지속시간을 줄일지</td><td>양수의 유한 <code>Duration</code>에만 적용됩니다. 데이터 에셋의 기본 수정치는 장착 중 무기한이므로 효과가 없습니다.</td></tr>
+      <tr><td><code>HUD Display</code></td><td>효과 아이콘 표시 분류</td><td><code>Hidden</code>은 숨김, <code>Buff</code>는 버프, <code>Debuff</code>는 디버프입니다. 이 값은 스탯 증감 부호를 자동 판별한 결과가 아니라 제작자가 정합니다.</td></tr>
+      <tr><td><code>HUD Name</code></td><td>HUD 효과 이름</td><td>Buff/Debuff일 때 표시할 텍스트. 비우면 <code>Source Display Name</code>을 사용합니다.</td></tr>
+      <tr><td><code>HUD Icon</code></td><td>HUD 효과 아이콘</td><td>Buff/Debuff일 때 사용할 <code>Texture2D</code> 참조. 아이템 자체의 <code>Display → Icon</code>과 별도입니다.</td></tr>
+      <tr><td><code>Guarantee Invulnerability</code></td><td>보장형 무적 부여</td><td><code>Stat Type = OverallDamageReduction</code>일 때만 허용됩니다. 일반 100% 피해 감소와 구별해야 할 무적 효과에 사용합니다.</td></tr>
+      <tr><td><code>Guarantee Evasion</code></td><td>보장형 회피 부여</td><td><code>Stat Type = Evasion</code>일 때만 허용됩니다.</td></tr>
+    </tbody></table></div>
+    <code class="formula">일반 스탯 최종값 = (기본값 + Flat 합계) × (1 + AdditivePercent 합계 ÷ 100) × Multiplicative 값들의 곱</code>
+    <p><code>IndependentDamageReduction</code>은 <code>OverallDamageReduction</code>, <code>PhysicalDamageReduction</code>, <code>FireDamageReduction</code>, <code>MagicDamageReduction</code>에만 사용 가능합니다. <code>Value = 50</code>인 독립 감소 두 개라면 남는 피해는 <code>0.5 × 0.5 = 0.25</code>, 즉 합계 75% 감소입니다.</p>
+    <div class="note">스탯이 여러 개여도 ‘중첩 1개’로 세고 싶다면 기본 배열에서는 같은 <code>Source Id</code>를, 런타임에서는 <code>Stack Group Handle</code>을 사용합니다. 별개의 효과를 HUD에서 따로 표시하려면 서로 다른 <code>Source Id</code>를 사용하세요.</div>
+  </div></details>
+
+  <details class="chapter" id="skills"><summary><span class="chapter-number">05</span> Skills — 입력 스킬을 등록하기</summary><div class="chapter-content">
+    <p><code>Skill Definitions</code>는 배열이며, 무기와 액티브 유물에서 주로 사용합니다. 패시브 유물도 입력으로 발동하는 스킬이 실제로 있을 때만 사용할 수 있습니다. 소모품 사용 효과는 여기에 넣지 않습니다. <strong>이 배열은 등록·비용·쿨다운·UI 정보이며 공격 판정이나 연출을 자동 생성하지 않습니다.</strong></p>
+    <div class="scroll"><table class="field"><thead><tr><th>필드</th><th>뜻</th><th>설정 방법 / 주의점</th></tr></thead><tbody>
+      <tr><td><code>Skill Id</code></td><td>아이템 내부 스킬 이름</td><td>같은 아이템 안에서는 고유해야 하고 빈 값이면 등록이 거부됩니다. 런타임 <code>Execute Item Skill(SkillId, ActionHandle)</code>에서 어떤 동작인지 분기합니다.</td></tr>
+      <tr><td><code>Input Mode</code></td><td>입력을 찾는 방식</td><td><code>Direct Tag</code>는 기존 방식으로 무기·유물 모두 사용할 수 있습니다. <code>Active Relic Slot</code>은 액티브 유물 전용으로, 장착 슬롯 위치와 내부 스킬 번호로 입력을 찾습니다. 기존 에셋은 기본값인 Direct Tag를 유지합니다.</td></tr>
+      <tr><td><code>Input Tag</code></td><td>Direct Tag의 논리 입력</td><td>Direct Tag에서만 보입니다. 등록된 Gameplay Tag를 고릅니다. 예: <code>Input.Skill.Primary</code>, <code>Input.Skill.1</code>, <code>Input.Skill.2</code>. 물리 키는 플레이어의 Input Action·IMC에서 연결합니다. Direct Tag일 때 비어 있으면 정의가 거부됩니다.</td></tr>
+      <tr><td><code>Slot Skill Index</code></td><td>액티브 유물 내부의 스킬 번호</td><td>Active Relic Slot에서만 보입니다. 1부터 시작합니다. 서로 다른 액티브 유물이 모두 1번 스킬을 갖더라도, 장착된 1번/2번 슬롯 입력이 각 유물을 따로 찾습니다. 무기·패시브에는 이 입력 방식을 사용할 수 없습니다.</td></tr>
+      <tr><td><code>Input Priority</code></td><td>같은 입력 후보의 우선순위</td><td>낮은 숫자부터 확인합니다. 같은 우선순위의 스킬은 그룹 단위로 비용·쿨다운·행동 가능 여부를 확인하여 의도적인 동시 발동을 지원합니다. Direct Tag에서는 같은 태그끼리, 슬롯 방식에서는 같은 유물·같은 내부 스킬 번호끼리 적용됩니다.</td></tr>
+      <tr><td><code>Resource Cost → Mana / Stamina</code></td><td>한 번 발동할 때의 마나·스태미나 소모</td><td>0 이상. 비용은 발동 과정에서 검사·차감됩니다. 복잡한 추가 조건은 런타임 <code>Can Execute Item Skill</code>에서 검사할 수 있습니다.</td></tr>
+      <tr><td><code>Base Cooldown</code></td><td>기본 쿨다운 초</td><td>0 이상. 캐릭터 쿨다운 감소율을 반영합니다.</td></tr>
+      <tr><td><code>Minimum Cooldown</code></td><td>쿨다운 최저 초</td><td>0 이상. 최종 쿨다운은 <code>Max(Minimum Cooldown, Base Cooldown × (1 - 쿨다운감소율/100))</code>입니다.</td></tr>
+      <tr><td><code>Action Request → Cancel Rules</code></td><td>경직·기절·구르기·기본 이동 입력에 의해 취소될지</td><td><code>Cancel On Stagger</code>, <code>Cancel On Stun</code>, <code>Cancel On Roll</code>, <code>Cancel On Basic Movement Input</code>을 각각 결정합니다. 기본값은 앞 두 개만 참입니다.</td></tr>
+      <tr><td><code>Action Request → Block Roll While Active</code></td><td>행동 중 구르기 금지</td><td>차징이나 무거운 공격처럼 구르기로 중단되면 안 되는 동작에서 사용합니다.</td></tr>
+      <tr><td><code>Action Request → Block Basic Movement While Active</code></td><td>행동 중 WASD 기본 이동 금지</td><td>스킬 자체의 이동까지 모두 막는 뜻은 아닙니다. 기본 이동 입력만 제한합니다.</td></tr>
+      <tr><td><code>Action Request → Is Roll Action</code></td><td>구르기 행동 여부</td><td>일반 무기·유물 스킬이면 기본값 <code>false</code>를 유지합니다. 실제 구르기로 취급할 의도가 있을 때만 변경합니다.</td></tr>
+      <tr><td><code>Action Request → Skill Group Handle / Owning Item Instance Id</code></td><td>실행 중 그룹·소유 아이템 연결값</td><td>아이템 스킬 실행 과정에서 시스템이 채웁니다. <strong>데이터 에셋에서는 기본값으로 둡니다.</strong></td></tr>
+      <tr><td><code>Skill Display Name / Skill Description / Skill Icon</code></td><td>스킬 UI 정보</td><td>스킬 목록·툴팁·HUD가 읽는 이름, 설명, 아이콘입니다. 설명에 적은 피해 계수나 효과가 실제로 적용되려면 런타임 그래프에도 구현해야 합니다.</td></tr>
+      <tr><td><code>Show On HUD</code></td><td>등록 스킬 HUD 표시 여부</td><td>켜면 스킬 UI 데이터에 포함됩니다. 실제 위젯 배치는 HUD 구현에 따릅니다.</td></tr>
+      <tr><td><code>HUD Sort Order</code></td><td>HUD 표시 정렬값</td><td>여러 스킬의 표시 순서를 조정할 때 사용합니다.</td></tr>
+    </tbody></table></div>
+    <h3>액티브 유물 슬롯 키 연결 예시</h3>
+    <p>두 액티브 유물의 스킬 정의에서 <code>Input Mode = Active Relic Slot</code>, <code>Slot Skill Index = 1</code>로 설정합니다. 테스트 플레이어 BP의 <code>Active Relic Slot Input Bindings</code>에 <code>IA_Active1 → Active Relic Slot 1 / Skill Index 1</code>, <code>IA_Active2 → Active Relic Slot 2 / Skill Index 1</code>을 넣고 IMC에서 두 IA를 각각 원하는 키에 연결합니다. 유물 에셋에는 Q/E 같은 물리 키를 넣지 않습니다. 두 번째 스킬이 있다면 해당 슬롯의 <code>Skill Index 2</code>용 IA·키를 추가합니다.</p>
+    <div class="note">슬롯 방식은 장착 배열의 현재 위치를 따릅니다. 1번 유물을 버려 2번 유물이 앞으로 당겨지면 남은 유물은 1번 슬롯 키로 작동합니다. 무기와 의도적 동시 발동용 스킬은 기존 <code>Direct Tag</code>를 사용하세요. 같은 물리 키를 Direct Tag IA와 슬롯 IA 양쪽에 등록하면 충돌할 수 있으므로 IMC의 키 중복은 피해야 합니다.</div>
+  </div></details>
+
+  <details class="chapter" id="runtime"><summary><span class="chapter-number">06</span> Runtime — 실제 동작 클래스 연결하기</summary><div class="chapter-content">
+    <p><code>Runtime Behavior Class</code>에는 <strong>데이터 에셋이 아니라 BP 클래스</strong>를 선택합니다. 플레이어 BP 안에 그래프가 복사되는 구조가 아닙니다. 획득하면 아이템별 런타임 인스턴스가 새로 만들어지고, 해제·교체·사용 시 해당 인스턴스가 정리됩니다.</p>
+    <p>유물 BP에서 사용할 이벤트와 노드의 모든 주요 핀은 <a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">유물 런타임 블루프린트 노드 가이드</a>를 참고하세요.</p>
+    <div class="scroll"><table><thead><tr><th>유형</th><th>허용되는 부모</th><th>주요 이벤트·역할</th></tr></thead><tbody>
+      <tr><td>무기 / 액티브 유물 / 패시브 유물</td><td><code>ARLoadoutItemInstance</code> 또는 그 자식 BP</td><td><code>On Item Registered</code>: 장착 시 시작. <code>On Item Unregistered</code>: 타이머·이벤트 바인딩 정리. <code>Execute Item Skill</code>: 스킬 실행. <code>Apply Item Stat Modifier</code>: 시간·조건부 스탯 효과 적용.</td></tr>
+      <tr><td>소모품</td><td><code>ARConsumableInstance</code> 또는 그 자식 BP</td><td><code>Can Use Consumable</code>: 사용 가능 여부. <code>Execute Consumable Use</code>: 사용 즉시 효과 구현. 사용 뒤 슬롯에서 제거되며 현재 기본 쿨다운은 없습니다.</td></tr>
+    </tbody></table></div>
+    <p>데이터만 제공하는 무기·유물은 기본 <code>ARLoadoutItemInstance</code>를 지정해도 되지만, 소모품의 실제 효과는 자식 BP에서 구현해야 합니다. 유형과 다른 부모를 선택하거나 클래스를 비우면 획득이 거부됩니다.</p>
+    <div class="note">아이템 런타임의 <code>Apply Item Stat Modifier</code>로 준 수정치는 아이템 해제 시 핸들별로 자동 제거됩니다. 다만 <strong>BP에서 시작한 반복 타이머·직접 바인딩한 이벤트는 <code>On Item Unregistered</code>에서 직접 정리</strong>하세요. 소모품 BP에서는 아이템 장착용 기본 수정치가 자동 적용되지 않으므로 사용 효과를 별도로 호출해야 합니다.</div>
+  </div></details>
+
+  <details class="chapter" id="ui"><summary><span class="chapter-number">07</span> UI — 아이템 고유 게이지와 버프 표시</summary><div class="chapter-content">
+    <p><code>UI State Display Definitions</code>는 무기·유물이 자체적으로 가지는 게이지/숫자/작은 스택 표시를 위한 배열입니다. 현재 소모품의 사용 효과나 소모품 슬롯 UI를 정의하는 곳은 아닙니다. 런타임 BP가 <code>Set Item UI State</code>를 호출하여 값을 전달해야 하며, 에셋에 배열만 넣는다고 값이 저절로 바뀌지는 않습니다.</p>
+    <div class="scroll"><table class="field"><thead><tr><th>필드</th><th>뜻</th><th>설정 방법 / 주의점</th></tr></thead><tbody>
+      <tr><td><code>State Id</code></td><td>아이템 내부 UI 상태 식별 태그</td><td>등록된 Gameplay Tag가 필요합니다. 런타임 <code>Set Item UI State</code>에서 같은 태그로 값을 갱신합니다.</td></tr>
+      <tr><td><code>Display Name</code></td><td>상태의 이름</td><td>아이템 자체의 Display Name과 별개입니다.</td></tr>
+      <tr><td><code>Icon</code></td><td>상태 아이콘</td><td>아이템 기본 아이콘이나 버프 아이콘과는 별개입니다.</td></tr>
+      <tr><td><code>Display Type</code></td><td><code>Gauge</code>, <code>Number</code>, <code>SmallStack</code></td><td>게이지/수치/작은 칸 중 어떤 형태의 표시 데이터를 원하는지 선택합니다.</td></tr>
+      <tr><td><code>Max Display Slots</code></td><td>SmallStack에 그릴 최대 칸 수</td><td>SmallStack일 때만 의미가 있으며 1~6으로 제한됩니다. 런타임 스택 자체의 상한을 정하는 필드는 아닙니다.</td></tr>
+      <tr><td><code>Show Number Alongside</code></td><td>칸/게이지 옆 숫자 표시 여부</td><td>해당 상태 UI가 숫자를 함께 보여주도록 요청하는 표시 정보입니다.</td></tr>
+      <tr><td><code>Placement</code></td><td><code>HUD</code>, <code>Details</code>, <code>Both</code></td><td>어느 화면의 위젯이 이 상태를 소비할지 지정합니다. 최종 디자인과 배치는 위젯 구현에 달려 있습니다.</td></tr>
+    </tbody></table></div>
+    <h3>버프·디버프 중첩은 다른 경로</h3>
+    <p>스탯 수정치 자체를 아이콘·중첩 수로 보이려면 <code>Default Stat Modifiers</code> 또는 런타임 <code>Apply Item Stat Modifier</code>에서 <code>Source Id</code>, <code>HUD Display</code>, <code>HUD Name</code>, <code>HUD Icon</code>을 사용합니다. <code>Get Modifiers By Source</code>로 같은 출처의 <code>Stack Count</code>를 읽을 수 있습니다. 스탯 없이 카운터만 필요하면 <code>Stack Only</code>를 켭니다. 이는 위 배열의 아이템 전용 상태 표시와 독립된 통로입니다.</p>
+  </div></details>
+
+  <details class="chapter" id="guarantees"><summary><span class="chapter-number">08</span> 런타임 보장 효과 — 슈퍼아머·CC 면역</summary><div class="chapter-content">
+    <p>이 두 효과는 데이터 에셋의 숫자 스탯이 아닙니다. 필요할 때 무기·유물 런타임 BP에서 <code>Apply Item Super Armor</code> 또는 <code>Apply Item CC Immunity</code>를 호출합니다. 각 입력 구조체에는 <code>Duration</code>과 <code>Source</code>가 있으며 <code>-1</code>은 별도 제거 전까지 유지됩니다. 아이템이 해제되면 해당 아이템이 부여한 보장 효과는 자동 회수됩니다.</p>
+    <ul>
+      <li><strong>슈퍼아머:</strong> 경직을 막습니다. 그로기 피해나 상태이상을 함께 막지는 않습니다. 필요하면 반환 핸들로 <code>Remove Own Item Super Armor</code>를 호출해 일찍 끝낼 수 있습니다.</li>
+      <li><strong>CC 면역:</strong> 새 기절·속박 등 CC로 지정된 상태이상 적용을 막습니다. 이미 걸린 상태를 해제하지는 않습니다. 필요하면 <code>Remove Own Item CC Immunity</code>를 호출합니다.</li>
+      <li><strong>스킬 행동에만 적용:</strong> 장착 아이템의 수명 전체가 아니라 시전 중에만 필요하면 <code>Apply Action Super Armor</code> / <code>Apply Action CC Immunity</code>를 사용합니다. 해당 행동의 종료·취소와 수명을 맞추는 방식입니다.</li>
+    </ul>
+    <div class="note"><code>Guarantee Invulnerability</code> / <code>Guarantee Evasion</code>은 Stats의 별도 보장 옵션이며 슈퍼아머·CC 면역과 다른 기능입니다. 해당 기능을 쓰는 아이템에서만 설정하세요.</div>
+  </div></details>
+
+  <details class="chapter" id="evolution"><summary><span class="chapter-number">09</span> Evolution — 무기에서만 사용</summary><div class="chapter-content">
+    <div class="scroll"><table class="field"><thead><tr><th>필드</th><th>뜻</th><th>설정 방법 / 주의점</th></tr></thead><tbody>
+      <tr><td><code>Evolution Group Id</code></td><td>진화 계열을 묶는 이름</td><td>같은 진화 라인의 무기들만 같은 값을 줍니다. 진화하지 않는 무기는 비워도 됩니다.</td></tr>
+      <tr><td><code>Evolution Stage</code></td><td>현재 진화 단계</td><td>1 이상. 후보는 현재 단계보다 정확히 1 높아야 합니다. 진화를 쓰지 않는 유형은 기본값 1 그대로 둡니다.</td></tr>
+      <tr><td><code>Next Evolution Candidates</code></td><td>다음 단계 무기 정의 에셋 배열</td><td>각 후보는 <code>Item.Type.Weapon</code>, 같은 그룹 ID, <code>현재 단계 + 1</code>이어야 합니다. 후보가 없으면 추가 진화가 없습니다.</td></tr>
+    </tbody></table></div>
+    <p>진화는 기존 무기 객체의 수치를 수정하는 것이 아니라 <strong>기존 무기를 해제하고 새 정의의 무기를 장착</strong>합니다. 액티브 유물·패시브 유물·소모품은 Evolution 값을 건드리지 마세요.</p>
+  </div></details>
+
+  <details class="chapter" id="catalog"><summary><span class="chapter-number">10</span> 검색·획득 노드 — 에셋을 게임에서 찾기</summary><div class="chapter-content">
+    <div class="scroll"><table class="field"><thead><tr><th>노드</th><th>입력 / 결과</th><th>언제 쓰나?</th></tr></thead><tbody>
+      <tr><td><code>Find Item By Key</code></td><td><code>Item Type Tag + Item Id</code> → 정의 에셋 또는 없음</td><td>고유 아이템 지정 획득. 같은 키가 중복되면 오류 로그를 남기고 찾기 실패합니다.</td></tr>
+      <tr><td><code>Find Items By Additional Tag</code></td><td>계열 문자열, 선택적 유형 필터 → 정의 에셋 배열</td><td>화염 계열·검 계열처럼 여러 후보를 찾습니다. 무작위 후보 선택은 이 결과 배열에서 별도 BP 로직으로 합니다.</td></tr>
+      <tr><td><code>Count Owned Items By Additional Tag</code></td><td>플레이어, 계열 문자열, 선택적 유형 필터 → 개수</td><td>‘화염 계열 유물 보유 수만큼’ 같은 효과. 동일 정의의 복수 인스턴스도 각각 셉니다.</td></tr>
+      <tr><td><code>Try Acquire Item</code></td><td>플레이어, 정의 에셋 → 성공·실패 상태</td><td>상점·보상·스크립트 획득. 유형에 따라 장비/유물 또는 소모품 시스템으로 보냅니다. 슬롯이 가득 차면 실패할 수 있습니다.</td></tr>
+      <tr><td><code>Validate Item Catalog</code></td><td>전체 저장 에셋 검사 → 유효 여부, 오류 문자열 배열</td><td>유형, ID 중복, 런타임 부모 클래스 연결을 제작 후 확인합니다.</td></tr>
+    </tbody></table></div>
+    <p>맵에 배치하는 경우 <code>ARItemPickup</code>의 <code>Item Definition</code>에 정의를 연결합니다. 픽업 객체와 플레이어 F 입력·상호작용 컴포넌트는 에셋 정의와 별도입니다. 카탈로그 검색 대상은 Asset Manager에 등록된 저장 에셋이며, 프로젝트 설정의 <code>ARItem</code> 검색 폴더인 <code>/Game/Game/Foundation/Data/Items</code>와 <code>/Game/Game/Objects/Items</code> 아래에 두어야 합니다.</p>
+  </div></details>
+
+  <details class="chapter" id="checks"><summary><span class="chapter-number">11</span> 저장 전·테스트 전 확인</summary><div class="chapter-content">
+    <ul>
+      <li><code>Item Type Tag</code>를 네 유형 중 하나로 선택했는가? 새 아이템마다 새 Gameplay Tag를 만들 필요는 없습니다.</li>
+      <li><code>Item Id &gt; 0</code>이며 같은 유형의 다른 에셋과 겹치지 않는가? 데이터 에셋 <strong>파일 이름</strong>도 중복되지 않는가?</li>
+      <li><code>Runtime Behavior Class</code>가 비어 있지 않고 아이템 유형에 맞는 부모 클래스인가?</li>
+      <li>무기·유물의 기본 스탯은 <code>Default Stat Modifiers</code>, 조건부 효과는 런타임 BP로 나눴는가? 소모품은 기본 수정치 배열에 의존하지 않는가?</li>
+      <li>스킬을 등록했다면 <code>Skill Id</code>가 유효한가? Direct Tag는 유효한 <code>Input Tag</code>, 액티브 슬롯 방식은 1 이상의 <code>Slot Skill Index</code>가 있는가? <code>Action Request</code>는 취소·이동 제한 규칙이며 별도의 행동 태그는 필요하지 않습니다. 실제 효과를 <code>Execute Item Skill</code>에 구현했는가?</li>
+      <li>HUD에 표시할 스탯 효과라면 <code>Source Id</code>와 HUD 분류·이름·아이콘을 설정했는가? 독립적인 효과에 같은 Source Id를 무심코 재사용하지 않았는가?</li>
+      <li>BP 반복 타이머와 이벤트 바인딩은 해제 이벤트에서 정리하는가? 특히 버린 뒤 다시 줍는 테스트를 했는가?</li>
+      <li>새 에셋을 <strong>저장</strong>한 뒤 <code>Validate Item Catalog</code>로 전체 유형·ID·런타임 클래스 오류를 확인했는가?</li>
+    </ul>
+    <p class="small muted">현재 코드의 데이터 구조를 설명하는 문서입니다. UI 스킨·픽업 스프라이트·공격 판정은 별도 블루프린트/위젯 제작 영역입니다.</p>
+  </div></details>
+</main>
+<footer><div class="wrap">코드 대조 기준: <code>ARItemDefinition.h</code>, <code>ARItemTypes.h</code>, <code>ARStatsComponent.h</code>, <code>ARLoadoutComponent.cpp</code>, <code>ARConsumableComponent.cpp</code>, <code>ARItemCatalogBlueprintLibrary.cpp</code>. 기존 코드·기획서를 바꾸지 않고 제작 절차를 풀어 쓴 가이드입니다.</div></footer>
+
+<script src="../assets/guide.js"></script></body>
+</html>

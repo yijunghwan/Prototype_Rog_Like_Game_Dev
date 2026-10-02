@@ -45,6 +45,21 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Character") FARAimDirectionChangedSignature OnAimDirectionChanged;
 
 protected:
+	/** Direct BP hooks for this Character. Existing multicast observers remain available. */
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Character|Events", meta=(DisplayName="On Character Death"))
+	void ReceiveCharacterDeath(const FARCombatDamageResult& KillingDamage);
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Character|Events", meta=(DisplayName="On Groggy Gauge Depleted"))
+	void ReceiveGroggyGaugeDepleted();
+	/** Damage or explicit removal emptied the total shield; never expiry/bypass. PreviousShield is the pre-operation total. */
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Character|Events", meta=(DisplayName="On Shield Broken"))
+	void ReceiveShieldBroken(float PreviousShield, EARResourceChangeReason Reason);
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Character|Events", meta=(DisplayName="On Damage Applied"))
+	void ReceiveDamageApplied(const FARCombatDamageResult& DamageResult);
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Character|Events", meta=(DisplayName="On Action Cancelled"))
+	void ReceiveActionCancelled(FARActionHandle ActionHandle, EARActionCancelReason Reason);
+	UFUNCTION(BlueprintImplementableEvent, Category="AR|Character|Events", meta=(DisplayName="On Status Removed"))
+	void ReceiveStatusRemoved(const FARStatusEffectView& Status);
+
 	UFUNCTION() void HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue);
 	UFUNCTION() void HandleCharacterDeath(AActor* Target, const FARCombatDamageResult& KillingDamage);
 	UFUNCTION() void HandleStaggered(AActor* Target, const FARStaggerResult& Result);
@@ -52,6 +67,10 @@ protected:
 	UFUNCTION() void HandleStatusAdded(AActor* Target, const FARStatusEffectView& Status);
 	UFUNCTION() void HandleStatusUpdated(AActor* Target, const FARStatusEffectView& Status);
 	UFUNCTION() void HandleStatusRemoved(AActor* Target, const FARStatusEffectView& Status);
+	UFUNCTION() void HandleGroggyGaugeDepleted(AActor* Target);
+	void HandleShieldBroken(AActor* Target, float PreviousShield, EARResourceChangeReason Reason);
+	void HandleDamageApplied(AActor* Target, const FARCombatDamageResult& DamageResult);
+	UFUNCTION() void HandleActionCancelled(FARActionHandle ActionHandle, EARActionCancelReason Reason);
 	void RefreshStatusMovementLock();
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Character") EARCombatTeam CombatTeam = EARCombatTeam::Enemy;

@@ -4,6 +4,9 @@
 #include "Foundation/Combat/ARCombatSubsystem.h"
 #include "Foundation/Components/ARStaggerComponent.h"
 #include "Foundation/Components/ARStatusEffectComponent.h"
+#include "Foundation/Components/ARHealthComponent.h"
+#include "Foundation/Core/ARGameplayTags.h"
+#include "Foundation/Status/ARStatusEffectDefinition.h"
 
 namespace
 {
@@ -67,6 +70,24 @@ FARStaggerResult UARCombatBlueprintLibrary::ApplyStaggerAndGroggyDamage(const FA
 	return FARStaggerResult();
 }
 
+FARStaggerResult UARCombatBlueprintLibrary::ApplyStaggerAndGroggyDamageFromResult(const FARCombatDamageResult& DamageResult,
+	float BaseStaggerDamage, float StaggerMultiplier, float BaseGroggyDamage, const FARSourceInfo& Source, FName EffectName)
+{
+	if (!DamageResult.WasApplied() || !DamageResult.HitContext.IsUsable())
+	{
+		return FARStaggerResult();
+	}
+
+	FARStaggerRequest Request;
+	Request.HitContext = DamageResult.HitContext;
+	Request.Template.BaseStaggerDamage = BaseStaggerDamage;
+	Request.Template.StaggerMultiplier = StaggerMultiplier;
+	Request.Template.BaseGroggyDamage = BaseGroggyDamage;
+	Request.Template.Source = Source;
+	Request.Template.EffectName = EffectName;
+	return ApplyStaggerAndGroggyDamage(Request);
+}
+
 FARSuperArmorHandle UARCombatBlueprintLibrary::ApplySuperArmor(AActor* Target, const FARSuperArmorSpec& Spec, bool& bSuccess)
 {
 	bSuccess = false;
@@ -103,6 +124,54 @@ bool UARCombatBlueprintLibrary::RemoveCCImmunity(AActor* Target, FARCCImmunityHa
 		return Status->RemoveCCImmunity(Handle);
 	}
 	return false;
+}
+
+FARStatusEffectHandle UARCombatBlueprintLibrary::ApplyCrowdControl(AActor* Target, EARCrowdControlType CCType,
+	float Duration, bool bAffectedByTenacity, bool& bSuccess, EARRequestResult& FailureReason,
+	float& AppliedDuration, const FARSourceInfo& Source)
+{
+	bSuccess = false;
+	AppliedDuration = 0.0f;
+	FailureReason = EARRequestResult::InvalidTarget;
+	UARStatusEffectComponent* Status = IsValid(Target) ? Target->FindComponentByClass<UARStatusEffectComponent>() : nullptr;
+	if (!Status)
+	{
+		return FARStatusEffectHandle();
+	}
+	if (const UARHealthComponent* Health = Target->FindComponentByClass<UARHealthComponent>(); Health && Health->IsDead())
+	{
+		return FARStatusEffectHandle();
+	}
+	if (!FMath::IsFinite(Duration) || Duration <= 0.0f
+		|| (CCType != EARCrowdControlType::Stun && CCType != EARCrowdControlType::Root))
+	{
+		FailureReason = EARRequestResult::InvalidDefinition;
+		return FARStatusEffectHandle();
+	}
+
+	// Never mutate an asset/CDO. The active status keeps this transient definition
+	// alive via its reflected reference, and releases it on removal/expiry.
+	const bool bStun = CCType == EARCrowdControlType::Stun;
+	UARStatusEffectDefinition* Definition = NewObject<UARStatusEffectDefinition>(Status, NAME_None, RF_Transient);
+	Definition->StatusTag = bStun ? ARGameplayTags::Status_Stun : ARGameplayTags::Status_Root;
+	Definition->BaseDuration = Duration;
+	Definition->bAffectedByTenacity = bAffectedByTenacity;
+	Definition->bIsCrowdControl = true;
+	Definition->bCanBeImmune = true;
+	Definition->bBlocksBasicMovement = true;
+	Definition->bBlocksAllMovement = bStun;
+	Definition->bBlocksRoll = true;
+	Definition->bBlocksSkillGroups = bStun;
+	Definition->bCancelActionsOnApply = bStun;
+	Definition->ActionCancelReason = bStun ? EARActionCancelReason::Stun : EARActionCancelReason::Root;
+	FARStatusEffectRequest Request;
+	Request.Definition = Definition;
+	Request.Source = Source;
+	const FARStatusEffectResult Result = Status->ApplyStatusEffect(Request);
+	FailureReason = Result.Result;
+	bSuccess = Result.Result == EARRequestResult::Success;
+	AppliedDuration = Result.AppliedDuration;
+	return Result.Handle;
 }
 
 FARStatusEffectResult UARCombatBlueprintLibrary::ApplyStatusEffect(AActor* Target, const FARStatusEffectRequest& Request)

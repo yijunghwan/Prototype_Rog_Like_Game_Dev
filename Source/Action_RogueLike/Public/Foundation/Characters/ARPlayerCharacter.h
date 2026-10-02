@@ -34,6 +34,17 @@ struct ACTION_ROGUELIKE_API FARSkillInputBinding
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input") FGameplayTag InputTag;
 };
 
+/** Map an Input Action to a one-based equipped active-relic slot and that relic's local skill number. */
+USTRUCT(BlueprintType)
+struct ACTION_ROGUELIKE_API FARActiveRelicSlotInputBinding
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input") TObjectPtr<UInputAction> InputAction = nullptr;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input", meta=(ClampMin="1")) int32 ActiveRelicSlot = 1;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input", meta=(ClampMin="1")) int32 SkillIndex = 1;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARAimWorldLocationChangedSignature, AARPlayerCharacter*, Player, FVector, WorldLocation);
 
 UCLASS(Blueprintable)
@@ -80,6 +91,7 @@ protected:
 	UFUNCTION() void HandleRollActionCancelled(FARActionHandle Handle, EARActionCancelReason Reason);
 	void ClearRollMovement();
 	void HandleSkillPressed(const FInputActionValue& Value, FGameplayTag InputTag);
+	void HandleActiveRelicSlotPressed(const FInputActionValue& Value, int32 ActiveRelicSlot, int32 SkillIndex);
 	void HandleInteractPressed(const FInputActionValue& Value);
 	void HandleConsumablePressed(const FInputActionValue& Value, int32 SlotIndex);
 	void HandleInventoryPressed(const FInputActionValue& Value);
@@ -95,6 +107,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TObjectPtr<UInputAction> MouseRollAction;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TObjectPtr<UInputAction> InteractAction;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TArray<FARSkillInputBinding> SkillInputBindings;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TArray<FARActiveRelicSlotInputBinding> ActiveRelicSlotInputBindings;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TArray<TObjectPtr<UInputAction>> ConsumableSlotActions;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TObjectPtr<UInputAction> InventoryAction;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AR|Input") TObjectPtr<UInputAction> UIBackAction;

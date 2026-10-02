@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayTagContainer.h"
 #include "Foundation/Core/ARFoundationTypes.h"
 #include "ARActionTypes.generated.h"
 
@@ -21,7 +20,7 @@ struct ACTION_ROGUELIKE_API FARActionRequest
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) FGameplayTag ActionTag;
+	// Actions are identified by their handle, not by a mandatory classification tag.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FARActionCancelRules CancelRules;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bBlockRollWhileActive = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bBlockBasicMovementWhileActive = false;

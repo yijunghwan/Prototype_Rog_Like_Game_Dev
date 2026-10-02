@@ -8,6 +8,15 @@
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Interfaces/ARCombatTargetInterface.h"
 
+namespace
+{
+	bool IsDamageNameIntervalValid(const FARCombatDamageRequest& Request)
+	{
+		return Request.bIgnoreDamageNameInterval || Request.DamageName.IsNone()
+			|| (FMath::IsFinite(Request.DamageNameInterval) && Request.DamageNameInterval >= 0.0f);
+	}
+}
+
 void UARCombatSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -22,6 +31,7 @@ void UARCombatSubsystem::Tick(float DeltaTime)
 		bool bApplyStaggerAndGroggy = false;
 		FARStaggerRequestTemplate StaggerTemplate;
 		bool bSourceAlreadyValidated = false;
+		double ScheduledAt = 0.0;
 	};
 
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -39,6 +49,7 @@ void UARCombatSubsystem::Tick(float DeltaTime)
 		while (Dot.NextTickAt <= Now && Dot.NextTickAt <= Dot.ExpireAt)
 		{
 			FARDueDotTick& Due = DueTicks.AddDefaulted_GetRef();
+			Due.ScheduledAt = Dot.NextTickAt;
 			Due.Request = Dot.Spec.DamageRequest;
 			Due.Request.Delivery = EARDamageDelivery::DamageOverTime;
 			Due.Request.bApplyEvasion = false;
@@ -70,9 +81,11 @@ void UARCombatSubsystem::Tick(float DeltaTime)
 		}
 	}
 
+	// Named interval checks must see chronological tick times, not one shared catch-up frame time.
+	DueTicks.StableSort([](const FARDueDotTick& A, const FARDueDotTick& B) { return A.ScheduledAt < B.ScheduledAt; });
 	for (const FARDueDotTick& Due : DueTicks)
 	{
-		const FARCombatDamageResult DamageResult = ProcessDamageRequest(Due.Request, Due.bSourceAlreadyValidated);
+		const FARCombatDamageResult DamageResult = ProcessDamageRequest(Due.Request, Due.bSourceAlreadyValidated, Due.ScheduledAt);
 		if (Due.bApplyStaggerAndGroggy && DamageResult.WasApplied() && DamageResult.HitContext.IsUsable())
 		{
 			if (UARStaggerComponent* Stagger = DamageResult.HitContext.Target->FindComponentByClass<UARStaggerComponent>())
@@ -83,6 +96,31 @@ void UARCombatSubsystem::Tick(float DeltaTime)
 				Stagger->ApplyStaggerAndGroggyDamage(StaggerRequest);
 			}
 		}
+	}
+	// Prune after catch-up so earlier scheduled ticks still see preceding accepted hits.
+	PruneDamageNameIntervals(Now);
+}
+
+void UARCombatSubsystem::Deinitialize()
+{
+	DamageNameIntervals.Reset();
+	Super::Deinitialize();
+}
+
+void UARCombatSubsystem::PruneDamageNameIntervals(double Now)
+{
+	for (auto TargetIt = DamageNameIntervals.CreateIterator(); TargetIt; ++TargetIt)
+	{
+		if (!TargetIt.Key().IsValid())
+		{
+			TargetIt.RemoveCurrent();
+			continue;
+		}
+		for (auto NameIt = TargetIt.Value().CreateIterator(); NameIt; ++NameIt)
+		{
+			if (NameIt.Value() <= Now) NameIt.RemoveCurrent();
+		}
+		if (TargetIt.Value().IsEmpty()) TargetIt.RemoveCurrent();
 	}
 }
 
@@ -189,7 +227,8 @@ FARDotHandle UARCombatSubsystem::ApplyDamageOverTime(const FARDamageOverTimeSpec
 	bSuccess = false;
 	FARDotHandle Handle;
 	FailureReason = EARRequestResult::Rejected;
-	if (!FMath::IsFinite(Spec.Duration) || !FMath::IsFinite(Spec.TickInterval) || Spec.Duration <= 0.0f || Spec.TickInterval <= 0.0f)
+	if (!FMath::IsFinite(Spec.Duration) || !FMath::IsFinite(Spec.TickInterval) || Spec.Duration <= 0.0f || Spec.TickInterval <= 0.0f
+		|| !IsDamageNameIntervalValid(Spec.DamageRequest))
 	{
 		FailureReason = EARRequestResult::InvalidDefinition;
 		return Handle;
@@ -289,9 +328,14 @@ int32 UARCombatSubsystem::GetActiveDamageOverTimeCount(AActor* Target) const
 	return Count;
 }
 
-FARCombatDamageResult UARCombatSubsystem::ProcessDamageRequest(const FARCombatDamageRequest& Request, bool bSourceAlreadyValidated)
+FARCombatDamageResult UARCombatSubsystem::ProcessDamageRequest(const FARCombatDamageRequest& Request, bool bSourceAlreadyValidated, double DamageTime)
 {
 	FARCombatDamageResult Result;
+	if (!IsDamageNameIntervalValid(Request))
+	{
+		Result.FailureReason = EARRequestResult::InvalidDefinition;
+		return Result;
+	}
 	EARRequestResult FailureReason = EARRequestResult::Rejected;
 	if (!bSourceAlreadyValidated && !CanDamageTarget(Request.Attacker, Request.Target, FailureReason))
 	{
@@ -321,6 +365,26 @@ FARCombatDamageResult UARCombatSubsystem::ProcessDamageRequest(const FARCombatDa
 		return Result;
 	}
 
+	const double Now = DamageTime >= 0.0 ? DamageTime : (GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0);
+	const bool bUseDamageNameInterval = !Request.bIgnoreDamageNameInterval && !Request.DamageName.IsNone() && Request.DamageNameInterval > 0.0f;
+	if (bUseDamageNameInterval)
+	{
+		if (const TMap<FName, double>* Names = DamageNameIntervals.Find(Request.Target.Get()))
+		{
+			if (const double* NextAllowed = Names->Find(Request.DamageName); NextAllowed && Now < *NextAllowed)
+			{
+				Result.Outcome = EARDamageOutcome::Blocked;
+				Result.FailureReason = EARRequestResult::Cooldown;
+				Result.HitContext.Attacker = Request.Attacker;
+				Result.HitContext.Target = Request.Target;
+				Result.HitContext.Delivery = Request.Delivery;
+				Result.HitContext.Attribute = Request.Attribute;
+				OnDamageBlocked.Broadcast(Request.Target, Result);
+				return Result;
+			}
+		}
+	}
+
 	const FAROffensiveStatSnapshot Offense = Request.bUseOffensiveSnapshot
 		? Request.OffensiveSnapshot
 		: CaptureOffensiveSnapshot(Request.Attacker, Request.Delivery, Request.Attribute);
@@ -329,6 +393,7 @@ FARCombatDamageResult UARCombatSubsystem::ProcessDamageRequest(const FARCombatDa
 	Defense.Evasion = TargetStats->GetFinalStat(EARStatType::Evasion);
 	Defense.bGuaranteedEvasion = TargetStats->HasGuaranteedEvasion();
 	Defense.bGuaranteedInvulnerability = TargetStats->HasGuaranteedInvulnerability();
+	Defense.OverallDamageTakenIncrease = TargetStats->GetFinalStat(EARStatType::OverallDamageTakenIncrease);
 	if (Request.Attribute == EARDamageAttribute::Physical)
 	{
 		Defense.AttributeDefense = TargetStats->GetFinalStat(EARStatType::PhysicalDefense);
@@ -373,6 +438,11 @@ FARCombatDamageResult UARCombatSubsystem::ProcessDamageRequest(const FARCombatDa
 		return Result;
 	}
 
+	// Commit before Health/Combat callbacks so re-entrant hits cannot pass the same named window.
+	if (bUseDamageNameInterval)
+	{
+		DamageNameIntervals.FindOrAdd(Request.Target.Get()).Add(Request.DamageName, Now + Request.DamageNameInterval);
+	}
 	TargetHealth->PreviewDamageAllocation(Result.FinalDamage, Request.bIgnoreShield, Result.ShieldDamage, Result.HealthDamage);
 	Result.HitContext.bValidHit = true;
 	Result.bOnHitEffectsTriggered = Request.bApplyOnHitEffects && Request.Delivery == EARDamageDelivery::Direct;
@@ -475,5 +545,8 @@ bool UARCombatSubsystem::IsRefreshDotDefinitionEqual(const FARDamageOverTimeSpec
 		&& A.DamageRequest.bCanCrit == B.DamageRequest.bCanCrit
 		&& A.DamageRequest.bApplyAmplification == B.DamageRequest.bApplyAmplification
 		&& A.DamageRequest.bIgnoreDefense == B.DamageRequest.bIgnoreDefense
+		&& A.DamageRequest.DamageName == B.DamageRequest.DamageName
+		&& A.DamageRequest.bIgnoreDamageNameInterval == B.DamageRequest.bIgnoreDamageNameInterval
+		&& (A.DamageRequest.bIgnoreDamageNameInterval || FMath::IsNearlyEqual(A.DamageRequest.DamageNameInterval, B.DamageRequest.DamageNameInterval))
 		&& A.DamageRequest.bIgnoreShield == B.DamageRequest.bIgnoreShield;
 }

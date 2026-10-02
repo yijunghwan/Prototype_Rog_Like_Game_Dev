@@ -44,7 +44,9 @@ enum class EARStatModifierOperation : uint8
 	Flat,
 	AdditivePercent,
 	Multiplicative,
-	IndependentDamageReduction
+	IndependentDamageReduction,
+	/** Directly changes the target's base value; only the general Apply Stat Modifier node supports this. */
+	PermanentFlat = 4 UMETA(DisplayName="Permanent Flat")
 };
 
 UENUM(BlueprintType)
@@ -77,7 +79,9 @@ enum class EARStatType : uint8
 	FireDamageAmplification,
 	MagicDamageAmplification,
 	GroggyDamageAmplification,
-	PhysicalDamageTakenIncrease,
+	// Keep existing serialized values unchanged; declaration order is the authoring/display order.
+	OverallDamageTakenIncrease = 46,
+	PhysicalDamageTakenIncrease = 27,
 	FireDamageTakenIncrease,
 	MagicDamageTakenIncrease,
 	Tenacity,
@@ -96,7 +100,9 @@ enum class EARStatType : uint8
 	ManaRecoveryPerSecond,
 	MaxConsumableSlots,
 	CooldownReduction,
-	Count UMETA(Hidden)
+	/** Player-only content value. No automatic income, spending, UI, or persistence. */
+	Money = 47,
+	Count = 48 UMETA(Hidden)
 };
 
 UENUM(BlueprintType)

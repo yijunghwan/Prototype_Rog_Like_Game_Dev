@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>아이템 런타임 기본 참고서 · Action RogueLike</title>
+  <style>
+    :root { color-scheme:dark; --bg:#0b1020; --panel:#151e31; --panel2:#1d2940; --line:#34425b; --text:#edf4ff; --muted:#b8c8df; --accent:#8ed8ff; --good:#9cebc5; --warn:#ffd38a; --bad:#ffabac; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 system-ui,"Malgun Gothic",sans-serif; }
+    a { color:var(--accent); }
+    code { padding:.08em .32em; border-radius:4px; background:#2a3954; overflow-wrap:anywhere; }
+    .wrap { width:min(1120px,calc(100% - 32px)); margin:auto; }
+    header { padding:43px 0 31px; background:linear-gradient(125deg,#153a55,#18253e 65%,#111827); border-bottom:1px solid var(--line); }
+    h1 { font-size:clamp(2rem,4vw,3.1rem); line-height:1.18; margin:0 0 12px; }
+    h2 { font-size:1.43rem; margin:0 0 11px; }
+    h3 { font-size:1.12rem; margin:19px 0 7px; }
+    p { margin:8px 0 13px; }
+    ul,ol { padding-left:1.45em; }
+    li { margin:5px 0; }
+    .eyebrow { color:var(--good); font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:.83rem; }
+    .lead,.muted { color:var(--muted); }
+    nav { position:sticky; top:0; z-index:3; background:#10182aeb; border-bottom:1px solid var(--line); backdrop-filter:blur(10px); }
+    nav .wrap { display:flex; gap:17px; overflow-x:auto; white-space:nowrap; padding:10px 0; font-size:.92rem; }
+    nav a { text-decoration:none; color:var(--muted); }
+    nav a:hover { color:var(--accent); }
+    main { padding:26px 0 64px; }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:18px; }
+    .actions p { color:var(--muted); margin:0 auto 0 0; }
+    button { border:1px solid #5b88a8; border-radius:7px; padding:8px 13px; color:var(--text); background:#244260; font:inherit; cursor:pointer; }
+    button:hover { background:#315a80; }
+    .chapter { margin:0 0 12px; background:var(--panel); border:1px solid var(--line); border-radius:14px; scroll-margin-top:65px; overflow:hidden; }
+    .chapter[open] { border-color:#5c96ba; }
+    .chapter>summary { display:flex; align-items:center; gap:13px; padding:17px 23px; cursor:pointer; font-size:1.18rem; font-weight:750; list-style:none; background:var(--panel2); }
+    .chapter>summary::-webkit-details-marker,.node>summary::-webkit-details-marker { display:none; }
+    .chapter>summary::after,.node>summary::after { content:"＋"; margin-left:auto; color:var(--accent); font-size:1.35rem; line-height:1; }
+    .chapter[open]>summary::after,.node[open]>summary::after { content:"−"; }
+    .chapter>summary:hover,.node>summary:hover { background:#263855; }
+    summary:focus-visible,button:focus-visible,nav a:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+    .chapter-body { padding:18px 26px 26px; border-top:1px solid var(--line); }
+    .chapter-body>:first-child { margin-top:0; }
+    .chapter-number { color:var(--good); font-size:.88rem; font-weight:800; min-width:2.3em; }
+    .node { margin:10px 0; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#111b2d; }
+    .node>summary { display:flex; align-items:center; gap:9px; padding:11px 15px; cursor:pointer; list-style:none; font-weight:700; background:#19263c; }
+    .node[open]>summary { color:var(--accent); }
+    .node-body { padding:13px 17px 17px; }
+    .node-body>:first-child { margin-top:0; }
+    .tag { padding:1px 7px; border-radius:6px; font-size:.76rem; font-weight:700; background:#305274; color:white; white-space:nowrap; }
+    .tag.event { background:#5b416f; }
+    .tag.query { background:#32604d; }
+    .scroll { overflow-x:auto; margin:11px 0; }
+    table { border-collapse:collapse; width:100%; min-width:690px; }
+    th,td { padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { color:var(--accent); background:#22314b; }
+    tbody tr:nth-child(even) { background:#19243a; }
+    .fields th:first-child { width:27%; }
+    .spec-guide { margin:15px 0; border-color:#6598ad; }
+    .spec-guide>summary { background:#21435b; color:#fff; }
+    .spec-guide .node-body { background:#101c2e; }
+    .spec-guide .scroll table { min-width:780px; }
+    .note { padding:11px 15px; margin:13px 0; background:#2b2a2a; border-left:4px solid var(--warn); border-radius:5px; }
+    .note.good { background:#19312e; border-left-color:var(--good); }
+    .note.bad { background:#39262d; border-left-color:var(--bad); }
+    .flow { display:block; padding:12px 14px; margin:10px 0; background:#0d1728; border:1px solid var(--line); border-radius:7px; overflow-x:auto; line-height:1.9; }
+    footer { padding:22px 0 38px; border-top:1px solid var(--line); color:var(--muted); font-size:.88rem; }
+    @media (max-width:650px) { .chapter>summary { padding:15px 16px; font-size:1.04rem; } .chapter-body { padding:15px; } .node>summary { flex-wrap:wrap; } }
+    @media print { :root { color-scheme:light; --bg:#fff; --panel:#fff; --panel2:#f4f7fa; --line:#c7d0da; --text:#172232; --muted:#475569; --accent:#075b8e; --good:#146044; --warn:#755000; --bad:#8c2530; } nav,.actions { display:none; } header { background:#fff; } .chapter,.node { break-inside:avoid; } .chapter-body,.node-body { display:block; } code,.flow { background:#f0f3f6; } }
+  </style>
+<link rel="stylesheet" href="../assets/guide.css">
+</head>
+<body data-guide-ui="shared">
+<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common">공통</a><a href="../index.html#item" aria-current="true">아이템</a><a href="../index.html#enemy">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="ITEM_ASSET_CREATION_GUIDE_KO.html">데이터 에셋</a><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html" aria-current="page">런타임 기본</a><a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬</a></div></div></nav><!-- GUIDE PORTAL END -->
+<header><div class="wrap">
+  <div class="eyebrow">Action RogueLike · Blueprint 제작자용</div>
+  <h1>아이템 런타임 기본 참고서</h1>
+  <p class="lead">액티브·패시브 유물의 <code>ARLoadoutItemInstance</code> 자식 BP에서 쓰는 이벤트, 함수 노드, 구조체 핀을 실제 C++ 동작 기준으로 설명합니다. 무기도 같은 부모를 쓰지만 입력 슬롯·진화 규칙은 별개입니다.</p>
+  <p><a href="ITEM_ASSET_CREATION_GUIDE_KO.html">아이템 데이터 에셋 제작 가이드</a> · <a href="../common/OBJECT_STAT_GUIDE_KO.html">객체별 스탯 가이드</a> · <a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html">스킬 런타임·액션 핸들 가이드</a> · 이 문서는 <strong>런타임 그래프</strong> 편입니다.</p>
+</div></header>
+<nav aria-label="목차"><div class="wrap">
+  <a href="#start">시작</a><a href="#lifecycle">등록·해제</a><a href="#stat">스탯 버프</a><a href="#spec">Spec의 모든 핀</a><a href="#stack">중첩·조회</a><a href="#skill">액티브 스킬</a><a href="#guarantee">슈퍼아머·CC 면역</a><a href="#ui">아이템 UI 상태</a><a href="#pickup-interaction">픽업·상호작용</a><a href="#check">점검</a>
+</div></nav>
+<main class="wrap"><div class="guide-tools"><label for="node-search">노드·내용 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 필드, 수명…" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button></div><p id="search-result" class="search-result" role="status" aria-live="polite"></p>
+  <div class="actions"><p>큰 항목과 각 노드를 눌러 펼칠 수 있습니다.</p><button id="expand-all" type="button">모두 펼치기</button><button id="collapse-all" type="button">모두 접기</button></div>
+
+  <details class="chapter" id="start" open><summary><span class="chapter-number">00</span> 먼저 알아둘 것</summary><div class="chapter-body">
+    <ul>
+      <li>유물 데이터 에셋은 <code>ARItemDefinition</code>, 실제 조건부 동작은 <code>ARLoadoutItemInstance</code> 자식 BP에 둡니다. 에셋의 <code>Runtime Behavior Class</code>에 그 BP 클래스를 지정해야 합니다.</li>
+      <li>이 런타임 BP는 <strong>Actor가 아닌 UObject</strong>입니다. 장착 이벤트는 <code>Event BeginPlay</code>가 아닌 <code>On Item Registered</code>입니다.</li>
+      <li><code>Apply Item ...</code> 노드의 <code>Target = Self</code>는 <strong>이 유물을 가진 플레이어</strong>에게 적용한다는 뜻입니다. 플레이어 입력 핀은 없습니다. 다른 플레이어·적에게 효과를 주려면 별도 일반 전투/스탯 노드를 사용합니다.</li>
+      <li>데이터 에셋의 <code>Default Stat Modifiers</code>는 등록 시 자동 적용됩니다. 같은 기본 효과를 런타임 BP에서 다시 주면 중복됩니다.</li>
+    </ul>
+    <div class="note">여기서 말하는 <strong>버프 아이콘·중첩</strong>은 <code>FARStatModifierSpec</code>의 HUD 필드로 현재 기본 HUD에 표시됩니다. <code>UI State Display Definitions</code>는 유물 고유 게이지·숫자용 <em>데이터 통로</em>이며 현재 기본 HUD가 이를 자동으로 그리지는 않습니다.</div>
+  </div></details>
+
+  <details class="chapter" id="lifecycle"><summary><span class="chapter-number">01</span> 장착·해제 이벤트와 소유자 조회</summary><div class="chapter-body">
+    <details class="node"><summary><span class="tag event">이벤트</span> On Item Registered</summary><div class="node-body"><p>획득·장착이 성공해 런타임 인스턴스가 등록될 때 호출됩니다. 입력값은 없습니다. 데이터 에셋의 기본 스탯 수정치가 먼저 적용되고 나서 이 이벤트가 옵니다. 타이머 시작, 이벤트 구독, 초기 변수 설정에 사용합니다. 같은 유물을 두 개 얻으면 각각 별도 런타임 인스턴스에서 호출됩니다.</p></div></details>
+    <details class="node"><summary><span class="tag event">이벤트</span> On Item Unregistered</summary><div class="node-body"><p><code>Reason</code> 입력은 제거 이유(<code>Replaced</code>, <code>Discarded</code>, <code>Evolved</code>, <code>OwnerDestroyed</code>, <code>Manual</code>)입니다. 반복 타이머 해제, 직접 묶은 이벤트 해제, 직접 만든 별도 액터 정리 등에 사용합니다. 이 이벤트 뒤에 아이템이 소유한 수정치·슈퍼아머·CC 면역·아이템 UI 상태가 자동 정리됩니다.</p><div class="note bad">타이머는 자동 정리 대상이 아닙니다. BP에서 보관한 Timer Handle은 이 이벤트에서 <code>Clear and Invalidate Timer by Handle</code>로 멈추세요.</div></div></details>
+    <details class="node"><summary><span class="tag query">조회</span> Get Item Owner / Get Item Definition / Get Instance Id / Is Registered</summary><div class="node-body"><div class="scroll"><table class="fields"><thead><tr><th>노드</th><th>반환값</th><th>사용처</th></tr></thead><tbody>
+      <tr><td><code>Get Item Owner</code></td><td><code>ARPlayerCharacter</code> 참조</td><td>조준 방향·플레이어 컴포넌트 등 다른 기능이 필요할 때. <code>Apply Item Stat Modifier</code>에는 필요하지 않습니다.</td></tr>
+      <tr><td><code>Get Item Definition</code></td><td>현재 <code>ARItemDefinition</code></td><td>이름·아이콘·아이템 ID 같은 고정 정보를 읽을 때.</td></tr>
+      <tr><td><code>Get Instance Id</code></td><td>현재 보유본만의 <code>Guid</code></td><td>동일 유물 여러 개를 구분할 때. 데이터 에셋의 <code>Item Id</code>와 다릅니다.</td></tr>
+      <tr><td><code>Is Registered</code></td><td>참/거짓</td><td>지연 콜백이 도착했을 때 아직 장착 중인지 확인할 때.</td></tr>
+    </tbody></table></div></div></details>
+  </div></details>
+
+  <details class="chapter" id="stat"><summary><span class="chapter-number">02</span> 스탯 효과를 주고 제거하는 노드</summary><div class="chapter-body">
+    <details class="node" id="permanent-flat"><summary><span class="tag">일반 노드 · 기본값 증감</span> Apply Stat Modifier / Permanent Flat</summary><div class="node-body"><p>아이템을 버려도 남겨야 하는 기본 스탯 변화나 돈 지급은 <strong>일반 Apply Stat Modifier</strong>를 사용합니다. Target=<code>Get Item Owner</code>(픽업에서는 Interactor), Spec Stat Type=원하는 스탯, Spec Operation=<code>Permanent Flat</code>, Spec Value=증감량입니다. 양수는 더하고 음수는 뺍니다.</p><p>버프 기록·타이머·반환 핸들이 없습니다. 성공해도 Return Value가 비어 있으므로 <strong>Success</strong>를 검사하세요. Duration/Source/HUD/Tenacity/Stack Group은 무시하고 Stack Only/Guarantee 옵션은 해제해야 합니다. 기본값이 바뀐 뒤 기존 퍼센트·배율과 안전 범위를 다시 적용합니다.</p><p><code>Money</code>는 플레이어 전용 float 스탯, 기본0. 기본 잔액 부족 차감은 무변경 실패입니다. 임시 Money 보정은 영구 잔액으로 소비할 수 없습니다. 자동 결제·돈 UI·세이브·새 플레이어 객체로 이전은 구현하지 않습니다.</p><div class="note"><code>Apply Item Stat Modifier</code> / <code>Apply Action Stat Modifier</code> / DA의 <code>Default Stat Modifiers</code>에서는 Permanent Flat을 거절합니다. 아이템 BP에서도 일반 노드를 사용하면 가능합니다. <code>Flat + Duration=-1</code>은 기존 무기한 버프이며 아이템 수명에 묶을 수 있습니다. 반복 습득·이벤트 재진입의 중복 지급 방지는 콘텐츠 책임입니다.</div><p><a href="../common/OBJECT_STAT_GUIDE_KO.html#permanent-flat">전체 핀·돈 차감·수명 규칙</a></p></div></details>
+    <details class="node" open><summary><span class="tag">호출</span> Apply Item Stat Modifier</summary><div class="node-body"><p>이 유물을 가진 플레이어에게 스탯 수정치를 한 건 추가합니다. 그래프에서 <code>Self</code> 핀을 끌어 검색하면 찾기 쉽습니다. 아래 <strong>Spec 펼치기</strong>를 누르면 실제 핀 조작 순서와 모든 필드를 볼 수 있습니다.</p><div class="scroll"><table class="fields"><thead><tr><th>입력/출력</th><th>의미</th></tr></thead><tbody>
+      <tr><td><code>Target</code> 입력</td><td>현재 아이템 런타임 객체. 보통 <code>Self</code>. 플레이어 캐릭터를 연결하는 자리가 아닙니다.</td></tr>
+      <tr><td><code>Spec</code> 입력</td><td><code>FARStatModifierSpec</code>. 대상 스탯, 연산 방식, 값, 지속시간, 출처, HUD 표시, 보장 효과를 한데 묶은 설정입니다. <strong>바로 아래 Spec 칸을 눌러</strong> 펼쳐 보세요.</td></tr>
+      <tr><td><code>Success</code> 출력</td><td>실제 추가에 성공했는지. 중첩 변수 증가나 후속 처리는 참일 때만 실행합니다.</td></tr>
+      <tr><td><code>Return Value</code> 출력</td><td><code>FARStatModifierHandle</code>. 그 적용 1건을 조기 제거하거나 남은 시간을 조회할 때 저장합니다.</td></tr>
+    </tbody></table></div>
+    <details class="node spec-guide" id="spec"><summary><span class="tag">Spec 입력</span> 누르면 펼쳐지는 핀 조작법 · 모든 세부 필드</summary><div class="node-body">
+      <p><a href="../precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html#spec">일반·아이템·액션 노드의 전체 필드와 수명 비교</a></p><h3>먼저 블루프린트에서 펼치는 방법</h3>
+      <ol>
+        <li><code>Apply Item Stat Modifier</code> 노드를 그래프에 놓습니다. 노드 왼쪽의 파란 <code>Spec</code> 핀을 <strong>우클릭 → Split Struct Pin(구조체 핀 분할)</strong>합니다.</li>
+        <li><code>Spec Stat Type</code>, <code>Spec Operation</code> 같은 개별 입력이 나타납니다. <code>Spec Source</code>만 뭉쳐 보이면 그 핀도 다시 우클릭해 분할합니다. 지금처럼 <code>Spec Source Category</code>, <code>Spec Source Id</code>, <code>Spec Source Display Name</code>이 보이면 끝까지 펼친 상태입니다.</li>
+        <li>드롭다운은 항목을 <strong>선택</strong>, 숫자·이름 칸은 <strong>직접 입력</strong>, 체크박스는 <strong>켜기/끄기</strong>, 핸들·아이콘 핀은 필요할 때 <strong>변수 또는 에셋 연결</strong>로 설정합니다. 아무 선도 연결하지 않은 핀은 화면에 적은 기본 입력값을 사용합니다.</li>
+        <li>설정만 해서는 효과가 생기지 않습니다. 왼쪽 흰색 <strong>실행 핀</strong>에 이벤트를 연결하고, 오른쪽 <code>Success</code>로 성공을 확인하세요. 핀을 다시 합치려면 우클릭 → <code>Recombine Struct Pin</code>을 사용합니다. 분할 대신 <code>Make AR Stat Modifier Spec</code> 구조체 노드를 연결해도 됩니다.</li>
+      </ol>
+      <div class="note good">데이터 에셋의 <code>Default Stat Modifiers</code>는 장착 시 자동 적용됩니다. 런타임 Spec에는 조건부·시간제·반복 효과처럼 <strong>추가로 필요한 효과만</strong> 설정하세요.</div>
+
+      <h3>① 어떤 스탯을 얼마나 바꾸는가</h3>
+      <div class="scroll"><table class="fields"><thead><tr><th>핀</th><th>역할·왜 필요한가</th><th>화면에서 어떻게 설정하나</th></tr></thead><tbody>
+        <tr><td><code>Spec Stat Type</code></td><td>수정할 스탯의 종류. 한 적용 건은 하나의 스탯을 대상으로 합니다. 다른 스탯도 바꾸려면 노드를 한 번 더 실행합니다.</td><td>드롭다운에서 목적에 맞게 선택. 예: 최대 체력 효과라면 <code>Max Health</code>.</td></tr>
+        <tr><td><code>Spec Operation</code></td><td>값을 고정치·합연산 %·곱배율 중 무엇으로 계산할지 결정합니다. <code>Independent Damage Reduction</code>은 피해 감소율 스탯만 사용할 수 있습니다.</td><td>드롭다운에서 선택. 수치 그대로 더하려면 <code>Flat</code>.</td></tr>
+        <tr><td><code>Spec Value</code></td><td>실제 입력 수치. <code>Flat 1</code>은 +1, <code>Additive Percent 20</code>은 +20%, <code>Multiplicative 1.2</code>는 ×1.2입니다. 독립 피해 감소의 <code>50</code>은 남은 피해를 절반으로 줄입니다.</td><td>숫자 칸에 원하는 값을 입력. 예: 고정치 +5라면 <code>5.0</code>.</td></tr>
+        <tr><td><code>Spec Duration</code></td><td>적용 수명. 양수는 그 초만큼, 음수는 직접 제거하거나 유물을 해제할 때까지. <code>0</code>은 유효하지 않아 실패합니다.</td><td>숫자 칸에 영구 효과는 <code>-1.0</code>, 5초 버프는 <code>5.0</code>.</td></tr>
+      </tbody></table></div>
+      <p>일반 스탯 계산은 <code>(기본값 + 모든 Flat 합) × (1 + 모든 AdditivePercent 합 ÷ 100) × 모든 Multiplicative 값의 곱</code>입니다. 독립 피해 감소는 이 식과 별개로 피해의 남은 비율에 곱합니다.</p>
+
+      <h3>② 어느 효과가 준 것인지 구분하기 — Source</h3>
+      <div class="scroll"><table class="fields"><thead><tr><th>핀</th><th>역할·왜 필요한가</th><th>화면에서 어떻게 설정하나</th></tr></thead><tbody>
+        <tr><td><code>Spec Source Category</code></td><td>출처 종류. 공통 Spec 구조체라 보이지만 <code>Apply Item Stat Modifier</code>에서는 C++가 아이템 종류에 따라 <code>Weapon</code> 또는 <code>Relic</code>으로 다시 지정합니다.</td><td>유물 화면에는 <code>Relic</code>으로 둡니다. 다른 항목을 골라도 이 노드의 실제 분류를 바꾸는 용도로 쓰지 않습니다.</td></tr>
+        <tr><td><code>Spec Source Id</code></td><td>효과의 <strong>묶음 이름</strong>. 같은 출처 분류와 같은 ID의 적용은 조회·버프 HUD에서 함께 집계됩니다. 아이템의 정수 <code>Item Id</code>와 다릅니다.</td><td>이름 칸에 고유한 효과 이름 입력. 여러 효과를 따로 표시하려면 서로 다른 ID를 사용.</td></tr>
+        <tr><td><code>Spec Source Display Name</code></td><td>사람에게 보여줄 출처명. ID와 달리 UI 문구입니다. 비워두면 아이템 데이터 에셋의 표시 이름으로 대체됩니다.</td><td>선택 입력. 별도 출처명이 필요 없으면 비워도 됩니다.</td></tr>
+      </tbody></table></div>
+      <div class="note">Source Id를 비우면 코드가 이 런타임 인스턴스의 고유 ID를 사용합니다. 서로 다른 효과를 HUD에서 분리하려면 명시적인 별도 이름을 사용하세요. 같은 유물을 여러 개 보유하면 고정 이름끼리 합쳐 보일 수 있으므로, 독립 표시가 필요할 때는 인스턴스별 이름 생성이 필요합니다.</div>
+
+      <h3>③ 중첩을 새로 쌓을지, 같은 중첩에 묶을지</h3>
+      <div class="scroll"><table class="fields"><thead><tr><th>핀</th><th>역할·왜 필요한가</th><th>화면에서 어떻게 설정하나</th></tr></thead><tbody>
+        <tr><td><code>Spec Stack Only</code></td><td>체크하면 스탯 변화 없이 <strong>중첩 기록만</strong> 추가합니다. 다른 노드에서 중첩 수를 읽어 조건을 처리할 때 사용합니다. 이 경우 무적·회피 보장을 동시에 줄 수 없습니다.</td><td>체크박스. 스탯을 실제로 바꿀 때는 끄고, 숫자 중첩만 기록할 때 켭니다.</td></tr>
+        <tr><td><code>Spec Stack Group Handle</code></td><td>이전 적용의 <code>Return Value</code> 핸들을 연결하면 여러 스탯 수정치를 <strong>같은 한 중첩</strong>으로 셉니다. 연결하지 않으면 이번 호출은 새 중첩입니다. 연결한 핸들은 같은 출처 분류·ID여야 하고 지속시간도 원래 그룹을 따릅니다.</td><td>독립된 새 중첩이면 비워두고, 한 중첩에 여러 스탯을 묶을 때만 이전 핸들을 연결합니다.</td></tr>
+      </tbody></table></div>
+      <p><code>Source Id</code>가 같다는 사실만으로 하나의 스택이 되는 것은 아닙니다. <strong>Source Id는 화면·조회에서 묶는 이름</strong>, <strong>Stack Group Handle은 실제 중첩 단위</strong>를 정합니다.</p>
+
+      <h3>④ 지속시간과 버프 아이콘</h3>
+      <div class="scroll"><table class="fields"><thead><tr><th>핀</th><th>역할·왜 필요한가</th><th>화면에서 어떻게 설정하나</th></tr></thead><tbody>
+        <tr><td><code>Spec Affected by Tenacity</code></td><td>시간제 효과라면 대상의 강인함이 지속시간을 줄이게 할지 선택합니다. 강인함이 100이면 적용되지 않을 수 있습니다. 영구 효과에는 의미가 없습니다.</td><td>체크박스. 강인함이 지속시간에 영향을 줘야 할 때만 켭니다.</td></tr>
+        <tr><td><code>Spec HUDDisplay</code></td><td>스탯 효과의 HUD 아이콘 표시 유형. <code>Hidden</code>은 안 보임, <code>Buff</code>는 버프, <code>Debuff</code>는 디버프입니다. 아이템 전용 UI State와 별개의 표시 경로입니다.</td><td>드롭다운. 화면에 표시할지와 효과의 성격에 따라 선택합니다.</td></tr>
+        <tr><td><code>Spec HUDName</code></td><td>아이콘 이름·툴팁. 비워두면 Source Display Name, 그것도 비우면 아이템 이름을 씁니다.</td><td>텍스트 칸에 선택 입력. 필요한 표시 이름이 없으면 비웁니다.</td></tr>
+        <tr><td><code>Spec HUDIcon</code></td><td>버프 아이콘 이미지. 데이터 에셋의 <code>Display → Icon</code>이 자동 복사되지 않기 때문에 별도 필드가 있습니다.</td><td>에셋 선택기에서 <code>Texture2D</code>를 지정. 비우면 아이콘 틀에 이미지가 없습니다.</td></tr>
+      </tbody></table></div>
+
+      <h3>⑤ 100%를 보장하는 특수 옵션</h3>
+      <div class="scroll"><table class="fields"><thead><tr><th>핀</th><th>역할·왜 필요한가</th><th>화면에서 어떻게 설정하나</th></tr></thead><tbody>
+        <tr><td><code>Spec Guarantee Invulnerability</code></td><td>일반 감소율 계산과 별개로 무적 보장을 등록합니다. <code>Stat Type = Overall Damage Reduction</code>일 때만 허용됩니다. 공허 같은 시스템 피해 규칙은 별도입니다.</td><td>체크박스. 무적 보장을 원할 때만 해당 Stat Type과 함께 켭니다.</td></tr>
+        <tr><td><code>Spec Guarantee Evasion</code></td><td>일반 회피율 수치와 별개로 회피 보장을 등록합니다. <code>Stat Type = Evasion</code>일 때만 허용됩니다. 필중 기술까지 회피한다는 뜻은 아닙니다.</td><td>체크박스. 회피 보장을 원할 때만 해당 Stat Type과 함께 켭니다.</td></tr>
+      </tbody></table></div>
+      <div class="note good">설정 뒤에는 실행 핀을 연결하고 <code>Success</code>를 확인하세요. 같은 ID로 여러 번 적용하고 <code>Stack Group Handle</code>을 비우면 HUD에서는 한 효과의 여러 중첩으로 집계됩니다.</div>
+    </div></details>
+    <p>아이템 해제 시 성공한 수정치는 핸들별로 자동 회수됩니다. 이 노드로 준 효과를 <code>Remove All Own Item Modifiers</code>로 직접 지우지 않는 한 유물 수명에 묶입니다.</p></div></details>
+    <details class="node"><summary><span class="tag">호출</span> Remove Own Item Modifier</summary><div class="node-body"><p><code>Target = Self</code>, <code>Handle</code>에는 이전 <code>Apply Item Stat Modifier</code>의 <code>Return Value</code>를 넣습니다. 반환 <code>bool</code>은 제거 성공 여부입니다. 이 아이템 인스턴스가 부여한 핸들만 제거할 수 있습니다. 예: 5초짜리 효과를 조건 만족 시 조기에 해제.</p></div></details>
+    <details class="node"><summary><span class="tag">호출</span> Remove Stat Modifiers by Source — Category·Source Id로 버프 제거</summary><div class="node-body">
+      <p>핸들 대신 <strong>출처 분류와 ID가 일치하는 스탯 수정치 전부</strong>를 대상 캐릭터에서 제거합니다. 해당 수정치가 HUD에 버프로 표시 중이었다면 버프 표시도 함께 갱신됩니다. <code>Remove Own Item Modifier</code>와 달리 아이템 인스턴스의 <code>Self</code>를 대상으로 하는 노드가 아닙니다.</p>
+      <div class="scroll"><table class="fields"><thead><tr><th>입력/출력</th><th>연결 방법과 의미</th></tr></thead><tbody>
+        <tr><td><code>Target</code> 입력</td><td>수정치가 적용된 <strong>캐릭터 Actor</strong>. 유물 런타임 BP에서는 <code>Get Item Owner → Return Value</code>를 연결합니다. <code>Self</code>를 연결하지 않습니다.</td></tr>
+        <tr><td><code>Category</code> 입력</td><td>추가 당시의 실제 <code>Source Category</code>와 같아야 합니다. 유물은 <code>Relic</code>, 무기는 <code>Weapon</code>입니다. <code>Apply Item Stat Modifier</code>는 이 분류를 아이템 종류에 맞게 지정합니다.</td></tr>
+        <tr><td><code>Source Id</code> 입력</td><td>추가 노드의 <code>Spec Source Id</code>와 <strong>같은 이름</strong>을 입력합니다. 아이템 데이터 에셋의 정수 <code>Item Id</code>가 아닙니다. 적용할 때 ID를 비웠다면 런타임 인스턴스의 고유 ID로 대체되므로 임의의 이름으로 제거할 수 없습니다.</td></tr>
+        <tr><td><code>Return Value</code> 출력</td><td>실제로 제거된 수정치 <strong>건수(int32)</strong>. <code>0</code>이면 대상, 분류, ID 또는 현재 적용 여부를 확인합니다.</td></tr>
+      </tbody></table></div>
+      <div class="flow"><code>Get Item Owner → Target</code> · <code>추가할 때의 Category → Category</code> · <code>추가할 때의 Spec Source Id → Source Id</code></div>
+      <div class="note bad">이 노드는 <strong>그 유물만</strong> 골라 제거하지 않습니다. 같은 캐릭터에게 붙은 동일 Category·Source Id의 효과는 다른 유물이나 데이터 에셋의 기본 효과에서 왔더라도 모두 제거됩니다. 반복해서 적용·삭제하는 아이템에서 이 노드를 사용하면 런타임 객체가 보관한 소유 핸들 기록은 별도로 정리되지 않습니다. 인스턴스별 안전한 제거가 필요하면 <code>Apply Item Stat Modifier</code>의 <code>Return Value</code>를 보관하고 <code>Remove Own Item Modifier</code>를 사용하세요.</div>
+    </div></details>
+    <details class="node"><summary><span class="tag">호출</span> Remove All Own Item Modifiers</summary><div class="node-body"><p><code>Target = Self</code>. 반환값은 실제 제거한 수정치 건수(<code>int32</code>)입니다. <strong>데이터 에셋의 기본 수정치까지 포함해</strong> 이 아이템 소유의 모든 수정치를 지웁니다. 일부 스택만 지울 때는 사용하지 마세요. 재등록 없이 기본 효과가 자동 복구되지 않습니다.</p></div></details>
+  </div></details>
+
+  <details class="chapter" id="stack"><summary><span class="chapter-number">03</span> 중첩 수·최종 스탯을 조회할 때</summary><div class="chapter-body">
+    <p>이 절의 조회 노드는 <code>Apply Item ...</code>과 달리 <strong>Stats Component</strong>의 함수입니다. 런타임 BP에서 <code>Get Item Owner → Get Stats Component</code>를 거쳐 호출합니다. 단, 이 컴포넌트는 플레이어 전체 효과를 보므로 같은 출처 ID를 다른 아이템도 사용한다면 합쳐집니다.</p>
+    <details class="node"><summary><span class="tag query">조회</span> Get Modifiers By Source</summary><div class="node-body"><p>입력: <code>Category</code>(유물은 <code>Relic</code>), 조회할 <code>Source Id</code>. 반환 구조체: <code>Exists</code>(존재), <code>Stack Count</code>(서로 다른 스택 그룹 수), <code>Has Permanent</code>(영구 건 존재), <code>Longest Remaining Time</code>(가장 긴 남은 시간, 영구가 있으면 -1). <code>Stack Group Handle</code>로 여러 수정치를 한 그룹에 묶었다면 수정치가 여러 건이어도 1중첩으로 셉니다.</p><p>같은 출처 ID를 여러 아이템이 공유할 수 있으므로, 한 유물 인스턴스만의 제한 횟수는 해당 BP의 정수 변수로 별도 관리하세요.</p></div></details>
+    <details class="node"><summary><span class="tag query">조회</span> Get Final Stat / Get Modifier Remaining Time / Get Visible Stat Effects</summary><div class="node-body"><div class="scroll"><table class="fields"><thead><tr><th>노드</th><th>입력과 반환</th><th>용도</th></tr></thead><tbody>
+      <tr><td><code>Get Final Stat</code></td><td><code>Stat Type</code> → 현재 최종 <code>float</code></td><td>현재 최대 스태미나 등 계산이 끝난 값을 조건에 활용.</td></tr>
+      <tr><td><code>Get Modifier Remaining Time</code></td><td>적용 핸들 → 성공 여부, 영구 여부, 남은 초</td><td>특정 적용 건이 아직 남아 있는지 확인.</td></tr>
+      <tr><td><code>Get Visible Stat Effects</code></td><td>입력 없음 → HUD에 표시되는 효과 목록</td><td>UI에서 출처별 이름·아이콘·중첩 수·남은 시간을 읽을 때. 기본 HUD는 이 통로를 사용합니다.</td></tr>
+    </tbody></table></div></div></details>
+    <div class="note bad"><code>Clear Modifiers</code>와 위에서 설명한 <code>Remove Stat Modifiers by Source</code>는 플레이어 전체 효과를 대상으로 합니다. 특정 유물이 자기 효과만 정리할 때는 <code>Remove Own Item Modifier</code> 또는 아이템 해제 시 자동 회수를 우선하세요.</div>
+  </div></details>
+
+  <details class="chapter" id="skill"><summary><span class="chapter-number">04</span> 액티브 유물의 발동 스킬</summary><div class="chapter-body">
+    <p>스킬 등록 정보·비용·쿨다운·입력 방식은 데이터 에셋의 <code>Skill Definitions</code>에 둡니다. 런타임 BP는 조건과 실제 스킬 효과를 담당합니다. 패시브 유물이 입력 스킬을 갖지 않으면 이 절은 건너뛰세요.</p>
+    <details class="node"><summary><span class="tag query">조건</span> Can Execute Item Skill</summary><div class="node-body"><p>입력 <code>Skill Id</code>는 데이터 에셋에서 등록한 이름. 출력 <code>Return Value</code>가 참이면 실행 가능, 거짓이면 해당 스킬을 실행하지 않습니다. <code>Failure Tag</code>는 거절 이유를 전달하는 출력값입니다. 이 함수는 부모 클래스에 기본 구현이 있으므로 조건이 필요할 때만 자식 BP에서 재정의합니다.</p></div></details>
+    <details class="node"><summary><span class="tag event">이벤트</span> Execute Item Skill</summary><div class="node-body"><p>입력: <code>Skill Id</code>, <code>Action Handle</code>. 등록된 입력을 누르고 조건·자원·쿨다운·행동 시작이 통과하면 호출됩니다. BP는 이곳에서 공격 판정·연출·효과 노드를 실행합니다. <strong>데이터 에셋의 자원 비용과 기본 쿨다운은 이 이벤트 전에 시스템이 처리하므로 BP에서 중복 소비시키지 마세요.</strong> 시전이 끝나면 소유자의 Action Component에서 받은 핸들로 <code>End Action</code>을 호출하고, 취소 시 정리가 필요한 타이머·연출은 행동 종료/취소 이벤트에 연결합니다.</p></div></details>
+    <details class="node"><summary><span class="tag event">이벤트</span> On Item Skill Cancelled</summary><div class="node-body"><p>입력받는 정보: <code>Skill Id</code>, <code>Action Handle</code>, <code>Reason</code>. 이벤트 그래프에 직접 추가하며 Bind가 필요 없습니다. Loadout에서 실행된 <strong>이 아이템 인스턴스의 스킬</strong>이 취소되면 액션 자동 정리 후 호출됩니다. Switch on Name으로 스킬을 구분하여 자체 타이머·상태·연출을 정리합니다.</p><p>정상 End Action·사전 거절에는 호출되지 않습니다. 이미 취소된 핸들에 End Action을 다시 호출하지 않습니다. 아이템 해제 때의 실행 중 스킬 취소는 On Item Unregistered 전에 알립니다. Action Delay.Cancelled와 정리가 중복되지 않도록 책임을 정하세요. <a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html#item-skill-cancelled">스킬 취소 이벤트 상세</a></p></div></details>
+    <details class="node"><summary><span class="tag">입력 경로</span> Direct Tag와 Active Relic Slot</summary><div class="node-body"><p><code>Direct Tag</code>는 IA→입력 태그와 동일 태그의 스킬을 연결하는 기존 방식입니다. <code>Active Relic Slot</code>은 플레이어의 <code>Active Relic Slot Input Bindings</code>에서 지정한 <strong>장착 칸 번호 + 해당 유물 내 스킬 번호</strong>로 실행합니다. 1번·2번 유물이 모두 로컬 <code>Slot Skill Index = 1</code>이어도 슬롯별 키로 구분됩니다. 물리 키는 IMC가 정하며 런타임 BP 안에서 고정하지 않습니다.</p></div></details>
+  </div></details>
+
+  <details class="chapter" id="guarantee"><summary><span class="chapter-number">05</span> 특수 보장 효과: 슈퍼아머·CC 면역</summary><div class="chapter-body">
+    <details class="node"><summary><span class="tag">호출</span> Apply Item Super Armor / Remove Own Item Super Armor</summary><div class="node-body"><p><code>Apply Item Super Armor</code> 입력 <code>Spec</code>에는 <code>Duration</code>(음수면 직접 제거 전까지 유지)과 <code>Source</code>(분류·ID·이름)가 있습니다. 출력은 <code>Success</code>와 <code>FARSuperArmorHandle</code>입니다. 슈퍼아머는 경직을 막지만 그로기 피해나 다른 상태이상까지 모두 막지는 않습니다. 조기 종료 시 <code>Remove Own Item Super Armor(Target=Self, Handle)</code>의 반환 <code>bool</code>로 결과를 확인합니다. 아이템 해제 때 자동 회수됩니다.</p></div></details>
+    <details class="node"><summary><span class="tag">호출</span> Apply Item CC Immunity / Remove Own Item CC Immunity</summary><div class="node-body"><p><code>Apply Item CC Immunity</code> 입력 <code>Spec</code>에도 <code>Duration</code>과 <code>Source</code>가 있습니다. 출력은 <code>Success</code>와 <code>FARCCImmunityHandle</code>입니다. 새 CC 상태이상 적용을 막으며 이미 걸린 것을 자동 해제하지는 않습니다. 조기 종료는 <code>Remove Own Item CC Immunity(Target=Self, Handle)</code>를 호출합니다. 아이템 해제 때 자동 회수됩니다.</p></div></details>
+    <div class="note">시전 중에만 필요한 효과라면 <code>Apply Action Super Armor</code> / <code>Apply Action CC Immunity</code>를 사용해 행동 핸들의 수명에 묶는 편이 안전합니다. 이 경우 노드의 <code>Target</code>은 Item Self가 아니라 소유 플레이어의 Action Component입니다.</div>
+  </div></details>
+
+  <details class="chapter" id="ui"><summary><span class="chapter-number">06</span> 아이템 고유 UI 상태 노드 — 현재 표시 범위 주의</summary><div class="chapter-body">
+    <p>이 통로는 <code>Spec HUDDisplay</code>의 버프 아이콘과 다릅니다. 데이터 에셋의 <code>UI State Display Definitions</code>에 <code>State Id</code>, 표시 이름·아이콘·형식(<code>Gauge</code>/<code>Number</code>/<code>SmallStack</code>)을 미리 등록해야 합니다.</p>
+    <details class="node"><summary><span class="tag">호출</span> Set Item UI State</summary><div class="node-body"><p><code>Target=Self</code>, <code>State Id</code>(데이터 에셋에 등록된 Gameplay Tag), <code>Current Value</code>, <code>Maximum Value</code>를 받습니다. 반환 <code>bool</code>은 등록된 ID로 갱신했는지입니다. 미등록 ID는 거절하고 로그 경고를 남깁니다. <code>SmallStack</code>에서 최대값이 6을 넘으면 숫자 방식으로 바뀝니다. 유물 자체의 수치를 갱신할 뿐 스탯을 변경하지 않습니다.</p></div></details>
+    <details class="node"><summary><span class="tag">호출·조회</span> Remove Item UI State / Get Item UI States / On Item UI State Changed</summary><div class="node-body"><p><code>Remove Item UI State(State Id)</code>는 해당 상태를 지우고 성공 여부를 돌려줍니다. <code>Get Item UI States</code>는 현재 상태 배열을 돌려줍니다. <code>On Item UI State Changed</code> 이벤트에는 아이템 인스턴스 ID, 상태값, 제거 여부가 옵니다. 아이템 해제 때 등록된 상태는 자동 제거됩니다.</p></div></details>
+    <div class="note bad"><strong>현재 기본 HUD는 아이템 UI State를 화면에 그리지 않습니다.</strong> 기본 HUD가 그리는 것은 스탯 버프·디버프 아이콘입니다. 아이템 UI State 값은 장비/인벤토리 조회와 변경 이벤트로 전달되지만, 무기·액티브 슬롯·패시브 전용 위젯은 추후 제작해야 합니다.</div>
+  </div></details>
+
+  <details class="chapter" id="check"><summary><span class="chapter-number">07</span> 막힐 때 확인할 것</summary><div class="chapter-body">
+    <div class="scroll"><table class="fields"><thead><tr><th>현상</th><th>우선 확인</th></tr></thead><tbody>
+      <tr><td><code>On Item Registered</code>가 안 옴</td><td>데이터 에셋의 <code>Runtime Behavior Class</code>가 이 BP인지, 실제 획득·장착이 성공했는지.</td></tr>
+      <tr><td><code>Apply Item Stat Modifier</code>의 <code>Success=false</code></td><td>장착 상태·소유 플레이어·Stats Component 유효성, <code>Duration=0</code> 여부, 잘못된 보장 효과/독립 피해 감소 조합, 잘못된 Stack Group Handle.</td></tr>
+      <tr><td>HUD에 버프 아이콘이 안 보임</td><td><code>HUDDisplay=Buff</code>인지, <code>HUDIcon</code>을 지정했는지, 실제 적용 성공 여부. 데이터 에셋의 기본 아이콘은 자동 재사용되지 않습니다.</td></tr>
+      <tr><td>예상보다 중첩 수가 크게 나옴</td><td>서로 다른 효과가 같은 <code>Source Id</code>를 공유하는지, <code>Stack Group Handle</code>이 의도대로 연결됐는지 확인하세요.</td></tr>
+      <tr><td><code>Remove Stat Modifiers by Source</code>로 지워지지 않음</td><td><code>Target</code>에 수정치를 받은 캐릭터가 연결됐는지, <code>Category</code>와 <code>Source Id</code>가 적용 당시의 실제 값과 둘 다 일치하는지 확인하세요. <code>Return Value=0</code>이면 일치하는 활성 수정치가 없다는 뜻입니다.</td></tr>
+      <tr><td>버린 뒤에도 타이머가 실행됨</td><td><code>On Item Unregistered</code>에서 해당 Timer Handle을 해제했는지.</td></tr>
+      <tr><td>같은 패시브 두 개의 스택이 합쳐 보임</td><td>두 인스턴스가 동일한 <code>Source Id</code>를 쓰는지. 인스턴스별 UI 구분이 필요하면 고유 Source Id를 설계하세요.</td></tr>
+    </tbody></table></div>
+  </div></details>
+<details class="chapter" id="pickup-interaction"><summary>픽업 객체·상호작용 연결</summary><div class="chapter-body"><details class="node" id="pickup-class"><summary><span class="tag">노드</span>픽업 BP의 기본 설정</summary><div class="node-body"><p>월드에 놓는 픽업 Actor와 획득 뒤 실행되는 런타임 UObject는 별개입니다. ARLoadoutItemPickup 자식 BP에 외형을 추가하고 Item Definition에 아이템 DA를 지정합니다.</p><dl class="pins"><dt>Item Definition</dt><dd>획득할 데이터 에셋. 런타임 클래스는 DA의 Runtime Behavior Class에서 지정합니다.</dd><dt>Interaction Volume</dt><dd>탐지용 상속 볼륨. 외형 Mesh를 대신 표시하지 않습니다.</dd><dt>외형 Mesh</dt><dd>Static Mesh와 Materials를 설정합니다. Actor/컴포넌트/레벨 인스턴스 스케일 덮어쓰기를 구분합니다. 물리 필요 없으면 Simulate Physics를 끕니다.</dd></dl></div></details><details class="node" id="try-interact"><summary><span class="tag">노드</span>Try Interact</summary><div class="node-body"><p>플레이어의 현재 상호작용 후보에게 획득을 요청합니다. 픽업 액터의 입력을 각각 활성화하는 방식이 아닙니다.</p><dl class="pins"><dt>Target</dt><dd>플레이어 Get Interaction Component 반환 참조.</dd><dt>입력 연결</dt><dd>플레이어 측 상호작용 입력 이벤트 → Try Interact. 시스템의 기존 입력 연결이 있으면 BP에서 같은 요청을 중복 호출하지 않습니다.</dd><dt>Return Value</dt><dd>Request Status. Result=Success 여부 확인. 슬롯/교체 등으로 실패할 수 있습니다.</dd><dt>Get Current Candidate / Get Current Prompt</dt><dd>같은 Interaction Component의 현재 후보/표시 문구 조회. 후보 조회는 실제 획득 성공과 다릅니다.</dd></dl><p><a href="../environment/ITEM_PICKUP_SPAWN_GUIDE_KO.html">DA 검색 결과로 픽업 소환</a></p></div></details></div></details>
+</main>
+<footer><div class="wrap">코드 확인 기준: <a href="../../../Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h">ARLoadoutItemInstance.h</a>, <a href="../../../Source/Action_RogueLike/Public/Foundation/Components/ARStatsComponent.h">ARStatsComponent.h</a>, <a href="../../../Source/Action_RogueLike/Public/Foundation/Items/ARItemTypes.h">ARItemTypes.h</a>, <a href="../../../Source/Action_RogueLike/Private/Foundation/Items/ARLoadoutItemInstance.cpp">ARLoadoutItemInstance.cpp</a>. 이 문서는 BP 제작 안내이며 게임 콘텐츠와 공통 시스템 규칙을 구분합니다.</div></footer>
+
+<script src="../assets/guide.js"></script></body>
+</html>

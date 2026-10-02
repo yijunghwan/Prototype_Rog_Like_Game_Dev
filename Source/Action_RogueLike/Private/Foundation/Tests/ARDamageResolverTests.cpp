@@ -51,6 +51,7 @@ bool FARVoidDamageRulesTest::RunTest(const FString& Parameters)
 	FARDefensiveStatSnapshot Defense;
 	Defense.AttributeDefense = 9999.0f;
 	Defense.AttributeDamageTakenIncrease = 999.0f;
+	Defense.OverallDamageTakenIncrease = 999.0f;
 	Defense.OverallRemainingDamageMultiplier = 0.0f;
 	Defense.AttributeRemainingDamageMultiplier = 0.0f;
 	Defense.bGuaranteedInvulnerability = true;
@@ -59,6 +60,45 @@ bool FARVoidDamageRulesTest::RunTest(const FString& Parameters)
 	const FARCombatDamageResult Result = FARDamageResolver::Resolve(Request, Offense, Defense, Random);
 	TestEqual(TEXT("Void ignores defense, reductions, vulnerability, and normal invulnerability"), Result.FinalDamage, 150);
 	TestEqual(TEXT("Void damage is applied"), Result.Outcome, EARDamageOutcome::Applied);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAROverallTakenDamageTest,
+	"AR.Foundation.Combat.OverallDamageTakenIncrease",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAROverallTakenDamageTest::RunTest(const FString& Parameters)
+{
+	FARCombatDamageRequest Request;
+	Request.BaseDamage = 100.0f;
+	Request.bCanCrit = false;
+	FAROffensiveStatSnapshot Offense;
+	FARDefensiveStatSnapshot Defense;
+	FRandomStream Random(42);
+	TestEqual(TEXT("New stat default zero preserves old damage"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 100);
+	Defense.OverallDamageTakenIncrease = 50.0f;
+	TestEqual(TEXT("Overall 50 alone gives 150 damage"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 150);
+	Defense.AttributeDamageTakenIncrease = 20.0f;
+	for (EARDamageAttribute Attribute : { EARDamageAttribute::Physical, EARDamageAttribute::Fire, EARDamageAttribute::Magic })
+	{
+		Request.Attribute = Attribute;
+		for (EARDamageDelivery Delivery : { EARDamageDelivery::Direct, EARDamageDelivery::DamageOverTime })
+		{
+			Request.Delivery = Delivery;
+			TestEqual(TEXT("Overall 50 plus attribute 20 is additive (170), not multiplicative (180)"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 170);
+		}
+	}
+	Offense.OverallAmplification = 50;
+	TestEqual(TEXT("Outgoing and incoming totals remain separate factors"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 255);
+	Offense.OverallAmplification = 0;
+	Defense.AttributeDefense = 100;
+	Defense.OverallRemainingDamageMultiplier = 0.5f;
+	TestEqual(TEXT("Incoming sum applies after defense and before reductions"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 42);
+	Request.bApplyAmplification = false;
+	TestEqual(TEXT("Amplification toggle bypasses incoming increases, not defense/reductions"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 25);
+	Request.bApplyAmplification = true;
+	Request.Attribute = EARDamageAttribute::Void;
+	TestEqual(TEXT("Void keeps existing incoming-vulnerability bypass rule"), FARDamageResolver::Resolve(Request, Offense, Defense, Random).FinalDamage, 100);
 	return true;
 }
 
@@ -140,4 +180,3 @@ bool FARIndependentReductionTest::RunTest(const FString& Parameters)
 }
 
 #endif
-

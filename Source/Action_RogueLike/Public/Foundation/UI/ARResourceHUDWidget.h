@@ -30,6 +30,8 @@ protected:
 	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UProgressBar> HealthBar;
+	/** Gray combined HP+shield fill behind HealthBar; added to legacy health overlays at runtime. */
+	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UProgressBar> ShieldBar;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UProgressBar> StaminaBar;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UProgressBar> ManaBar;
 	UPROPERTY(meta=(BindWidgetOptional)) TObjectPtr<UTextBlock> HealthValue;

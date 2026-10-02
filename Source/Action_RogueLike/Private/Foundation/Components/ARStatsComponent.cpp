@@ -2,6 +2,7 @@
 
 #include "Engine/World.h"
 #include "Foundation/Core/ARLogChannels.h"
+#include "Foundation/Characters/ARPlayerCharacter.h"
 
 UARStatsComponent::UARStatsComponent()
 {
@@ -25,6 +26,12 @@ UARStatsComponent::UARStatsComponent()
 void UARStatsComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (IsStatSupported(EARStatType::Money))
+	{
+		float& InitialMoney = BaseStats.FindOrAdd(EARStatType::Money);
+		if (!FMath::IsFinite(InitialMoney) || InitialMoney < 0.0f) InitialMoney = 0.0f;
+	}
+	else BaseStats.Remove(EARStatType::Money);
 	RecalculateAll();
 }
 
@@ -60,6 +67,13 @@ FARStatModifierHandle UARStatsComponent::AddStatModifier(const FARStatModifierSp
 {
 	bSuccess = false;
 	FARStatModifierHandle Handle;
+
+	// Owned item/action paths use this method. Permanent edits must never enter
+	// their reversible handle lists (including data-asset default modifiers).
+	if (Spec.Operation == EARStatModifierOperation::PermanentFlat || (!Spec.bStackOnly && !IsStatSupported(Spec.StatType)))
+	{
+		return Handle;
+	}
 
 	if (!FMath::IsFinite(Spec.Value) || !FMath::IsFinite(Spec.Duration) || Spec.Duration == 0.0f)
 	{
@@ -190,38 +204,70 @@ int32 UARStatsComponent::ClearModifiers(EARModifierSourceCategory Category)
 
 bool UARStatsComponent::RemoveOneModifierStack(EARModifierSourceCategory Category, FName SourceId, EARModifierStackRemovalPolicy Policy, FARStatModifierHandle& RemovedHandle)
 {
-	int32 SelectedIndex = INDEX_NONE;
-	double SelectedTime = Policy == EARModifierStackRemovalPolicy::Newest ? -DBL_MAX : DBL_MAX;
-	for (int32 Index = 0; Index < ActiveModifiers.Num(); ++Index)
-	{
-		const FARActiveStatModifier& Modifier = ActiveModifiers[Index];
-		if ((Category == EARModifierSourceCategory::All || Modifier.Spec.Source.Category == Category) && Modifier.Spec.Source.SourceId == SourceId)
-		{
-			const bool bSelect = Policy == EARModifierStackRemovalPolicy::Newest ? Modifier.AppliedAt > SelectedTime : Modifier.AppliedAt < SelectedTime;
-			if (bSelect)
-			{
-				SelectedIndex = Index;
-				SelectedTime = Modifier.AppliedAt;
-			}
-		}
-	}
-	if (SelectedIndex == INDEX_NONE)
-	{
-		return false;
-	}
-	RemovedHandle = ActiveModifiers[SelectedIndex].Handle;
-	const FGuid GroupId = ActiveModifiers[SelectedIndex].StackGroupId;
-	TArray<FARStatModifierHandle> GroupHandles;
+	RemovedHandle = FARStatModifierHandle();
+	int32 RemovedCount = 0;
+	TArray<FARStatModifierHandle> RemovedHandles;
+	const bool bRemoved = RemoveModifierStacks(Category, SourceId, 1, RemovedCount, RemovedHandles, Policy, true);
+	if (bRemoved && !RemovedHandles.IsEmpty()) RemovedHandle = RemovedHandles[0];
+	return bRemoved;
+}
+
+bool UARStatsComponent::RemoveModifierStacks(EARModifierSourceCategory Category, FName SourceId, int32 Count, int32& RemovedCount, TArray<FARStatModifierHandle>& RemovedHandles, EARModifierStackRemovalPolicy Policy, bool bRequireFullCount)
+{
+	RemovedCount = 0;
+	RemovedHandles.Reset();
+	if (Count <= 0 || SourceId.IsNone()
+		|| (Policy != EARModifierStackRemovalPolicy::Newest && Policy != EARModifierStackRemovalPolicy::Oldest)) return false;
+
+	struct FStackCandidate { FGuid Id; double AppliedAt; int32 Order; };
+	TArray<FStackCandidate> Candidates;
+	TMap<FGuid, int32> CandidateIndexes;
+	const double Now = GetNow();
 	for (const FARActiveStatModifier& Modifier : ActiveModifiers)
 	{
-		if (Modifier.StackGroupId == GroupId) GroupHandles.Add(Modifier.Handle);
+		if ((Category != EARModifierSourceCategory::All && Modifier.Spec.Source.Category != Category)
+			|| Modifier.Spec.Source.SourceId != SourceId || (Modifier.ExpireAt >= 0.0 && Modifier.ExpireAt <= Now)) continue;
+		if (const int32* Existing = CandidateIndexes.Find(Modifier.StackGroupId))
+		{
+			Candidates[*Existing].AppliedAt = FMath::Min(Candidates[*Existing].AppliedAt, Modifier.AppliedAt);
+		}
+		else
+		{
+			const int32 Order = Candidates.Num();
+			CandidateIndexes.Add(Modifier.StackGroupId, Order);
+			Candidates.Add({ Modifier.StackGroupId, Modifier.AppliedAt, Order });
+		}
 	}
-	for (const FARStatModifierHandle& GroupHandle : GroupHandles) RemoveStatModifier(GroupHandle);
+	if (Candidates.IsEmpty() || (bRequireFullCount && Candidates.Num() < Count)) return false;
+	Candidates.Sort([Policy](const FStackCandidate& A, const FStackCandidate& B)
+	{
+		if (A.AppliedAt == B.AppliedAt) return Policy == EARModifierStackRemovalPolicy::Newest ? A.Order > B.Order : A.Order < B.Order;
+		return Policy == EARModifierStackRemovalPolicy::Newest ? A.AppliedAt > B.AppliedAt : A.AppliedAt < B.AppliedAt;
+	});
+	TSet<FGuid> SelectedGroups;
+	for (int32 Index = 0; Index < FMath::Min(Count, Candidates.Num()); ++Index) SelectedGroups.Add(Candidates[Index].Id);
+	TSet<EARStatType> DirtyStats;
+	TArray<FARSourceInfo> ChangedSources;
+	// Remove the complete batch before recalculation/notifications so callbacks cannot observe a half-consumed cost.
+	for (int32 Index = ActiveModifiers.Num() - 1; Index >= 0; --Index)
+	{
+		const FARActiveStatModifier& Modifier = ActiveModifiers[Index];
+		if (!SelectedGroups.Contains(Modifier.StackGroupId)) continue;
+		RemovedHandles.Add(Modifier.Handle);
+		if (!Modifier.Spec.bStackOnly) DirtyStats.Add(Modifier.Spec.StatType);
+		if (!ChangedSources.ContainsByPredicate([&Modifier](const FARSourceInfo& Source)
+			{ return Source.Category == Modifier.Spec.Source.Category && Source.SourceId == Modifier.Spec.Source.SourceId; })) ChangedSources.Add(Modifier.Spec.Source);
+		ActiveModifiers.RemoveAt(Index);
+	}
+	RemovedCount = SelectedGroups.Num();
+	for (const EARStatType StatType : DirtyStats) RecalculateStat(StatType);
+	for (const FARSourceInfo& Source : ChangedSources) BroadcastSourceChange(Source);
 	return true;
 }
 
 float UARStatsComponent::GetFinalStat(EARStatType StatType) const
 {
+	if (!IsStatSupported(StatType)) return 0.0f;
 	if (const float* Value = CachedFinalStats.Find(StatType))
 	{
 		return *Value;
@@ -231,6 +277,7 @@ float UARStatsComponent::GetFinalStat(EARStatType StatType) const
 
 float UARStatsComponent::GetBaseStat(EARStatType StatType) const
 {
+	if (!IsStatSupported(StatType)) return 0.0f;
 	return BaseStats.FindRef(StatType);
 }
 
@@ -247,8 +294,12 @@ TArray<FARFinalStatView> UARStatsComponent::GetAllFinalStatViews() const
 	TArray<FARFinalStatView> Result;
 	Result.Reserve(static_cast<int32>(EARStatType::Count));
 	const UEnum* StatEnum = StaticEnum<EARStatType>();
-	for (int32 Value = 0; Value < static_cast<int32>(EARStatType::Count); ++Value)
+	// Enumeration declaration order groups related stats without renumbering persisted enum values.
+	for (int32 Index = 0; StatEnum && Index < StatEnum->NumEnums(); ++Index)
 	{
+		const int64 Value = StatEnum->GetValueByIndex(Index);
+		if (Value < 0 || Value >= static_cast<int64>(EARStatType::Count)
+			|| !IsStatSupported(static_cast<EARStatType>(Value))) continue;
 		FARFinalStatView& View = Result.AddDefaulted_GetRef();
 		View.StatType = static_cast<EARStatType>(Value);
 		View.DisplayName = StatEnum ? StatEnum->GetDisplayNameTextByValue(Value) : FText::GetEmpty();
@@ -398,8 +449,27 @@ bool UARStatsComponent::HasGuaranteedEvasion() const
 
 void UARStatsComponent::SetBaseStat(EARStatType StatType, float Value)
 {
+	if (!IsStatSupported(StatType)) return;
+	if (StatType == EARStatType::Money && (!FMath::IsFinite(Value) || Value < 0.0f)) return;
 	BaseStats.FindOrAdd(StatType) = Value;
 	RecalculateStat(StatType);
+}
+
+bool UARStatsComponent::ApplyPermanentFlat(EARStatType StatType, float Delta)
+{
+	if (!IsStatSupported(StatType) || !FMath::IsFinite(Delta)) return false;
+	const float NewBase = GetBaseStat(StatType) + Delta;
+	if (!FMath::IsFinite(NewBase) || (StatType == EARStatType::Money && NewBase < 0.0f)) return false;
+	// Keep raw base semantics consistent with Flat. Existing final-value safety
+	// rules and percentage/multiplier effects still run via RecalculateStat.
+	SetBaseStat(StatType, NewBase);
+	return true;
+}
+
+bool UARStatsComponent::IsStatSupported(EARStatType StatType) const
+{
+	return static_cast<uint8>(StatType) < static_cast<uint8>(EARStatType::Count)
+		&& (StatType != EARStatType::Money || (IsValid(GetOwner()) && GetOwner()->IsA<AARPlayerCharacter>()));
 }
 
 void UARStatsComponent::RecalculateAll()
@@ -412,6 +482,7 @@ void UARStatsComponent::RecalculateAll()
 
 void UARStatsComponent::RecalculateStat(EARStatType StatType)
 {
+	if (!IsStatSupported(StatType)) return;
 	const float OldValue = CachedFinalStats.FindRef(StatType);
 	const float NewValue = IsReductionStat(StatType)
 		? (1.0f - GetDamageRemainingMultiplier(StatType)) * 100.0f
@@ -425,6 +496,7 @@ void UARStatsComponent::RecalculateStat(EARStatType StatType)
 
 float UARStatsComponent::CalculateGeneralStat(EARStatType StatType, FARStatBreakdown* OutBreakdown) const
 {
+	if (!IsStatSupported(StatType)) return 0.0f;
 	const float BaseValue = BaseStats.FindRef(StatType);
 	float FlatTotal = 0.0f;
 	float AdditiveTotal = 0.0f;
@@ -469,6 +541,8 @@ float UARStatsComponent::ApplySafetyRules(EARStatType StatType, float Value) con
 	case EARStatType::PhysicalDefense:
 	case EARStatType::FireDefense:
 	case EARStatType::MagicDefense:
+	case EARStatType::OverallDamageTakenIncrease:
+	case EARStatType::Money:
 	case EARStatType::PhysicalDamageTakenIncrease:
 	case EARStatType::FireDamageTakenIncrease:
 	case EARStatType::MagicDamageTakenIncrease:

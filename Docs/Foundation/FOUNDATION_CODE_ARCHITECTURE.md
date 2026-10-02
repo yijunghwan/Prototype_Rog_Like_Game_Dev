@@ -1,5 +1,11 @@
 # Foundation 코드 아키텍처 설계서
 
+> **현행 추가 (2026-10-03):** EARStatType::Money=47, Count=48 및 EARStatModifierOperation::PermanentFlat=4 추가, 기존 번호 유지. UARStatsBlueprintLibrary::ApplyStatModifier만 PermanentFlat을 직접 기본값 수정 경로로 분기한다. UARStatsComponent::ApplyPermanentFlat은 비정상 값/결과와 부족한 기본 Money 잔액을 원자적으로 거절하고 SetBaseStat→기존 재계산/OnFinalStatChanged를 사용한다. AddStatModifier 경로는 PermanentFlat을 거절하여 아이템·액션 자동 회수와 섞이지 않는다. Money 지원 여부는 ARPlayerCharacter 계열 소유자 기준이며 GetAllFinalStatViews에서도 비플레이어에게 숨긴다. 기록·핸들·타이머·Source 알림·세이브 없음. [참고](../Guides/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
+
+> **현행 추가 (2026-10-03):** `UARCombatBlueprintLibrary::ApplyCrowdControl`은 `EARCrowdControlType`의 Stun/Root를 받아 DA 없이 표준 CC를 적용한다. 요청별 RF_Transient Definition을 만들어 기존 StatusEffectComponent에 전달하며 활성 효과의 UPROPERTY 참조가 수명을 소유한다. 저장 에셋/CDO를 수정하지 않는다. 강인함 기본 적용, 면역·동일 태그 긴 시간 갱신·기존 해제/알림 재사용. 사용자 정의 규칙은 기존 DA 경로 유지. [핀 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#apply-crowd-control).
+
+> **현행 보완 (2026-10-02):** 공통 Character의 직접 BP 이벤트 6개(사망·그로기 소진·실드 파괴·피해 적용·액션 취소·상태 제거)를 지원한다. 등장 초기화는 기존 Event BeginPlay. 기존 컴포넌트/Character 디스패처와 중복 처리하지 않는다. 실드 파괴는 총합 양수→0의 피해 또는 명시적 제거만 발생하고 시간 만료·Ignore Shield는 제외한다. Health의 변경 알림 이후 파괴 전이 스냅샷을 전달한다. Restore Health/Mana/Stamina는 현재값을 최대치까지만 더하며 실제 증가량을 반환한다. 최대 스탯 변경·부활·RecoveryPower 자동 배율은 아니다. [직접 이벤트](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events) · [회복 핀 참고](../Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing).
+
 > **현행 보완 (2026-09-30):** `UARStaggerComponent`는 슈퍼아머 핸들을, `UARStatusEffectComponent`는 CC 면역 핸들을 소유한다. 무기·유물 런타임과 Action은 각각 자신이 발급받은 핸들을 수명 종료 시 자동 회수한다. 기절·속박은 자동 CC이며 향후 상태 Definition은 `bIsCrowdControl`로 분류한다. 이 보장 효과는 `Tenacity` 스탯 수정치와 별개다.
 
 > **상태:** 구현 전 코드 설계서  
@@ -327,7 +333,7 @@ Enemy 팀을 가진 최소 자식이다. AI와 공격 패턴은 넣지 않는다
 | `GetModifierRemainingTime(Handle)` | 영구/남은 시간 상태 반환 |
 | `GetModifiersBySource(Category, SourceId)` | 존재 여부, 중첩 수, 가장 긴 남은 시간 반환 |
 | `GetVisibleStatEffects()` | 현재 HUD에 표시할 출처별 버프·디버프 아이콘, 중첩 수, 남은 시간 반환 |
-| `RemoveOneModifierStack(Category, SourceId, Policy)` | 최신/가장 오래된 중첩 하나 제거 |
+| `RemoveModifierStacks(Category, SourceId, Count, RemovedCount, RemovedHandles, Policy, bRequireFullCount)` | 지정 개수의 스택 그룹 제거. 기본 Oldest/전체 개수 필수, 부족 시 무차감 실패. 부분 제거 옵션 및 실제 제거 개수 제공. |
 | `GetStatBreakdown(StatType)` | 인벤토리/디버그용 읽기 전용 분해 정보 |
 
 이벤트는 `OnFinalStatChanged`, `OnStatModifiersChanged`, `OnModifierAdded`, `OnModifierRemoved`다. Modifier Spec에는 출처 분류, 출처 ID, 표시 이름, 지속시간, 스탯, 계산 방식을 항상 넣는다. 같은 SourceId의 재적용은 독립 중첩하지만, 한 적용이 여러 스탯을 바꿀 때는 첫 반환 Handle을 `StackGroupHandle`에 전달해 한 중첩으로 센다. `GetModifiersBySource`는 수정치 개수가 아닌 살아 있는 적용 그룹 수를 반환한다. `bStackOnly`는 스탯 재계산 없이 중첩만 저장하며, `bAffectedByTenacity`는 유한 지속시간에 대상의 강인함을 적용 시점에 한 번 반영한다. HUD 표시를 선택한 수정치는 대상의 스탯 컴포넌트가 아이콘 메타데이터와 수명을 함께 관리하고 UI가 이를 읽는다. `DisplayName`은 조회 키로 쓰지 않는다.
@@ -480,7 +486,7 @@ Loadout Component는 등록·소유권과 후보 열거의 유일한 소유자�
 
 Damage Request는 공격자/환경 출처, 대상, 전달 방식, 속성, 기본 피해, 공격력/주문력 계수, 치명타/회피/증감식/방어력 무시/보호막 무시/**흡수 적용**/적중시 효과/필중 여부, 출처 ID와 표시 이름을 담는다.
 
-경직과 그로기는 Damage Request에 숨기지 않는다. 공격 BP가 필요할 때 별도 `FARStaggerRequest`로 호출한다. 따라서 **경직력은 자동 경직을 만들지 않고, 공격이 제공한 기본 경직 피해 또는 기본 그로기 피해를 강화할 뿐이다.** 공격력·주문력도 스킬이 계수를 지정할 때만 참여하며, 계수 없는 깡 피해도 가능하다.
+경직과 그로기는 Damage Request에 숨기지 않는다. 공격 BP는 피해 Return Value를 `Apply Stagger And Groggy Damage From Result`에 바로 전달하고 기본 경직력·배율·그로기 수치를 개별 지정할 수 있다. 기존 저수준 `FARStaggerRequest` 경로도 유지한다. 따라서 **경직력은 자동 경직을 만들지 않고, 공격이 제공한 기본 경직 피해 또는 기본 그로기 피해를 강화할 뿐이다.** 공격력·주문력도 스킬이 계수를 지정할 때만 참여하며, 계수 없는 깡 피해도 가능하다.
 
 ### `UARCombatSubsystem`
 
@@ -497,6 +503,8 @@ Damage Request는 공격자/환경 출처, 대상, 전달 방식, 속성, 기본
 | `GetActiveDotsForTarget` | 디버그/특수 UI 읽기 |
 
 DOT 첫 틱은 `TickInterval` 뒤에 들어가고 기본 간격은 0.25초다. 프레임 지연으로 밀린 틱은 모두 처리한다. 갱신형 DOT는 같은 이름이며 기본 피해·지속시간·간격이 모두 같을 때만 남은 시간을 초기화하고, 다르면 경고 로그 후 기존 DOT를 유지한다. 독립 중첩은 별도 Handle로 처리한다.
+
+피해 요청은 `DamageNameInterval=0.2`와 `bIgnoreDamageNameInterval=false`를 기본으로 제공한다. 유효 DamageName은 대상 + 이름별 다음 허용 시각을 Subsystem의 약한 대상 참조 맵에 기록한다. 성공한 Applied 피해가 제한을 시작하며 자동 정리/피해 이벤트 전에 기록해 재진입 요청도 막는다. 다른 공격자·속성·전달 방식도 같은 이름이면 공유한다. 제한 중 요청은 Blocked/Cooldown, 무효·회피·무적·피해0은 시간을 소비하지 않는다. None/0초/무시 체크는 검사·기록을 생략하고 기존 제한은 유지한다. DOT catch-up은 예정 시각으로 안정 정렬 후 검사하며, 간격상 허용되는 틱만 적용한다. 갱신 정의에는 피해 이름·제한 간격·무시 체크도 포함한다. 만료·소멸 대상과 월드 종료 시 기록을 제거한다.
 
 DOT Instance는 최종 피해를 저장하지 않고 원본 Request를 보관해 매 틱 캐시된 최신 스탯으로 다시 계산한다. 공격자 참조가 사라지는 순간 마지막 유효 공격 스탯을 Snapshot하여 남은 틱을 계속 처리한다. `FARDamageOverTimeSpec`은 선택적 `FARStaggerRequestTemplate`을 가질 수 있으며, 존재하면 각 성공 틱의 Hit Context로 경직·그로기 요청을 실행한다. 활성 DOT 수와 한 프레임 밀린 틱 수가 설정 임계값을 넘으면 경고하되 합의된 틱을 버리지는 않는다.
 
@@ -520,7 +528,7 @@ DOT Instance는 최종 피해를 저장하지 않고 원본 Request를 보관해
 → 전체·직접/지속·속성 증폭
 → 치명타
 → 방관 후 속성 방어력
-→ 대상 속성 피격 피해 증가율
+→ 대상 전체 + 해당 속성 피격 피해 증가율의 합연산
 → 전체/속성 피해 감소율의 독립 곱연산
 → 내림/최소 피해 규칙
 → 보호막·체력 분배
@@ -538,6 +546,7 @@ Combat Subsystem의 한 요청은 검증·계산·보호막/체력 반영·자�
 - `Apply Combat Damage`
 - `Apply Damage Over Time` / `Remove Damage Over Time`
 - `Apply Stagger And Groggy Damage`
+- `Apply Stagger And Groggy Damage From Result`: Damage Result와 개별 기본 경직력/배율/그로기 수치를 받아 Applied + 유효 Hit Context일 때 기존 경직 처리에 위임한다. BP의 Break/Branch/Make Request가 필요 없다. 기존 Request 기반 노드·저장 그래프는 유지한다. DOT는 기존 매 틱 체크 옵션을 사용한다.
 - `Apply Super Armor` / `Remove Super Armor`
 - `Apply Status Effect`
 
@@ -580,9 +589,12 @@ Loadout/Consumable Component는 `UPROPERTY(Transient)` 슬롯·배열로 Instanc
 | `OnItemRegistered` | BP 이벤트 | 조건부 패시브/연출 시작 |
 | `CanExecuteItemSkill(SkillId)` | BP Native Event, 순수 판정 | 스택·특수 자원 등 고유 조건 검사 |
 | `ExecuteItemSkill(SkillId, ActionHandle)` | BP 이벤트 | 공격/스킬 실제 구현 |
+| `On Item Skill Cancelled(SkillId, ActionHandle, Reason)` | BP 이벤트 | 해당 인스턴스에서 실행된 스킬 취소 알림. 별도 Bind 없이 자체 타이머·상태 정리 |
 | `SetItemUIState` | C++ 함수 | 게이지/숫자/소형 스택 데이터 전달 |
 | `UnregisterItem` | C++ 흐름 | 구독 해제·Modifier 제거·BP 해제 이벤트 |
 | `OnItemUnregistered` | BP 이벤트 | 고유 Object/연출 정리 |
+
+Loadout은 실행 핸들별로 약한 아이템 참조와 SkillId를 보관한다. 취소 시 Action Component의 자동 정리가 끝난 뒤 실행 기록을 먼저 제거하고 해당 아이템에만 `On Item Skill Cancelled`를 전달한다. 정상 End Action, 실행 전 판정 실패, ExecuteItemSkill에 도달하지 않은 롤백에는 이 이벤트가 없다. 수동 TryStartAction은 별도 공용 액션 알림을 사용한다. 아이템 제거 시 실행 중인 스킬의 취소 알림이 On Item Unregistered보다 먼저 전달되며 비용·쿨다운 환불 규칙은 바뀌지 않는다.
 
 픽업, 상점, 보상, 제단은 아이템을 직접 장착하지 않는다. 모두 `Begin Loadout Acquisition → Commit Loadout Acquisition` 경로를 사용한다. 월드 픽업은 `BP_LoadoutItemPickup`/`BP_ConsumablePickup`이 `IARInteractable`로 구현한다.
 

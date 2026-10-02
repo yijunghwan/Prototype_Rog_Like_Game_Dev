@@ -1,5 +1,11 @@
 # Foundation 블루프린트 설계서
 
+> **현행 추가 (2026-10-03):** 일반 Apply Stat Modifier의 Operation에 Permanent Flat을 추가했다. 양/음수 Value를 기본값에 직접 더하며 기록·만료·반환 핸들 없음(Success로 판정). 아이템/액션/DA 기본 효과에서는 거절한다. Money는 플레이어 전용, 기본0, float 수치이며 부족한 기본 잔액 차감은 무변경 실패. Get Final Stat·Get Base Stat·OnFinalStatChanged·플레이어 전체 스탯 목록에 반영; 적/환경의 Money 적용은 거절하고 목록에서 제외한다. 자동 돈 HUD·상점·세이브는 없다. [사용 참고서](../Guides/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
+
+> **현행 추가 (2026-10-03):** 기본 CC는 `Apply Crowd Control`로 DA 없이 적용 가능하다. Target Actor / CC Type(Stun·Root) / Duration(초, 기본1, >0) / Affected By Tenacity(기본 체크)를 입력하고 Success / Return Value(상태 핸들)를 받는다. Source·Failure Reason·Applied Duration은 고급 핀. 정확한 자기 기절3초는 Duration=3, 강인함 체크 해제(면역은 여전히 적용). 기존 DA 및 해제 노드는 유지한다. [핀 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#apply-crowd-control).
+
+> **현행 보완 (2026-10-02):** 공통 Character의 직접 BP 이벤트 6개(사망·그로기 소진·실드 파괴·피해 적용·액션 취소·상태 제거)를 지원한다. 등장 초기화는 기존 Event BeginPlay. 기존 컴포넌트/Character 디스패처와 중복 처리하지 않는다. 실드 파괴는 총합 양수→0의 피해 또는 명시적 제거만 발생하고 시간 만료·Ignore Shield는 제외한다. Health의 변경 알림 이후 파괴 전이 스냅샷을 전달한다. Restore Health/Mana/Stamina는 현재값을 최대치까지만 더하며 실제 증가량을 반환한다. 최대 스탯 변경·부활·RecoveryPower 자동 배율은 아니다. [직접 이벤트](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events) · [회복 핀 참고](../Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing).
+
 > **현행 보완 (2026-09-30):** 유물/무기 런타임에서 `Apply Item Super Armor`와 `Apply Item CC Immunity`를 사용하면 아이템 제거 시 자동 해제된다. 스킬 행동에만 붙일 때는 `Apply Action Super Armor` / `Apply Action CC Immunity`를 사용한다. CC 면역은 강인함 100 수정치가 아니라 새 CC의 적용을 사전에 차단하는 별도 보장 효과다. 지속시간 `-1`은 무기한이고, 이미 걸린 상태를 지우지는 않는다.
 
 > **상태:** 구현 전 Blueprint 계약서  
@@ -186,6 +192,7 @@ Runtime BP는 월드 Actor가 아니다. 장착 중인 플레이어의 런타임
 | `Try Start Action` | Owner, Action 설정 | Started, Handle, 실패 이유 | 스킬 생명주기 시작 |
 | `Apply Combat Damage` | Damage Request | Damage Result | 실제 피해 요청 |
 | `Apply Stagger And Groggy Damage` | Stagger Request | Stagger Result | 별도 경직/그로기 요청 |
+| `Apply Stagger And Groggy Damage From Result` | Damage Result, Base Stagger Damage, Stagger Multiplier, Base Groggy Damage, Source, Effect Name | Stagger Result | 직접 피해 Return Value를 통째 연결. Applied/유효 타격 검사는 내부 처리. 기존 Request 조립 불필요 |
 
 아이템의 Definition에 이미 들어 있는 고정 Modifier는 C++ 등록 흐름이 자동 적용한다. Runtime BP는 “장착 직후 항상 적용되는 고정 스탯”을 다시 Apply하지 않는다.
 
@@ -295,6 +302,8 @@ Damage Result에는 성공 여부, 회피 여부, 치명타 여부, 최종 피�
 
 DOT Spec은 Damage Request 외에 지속시간, Tick Interval, DOT Name, 독립 중첩/갱신형 정책과 선택적 `Stagger Request Template`을 입력받는다. 갱신형은 같은 이름에 기본 피해·지속시간·간격이 정확히 같을 때만 남은 시간을 초기화한다. 템플릿이 있으면 성공한 각 틱이 경직·그로기 요청도 실행한다.
 
+직접 피해 및 DOT의 Damage Request에는 `Damage Name Interval`(기본 0.2초)과 `Ignore Damage Name Interval`(기본 false)이 있다. 같은 대상 + 같은 Damage Name의 Applied 타격은 간격 동안 재피격을 막으며 공격자·속성·직접/DOT 모두 공유한다. None 이름은 제외한다. 0초/무시 체크는 해당 요청만 검사·기록을 생략한다. 기존 제한은 그대로이고 사전 Can Damage Target에는 이 시간 조건이 포함되지 않는다. 반환 Blocked/Cooldown으로 제한 차단을 구분한다. 별도 BP 타이머나 새 피해 노드 없이 Make Request/구조체 핀 분할에서 지정한다. DOT 중첩 인스턴스 자체를 제거하는 기능은 아니며 틱 적용만 제한한다.
+
 ### 6.4 경직·그로기·상태이상 노드
 
 | 노드 | 입력 | 출력 | 동작 |
@@ -315,8 +324,8 @@ Stagger Result에는 경직 시도/성공/슈퍼아머 차단 여부, 실제 그
 
 | 노드 | 입력 | 출력 | 동작 |
 |---|---|---|---|
-| `Try Start Action` | Owner, Action Tag, Cancel Rules, Block Roll, Block Basic Move | Started, Action Handle, Failure Reason | 행동을 시작하고 유효 Handle 반환 |
-| `Can Start Action` | Owner, Action Tag/Rules | Can Start, Failure Reason | 시작 전 UI/AI 검사 |
+| `Try Start Action` | Owner, Cancel Rules, Block Roll, Block Basic Move | Started, Action Handle, Failure Reason | 태그 없이 행동을 시작하고 고유 Action Handle 반환 |
+| `Can Start Action` | Owner, Action Request 규칙 | Can Start, Failure Reason | 시작 전 UI/AI 검사; 행동 태그 불필요 |
 | `End Action` | Action Handle | Success | 정상 종료와 Action 소유 항목 정리 |
 | `Cancel Action` | Action Handle, Cancel Reason | Success | 강제 취소와 동일 정리 |
 | `Action Delay` | Action Handle, Duration | Completed / Cancelled | 취소된 Handle이면 즉시 Cancelled |

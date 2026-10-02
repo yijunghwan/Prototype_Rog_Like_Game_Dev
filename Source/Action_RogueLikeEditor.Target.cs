@@ -11,5 +11,6 @@ public class Action_RogueLikeEditorTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 		ExtraModuleNames.Add("Action_RogueLike");
+		ExtraModuleNames.Add("Action_RogueLikeEditor");
 	}
 }

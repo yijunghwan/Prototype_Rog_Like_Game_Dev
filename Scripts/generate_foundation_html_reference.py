@@ -41,6 +41,7 @@ STAT_META = [
     ("화염 피해 증폭", "피해 증폭", "화염 속성 피해만 증폭한다."),
     ("마법 피해 증폭", "피해 증폭", "마법 속성 피해만 증폭한다."),
     ("그로기 피해 증폭", "피해 증폭", "공격이 주는 그로기 피해를 증폭한다."),
+    ("전체 피격 피해 증가율", "피격 취약", "물리·화염·마법 피격에서 해당 속성 증가율과 합산한다. 공허는 제외."),
     ("물리 피격 피해 증가율", "피격 취약", "방어 계산 뒤 받는 물리 피해를 증가시킨다."),
     ("화염 피격 피해 증가율", "피격 취약", "방어 계산 뒤 받는 화염 피해를 증가시킨다."),
     ("마법 피격 피해 증가율", "피격 취약", "방어 계산 뒤 받는 마법 피해를 증가시킨다."),
@@ -60,6 +61,7 @@ STAT_META = [
     ("초당 MP 회복량", "플레이어", "초당 재생되는 MP."),
     ("최대 소모품 슬롯 수", "플레이어", "보유할 수 있는 소모품 슬롯 개수. 최종값은 내림."),
     ("쿨다운 감소율", "플레이어", "스킬 재사용 대기시간 감소율(%). 캐릭터별 상한과 스킬 최소 쿨다운을 따른다."),
+    ("돈", "플레이어", "플레이어 전용 콘텐츠 수치, 기본 0. Permanent Flat으로 기본 잔액 직접 증감, 부족 차감 실패. 자동 수입/상점/UI/세이브 없음. 적·환경은 미지원."),
 ]
 
 PURPOSE = {
@@ -201,6 +203,7 @@ PURPOSE = {
     "TryConsumeResources": "MP·스태미나 비용을 함께 지불",
     "GetCurrentResource": "지정 자원의 현재·최대·비율 조회",
     "ApplyStaggerAndGroggyDamage": "경직/그로기 피해를 별도 경로로 적용",
+    "ApplyStaggerAndGroggyDamageFromResult": "피해 결과를 바로 받아 성공한 타격에만 경직/그로기 적용. 별도 Break/Branch 불필요",
     "AddSuperArmor": "슈퍼아머를 추가하고 핸들 발급",
     "RemoveSuperArmor": "슈퍼아머 핸들 제거",
     "RemoveSuperArmorBySource": "출처가 일치하는 슈퍼아머 제거",
@@ -211,11 +214,11 @@ PURPOSE = {
     "GetCurrentGroggy": "현재 그로기 게이지 조회",
     "GetMaxGroggy": "최대 그로기 게이지 조회",
     "ResetGroggyGauge": "그로기 게이지 초기화",
-    "ApplyStatModifier": "스탯 보정 추가 및 핸들 발급",
+    "ApplyStatModifier": "일반 연산은 보정 추가·핸들 발급. Permanent Flat은 기본값 직접 증감·기록 없음, Success=true여도 핸들 없음. Money는 플레이어 전용·기본 잔액 부족 차감 실패.",
     "AddStatModifier": "스탯 보정 추가",
     "RemoveStatModifier": "스탯 보정 핸들 제거",
     "RemoveStatModifiersBySource": "출처가 일치하는 스탯 보정 제거",
-    "RemoveOneStatModifierStack": "스탯 보정 중첩 한 겹 제거",
+    "RemoveStatModifierStacks": "지정 개수의 스탯 효과 스택 제거. 부족 시 전체 실패 또는 남은 만큼 제거를 선택.",
     "ClearStatModifiers": "활성 스탯 보정을 모두 제거",
     "GetFinalStat": "모든 보정을 적용한 최종 스탯 조회",
     "GetBaseStat": "Details에 지정된 기본 스탯 조회",
@@ -227,6 +230,7 @@ PURPOSE = {
     "HasGuaranteedEvasion": "관리형 회피 보장 효과가 있는지 조회",
     "HasGuaranteedInvulnerability": "관리형 무적 보장 효과가 있는지 조회",
     "ApplyStatusEffect": "상태이상 적용/갱신",
+    "ApplyCrowdControl": "DA 없이 기본 기절/속박 적용. 대상·유형·초·강인함 적용(기본 true)을 입력, 성공·상태 핸들 출력. CC 면역과 동일 태그 긴 시간 갱신 규칙 사용.",
     "RemoveStatusEffect": "상태이상 핸들 제거",
     "RemoveStatusEffectsBySource": "출처가 일치하는 상태이상 제거",
     "ClearAllStatusEffects": "활성 상태이상 전체 제거",
@@ -271,7 +275,7 @@ PURPOSE = {
     "TrySpawnConsumablePickup": "소모품 픽업 Actor 생성 시도",
     "RemoveModifiers": "조건에 맞는 스탯 보정들을 제거",
     "ClearModifiers": "스탯 보정을 모두 제거",
-    "RemoveOneModifierStack": "스탯 보정의 중첩 한 겹 제거",
+    "RemoveModifierStacks": "지정 개수의 스택 그룹 제거. 그룹 안의 모든 스탯 변경을 함께 회수.",
     "GetModifiersBySource": "출처별 스탯 보정 목록 조회",
     "BP_AoEFinished": "기존 템플릿 범위 공격 완료 연출/정리 이벤트",
     "BP_CursorFeedback": "기존 템플릿 커서 피드백 구현 이벤트",
@@ -385,6 +389,7 @@ FIELD_PURPOSE = {
 }
 
 EVENT_PURPOSE = {
+    "OnShieldBroken": "피해/수동 제거로 총 실드가 양수에서 0이 됐을 때; 시간 만료 제외",
     "OnTargetAccepted": "히트박스가 새 대상을 명중 대상으로 수락했을 때",
     "OnCharacterDeath": "캐릭터가 사망했을 때",
     "OnAimDirectionChanged": "캐릭터의 조준 방향이 바뀌었을 때",
@@ -471,6 +476,16 @@ def pins(signature: str) -> tuple[list[str], list[str]]:
     return ins, outs
 
 def purpose(name: str, category: str, kind: str) -> str:
+    character_hooks = {
+        "ReceiveCharacterDeath": "자신의 사망 확정 후 액션·이동·상태 정리가 끝나면 받는 직접 이벤트",
+        "ReceiveGroggyGaugeDepleted": "자신의 그로기 게이지가 소진되면 받는 직접 이벤트",
+        "ReceiveShieldBroken": "피해/수동 제거로 총 실드가 양수→0이면 받는 직접 이벤트; 만료 제외",
+        "ReceiveDamageApplied": "자신에게 피해가 적용되면 결과를 받는 직접 이벤트",
+        "ReceiveActionCancelled": "취소된 액션 핸들·사유를 받는 직접 이벤트; 정상 종료 제외",
+        "ReceiveStatusRemoved": "제거된 상태 정보와 정확한 핸들을 받는 직접 이벤트",
+    }
+    if name in character_hooks:
+        return character_hooks[name]
     if name in PURPOSE:
         return PURPOSE[name]
     if kind == "구현 이벤트":
@@ -582,7 +597,8 @@ def stat_rows() -> list[tuple[str, str, str, str, str]]:
     data = STAT_HEADER.read_text(encoding="utf-8")
     block = re.search(r"enum class EARStatType\s*:\s*uint8\s*\{(.*?)\};", data, re.S)
     assert block
-    names = [part.strip() for part in block.group(1).split(",") if part.strip() and not part.strip().startswith("Count")]
+    body = re.sub(r"//[^\n]*", "", block.group(1))
+    names = [name for name in re.findall(r"^\s*(\w+)\s*(?:=\s*\d+)?\s*(?:UMETA\([^)]*\))?\s*(?:,|$)", body, re.M) if name != "Count"]
     assert len(names) == len(STAT_META), (len(names), len(STAT_META))
     stats_cpp = (ROOT / "Source/Action_RogueLike/Private/Foundation/Components/ARStatsComponent.cpp").read_text(encoding="utf-8")
     defaults = dict(re.findall(r"BaseStats\.Add\(EARStatType::(\w+),\s*([\d.]+)f?\)", stats_cpp))
@@ -625,7 +641,7 @@ code{font-family:ui-monospace,Consolas,monospace;color:#e8d6a6;font-size:.93em;o
     ))
     head += """</div></header><main class="wrap"><div class="intro">
 <strong>아이템 통합 안내 (2026-09-30)</strong> 이 페이지의 아이템 Definition·획득 노드 표는 통합 전 스냅샷이다.
-현행 아이템 필드와 새 조회·획득 노드는 <a href="ITEM_DATA_ASSET_FIELD_GUIDE.html">통합 아이템 제작 가이드</a>를 확인한다.<br>
+현행 아이템 필드와 새 조회·획득 노드는 <a href="../Guides/ITEM_ASSET_CREATION_GUIDE_KO.html">아이템 에셋 제작 가이드</a>를 확인한다.<br>
 <strong>범위</strong> 프로젝트 C++가 추가한 Foundation 및 기존 템플릿의 Blueprint 노드와 노출 필드를 다룬다.
 언리얼 엔진 기본 노드·엔진 상속 Details 전체와 바이너리 BP 그래프 내부 커스텀 변수는 포함하지 않는다.
 Details의 “조회 전용” 필드는 값 설정이 아니라 컴포넌트 참조다. 시그니처에서 비-const 참조 인자는 출력 핀으로 분류했다.
@@ -687,6 +703,9 @@ Acceptance Radius 기본 -1은 엔진 기본 허용 반경을 사용한다. 캡�
         body.append('<h3>' + title + '</h3><div class="tablebox"><table><thead><tr><th>카테고리 · 대상</th><th>영어 노드명</th><th>용도</th><th>Input</th><th>Output</th><th>선언</th></tr></thead><tbody>')
         for category, owner, link, name, label, kind, sig in sections[key]:
             inputs, outputs = pins(sig)
+            if owner == "AARBaseCharacter" and name.startswith("Receive") and kind == "구현 이벤트":
+                outputs = ["실행: 이벤트 발생"] + inputs + outputs
+                inputs = ["구독 불필요; 이 Character BP에서 구현, 대상은 Self"]
             row_anchor = ""
             if owner == "AARAIController":
                 row_anchor = ' id="node-' + esc(owner) + '-' + esc(name) + '"'

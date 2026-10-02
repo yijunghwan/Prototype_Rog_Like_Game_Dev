@@ -9,6 +9,7 @@ struct FARDefensiveStatSnapshot
 	bool bGuaranteedEvasion = false;
 	bool bGuaranteedInvulnerability = false;
 	float AttributeDefense = 0.0f;
+	float OverallDamageTakenIncrease = 0.0f;
 	float AttributeDamageTakenIncrease = 0.0f;
 	float OverallRemainingDamageMultiplier = 1.0f;
 	float AttributeRemainingDamageMultiplier = 1.0f;
@@ -24,4 +25,3 @@ public:
 		const FARDefensiveStatSnapshot& Defense,
 		FRandomStream& RandomStream);
 };
-

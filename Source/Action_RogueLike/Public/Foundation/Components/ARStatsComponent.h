@@ -20,19 +20,19 @@ struct ACTION_ROGUELIKE_API FARStatModifierSpec
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat", meta=(EditCondition="!bStackOnly", EditConditionHides, HideEditConditionToggle))
 	EARStatType StatType = EARStatType::AttackPower;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat", meta=(EditCondition="!bStackOnly", EditConditionHides, HideEditConditionToggle))
 	EARStatModifierOperation Operation = EARStatModifierOperation::Flat;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat", meta=(EditCondition="!bStackOnly", EditConditionHides, HideEditConditionToggle))
 	float Value = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat", meta=(EditCondition="Operation != EARStatModifierOperation::PermanentFlat", EditConditionHides))
 	float Duration = -1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stat", meta=(EditCondition="Operation != EARStatModifierOperation::PermanentFlat", EditConditionHides))
 	FARSourceInfo Source;
 
 	/** Records one stack without changing or recalculating a stat. */
@@ -40,15 +40,16 @@ struct ACTION_ROGUELIKE_API FARStatModifierSpec
 	/** Pass the first application handle to attach another stat change to the same stack. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stack") FARStatModifierHandle StackGroupHandle;
 	/** Only affects finite durations, using the target's tenacity at application time. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Duration") bool bAffectedByTenacity = false;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD") EARStatEffectDisplay HUDDisplay = EARStatEffectDisplay::Hidden;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="HUDDisplay != EARStatEffectDisplay::Hidden")) FText HUDName;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="HUDDisplay != EARStatEffectDisplay::Hidden")) TSoftObjectPtr<UTexture2D> HUDIcon;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Duration", meta=(EditCondition="Operation != EARStatModifierOperation::PermanentFlat && Duration > 0.0", EditConditionHides)) bool bAffectedByTenacity = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="Operation != EARStatModifierOperation::PermanentFlat", EditConditionHides)) EARStatEffectDisplay HUDDisplay = EARStatEffectDisplay::Hidden;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="Operation != EARStatModifierOperation::PermanentFlat && HUDDisplay != EARStatEffectDisplay::Hidden")) FText HUDName;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD", meta=(EditCondition="Operation != EARStatModifierOperation::PermanentFlat && HUDDisplay != EARStatEffectDisplay::Hidden")) TSoftObjectPtr<UTexture2D> HUDIcon;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Guarantee")
+	// Keep an already-checked guarantee visible so legacy/changed specs can be corrected.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Guarantee", meta=(EditCondition="bGuaranteeInvulnerability || (!bStackOnly && Operation != EARStatModifierOperation::PermanentFlat && StatType == EARStatType::OverallDamageReduction)", EditConditionHides, HideEditConditionToggle, ToolTip="Only valid for non-stack-only, non-permanent Overall Damage Reduction. Clear before switching modes."))
 	bool bGuaranteeInvulnerability = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Guarantee")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Guarantee", meta=(EditCondition="bGuaranteeEvasion || (!bStackOnly && Operation != EARStatModifierOperation::PermanentFlat && StatType == EARStatType::Evasion)", EditConditionHides, HideEditConditionToggle, ToolTip="Only valid for non-stack-only, non-permanent Evasion. Clear before switching modes."))
 	bool bGuaranteeEvasion = false;
 };
 
@@ -139,7 +140,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Stats")
 	int32 ClearModifiers(EARModifierSourceCategory Category = EARModifierSourceCategory::All);
 
-	UFUNCTION(BlueprintCallable, Category="AR|Stats")
+	/** Count is in stack groups, not individual stat changes. Invalid/insufficient full requests remove nothing. */
+	UFUNCTION(BlueprintCallable, Category="AR|Stats", meta=(AdvancedDisplay="RemovedHandles,Policy,bRequireFullCount", CPP_Default_Count="1"))
+	bool RemoveModifierStacks(EARModifierSourceCategory Category, FName SourceId, int32 Count, int32& RemovedCount, TArray<FARStatModifierHandle>& RemovedHandles, EARModifierStackRemovalPolicy Policy = EARModifierStackRemovalPolicy::Oldest, bool bRequireFullCount = true);
+
+	UFUNCTION(BlueprintCallable, Category="AR|Stats", meta=(BlueprintInternalUseOnly="true", DeprecatedFunction, DeprecationMessage="Use Remove Modifier Stacks with Count=1."))
 	bool RemoveOneModifierStack(EARModifierSourceCategory Category, FName SourceId, EARModifierStackRemovalPolicy Policy, FARStatModifierHandle& RemovedHandle);
 
 	UFUNCTION(BlueprintPure, Category="AR|Stats")
@@ -173,6 +178,8 @@ public:
 	bool HasGuaranteedEvasion() const;
 
 	void SetBaseStat(EARStatType StatType, float Value);
+	/** No effect handle or source record. Negative Money balances and non-finite results are rejected atomically. */
+	bool ApplyPermanentFlat(EARStatType StatType, float Delta);
 
 	UPROPERTY(BlueprintAssignable, Category="AR|Stats")
 	FARFinalStatChangedSignature OnFinalStatChanged;
@@ -203,6 +210,7 @@ private:
 	void BroadcastSourceChange(const FARSourceInfo& Source);
 	double GetNow() const;
 	static bool IsReductionStat(EARStatType StatType);
+	bool IsStatSupported(EARStatType StatType) const;
 
 	UPROPERTY(Transient)
 	TArray<FARActiveStatModifier> ActiveModifiers;

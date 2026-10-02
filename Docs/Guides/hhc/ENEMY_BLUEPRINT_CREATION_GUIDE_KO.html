@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>적 제작 · Blueprint 노드 참고서 · Action RogueLike</title><style>
+:root { color-scheme:dark; --bg:#0b1020; --panel:#151e31; --panel2:#1d2940; --line:#34425b; --text:#edf4ff; --muted:#b8c8df; --accent:#8ed8ff; --good:#9cebc5; --warn:#ffd38a; --bad:#ffabac; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 system-ui,"Malgun Gothic",sans-serif; }
+    a { color:var(--accent); }
+    code { padding:.08em .32em; border-radius:4px; background:#2a3954; overflow-wrap:anywhere; }
+    .wrap { width:min(1120px,calc(100% - 32px)); margin:auto; }
+    header { padding:43px 0 31px; background:linear-gradient(125deg,#153a55,#18253e 65%,#111827); border-bottom:1px solid var(--line); }
+    h1 { font-size:clamp(2rem,4vw,3.1rem); line-height:1.18; margin:0 0 12px; }
+    h2 { font-size:1.43rem; margin:0 0 11px; }
+    h3 { font-size:1.12rem; margin:19px 0 7px; }
+    p { margin:8px 0 13px; }
+    ul,ol { padding-left:1.45em; }
+    li { margin:5px 0; }
+    .eyebrow { color:var(--good); font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:.83rem; }
+    .lead,.muted { color:var(--muted); }
+    nav { position:sticky; top:0; z-index:3; background:#10182aeb; border-bottom:1px solid var(--line); backdrop-filter:blur(10px); }
+    nav .wrap { display:flex; gap:17px; overflow-x:auto; white-space:nowrap; padding:10px 0; font-size:.92rem; }
+    nav a { text-decoration:none; color:var(--muted); }
+    nav a:hover { color:var(--accent); }
+    main { padding:26px 0 64px; }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:18px; }
+    .actions p { color:var(--muted); margin:0 auto 0 0; }
+    button { border:1px solid #5b88a8; border-radius:7px; padding:8px 13px; color:var(--text); background:#244260; font:inherit; cursor:pointer; }
+    button:hover { background:#315a80; }
+    .chapter { margin:0 0 12px; background:var(--panel); border:1px solid var(--line); border-radius:14px; scroll-margin-top:65px; overflow:hidden; }
+    .chapter[open] { border-color:#5c96ba; }
+    .chapter>summary { display:flex; align-items:center; gap:13px; padding:17px 23px; cursor:pointer; font-size:1.18rem; font-weight:750; list-style:none; background:var(--panel2); }
+    .chapter>summary::-webkit-details-marker,.node>summary::-webkit-details-marker { display:none; }
+    .chapter>summary::after,.node>summary::after { content:"＋"; margin-left:auto; color:var(--accent); font-size:1.35rem; line-height:1; }
+    .chapter[open]>summary::after,.node[open]>summary::after { content:"−"; }
+    .chapter>summary:hover,.node>summary:hover { background:#263855; }
+    summary:focus-visible,button:focus-visible,nav a:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+    .chapter-body { padding:18px 26px 26px; border-top:1px solid var(--line); }
+    .chapter-body>:first-child { margin-top:0; }
+    .chapter-number { color:var(--good); font-size:.88rem; font-weight:800; min-width:2.3em; }
+    .node { margin:10px 0; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#111b2d; }
+    .node>summary { display:flex; align-items:center; gap:9px; padding:11px 15px; cursor:pointer; list-style:none; font-weight:700; background:#19263c; }
+    .node[open]>summary { color:var(--accent); }
+    .node-body { padding:13px 17px 17px; }
+    .node-body>:first-child { margin-top:0; }
+    .tag { padding:1px 7px; border-radius:6px; font-size:.76rem; font-weight:700; background:#305274; color:white; white-space:nowrap; }
+    .tag.event { background:#5b416f; }
+    .tag.query { background:#32604d; }
+    .scroll { overflow-x:auto; margin:11px 0; }
+    table { border-collapse:collapse; width:100%; min-width:690px; }
+    th,td { padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { color:var(--accent); background:#22314b; }
+    tbody tr:nth-child(even) { background:#19243a; }
+    .fields th:first-child { width:27%; }
+    .spec-guide { margin:15px 0; border-color:#6598ad; }
+    .spec-guide>summary { background:#21435b; color:#fff; }
+    .spec-guide .node-body { background:#101c2e; }
+    .spec-guide .scroll table { min-width:780px; }
+    .note { padding:11px 15px; margin:13px 0; background:#2b2a2a; border-left:4px solid var(--warn); border-radius:5px; }
+    .note.good { background:#19312e; border-left-color:var(--good); }
+    .note.bad { background:#39262d; border-left-color:var(--bad); }
+    .flow { display:block; padding:12px 14px; margin:10px 0; background:#0d1728; border:1px solid var(--line); border-radius:7px; overflow-x:auto; line-height:1.9; }
+    footer { padding:22px 0 38px; border-top:1px solid var(--line); color:var(--muted); font-size:.88rem; }
+    @media (max-width:650px) { .chapter>summary { padding:15px 16px; font-size:1.04rem; } .chapter-body { padding:15px; } .node>summary { flex-wrap:wrap; } }
+    @media print { :root { color-scheme:light; --bg:#fff; --panel:#fff; --panel2:#f4f7fa; --line:#c7d0da; --text:#172232; --muted:#475569; --accent:#075b8e; --good:#146044; --warn:#755000; --bad:#8c2530; } nav,.actions { display:none; } header { background:#fff; } .chapter,.node { break-inside:avoid; } .chapter-body,.node-body { display:block; } code,.flow { background:#f0f3f6; } }
+.search-tools { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 16px; }
+.search-tools label { font-weight:700; }
+input[type="search"] { flex:1; min-width:180px; padding:10px 12px; border:1px solid #65839e; border-radius:7px; background:#101b2e; color:var(--text); font:inherit; }
+input:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.search-result { margin:0 0 18px; color:var(--muted); font-size:.9rem; }
+[hidden] { display:none!important; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; background:#0d1728; border:1px solid var(--line); border-radius:7px; font:14px/1.8 ui-monospace,Consolas,"Malgun Gothic",monospace; }
+.quick-links { display:flex; flex-wrap:wrap; gap:8px 18px; }
+@media(max-width:650px) { .search-tools label { width:100%; } .search-tools input { width:100%; } }
+@media print { .search-tools,.search-result { display:none; } pre { background:#f0f3f6; } }
+
+.pins { margin:12px 0; }.pins dt { font-weight:750;color:var(--accent);border-top:1px solid var(--line);padding:10px 0 3px;overflow-wrap:anywhere }.pins dd { margin:0;padding:0 0 9px;color:var(--muted) }
+.node[id] { scroll-margin-top:70px; }.quick-links { margin:18px 0; }
+</style><link rel="stylesheet" href="../assets/guide.css">
+</head>
+<body data-guide-ui="shared">
+<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common">공통</a><a href="../index.html#item">아이템</a><a href="../index.html#enemy" aria-current="true">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html" aria-current="page">적 전체 가이드</a><a href="ENEMY_MOVEMENT_GUIDE_KO.html">적 이동</a><a href="ENEMY_ACTION_GUIDE_KO.html">적 액션</a></div></div></nav><!-- GUIDE PORTAL END -->
+<header><div class="wrap"><div class="eyebrow">Action RogueLike · Enemy Blueprint · 2026-10-03 코드 기준</div>
+<h1>적 제작 · Blueprint 노드 참고서</h1><p class="lead">적 Actor의 기본 설정부터 대상·이동·공격 액션·CC·그로기·사망·스폰까지. 개발하며 필요한 노드와 핀을 찾아 펼쳐 보는 참고서입니다.</p>
+<p class="quick-links"><a href="../common/OBJECT_STAT_GUIDE_KO.html">객체별 스탯</a><a href="../common/DAMAGE_NODES_FORMULA_GUIDE_KO.html">피해 노드·공식</a><a href="../nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬</a><a href="../TEST_ENEMY_BLUEPRINT_KO.md">테스트 적 안내</a></p>
+<p class="muted">공통 시스템 노드와 언리얼 기본 노드를 구분합니다. 적의 패턴/쿨타임/인지/연출은 콘텐츠에서 설계합니다. 특정 유물 예제나 전용 게임플레이 C++ 구현은 포함하지 않습니다.</p></div></header>
+<nav aria-label="목차"><div class="wrap"><a href="#start">구조</a><a href="#setup">기본 설정</a><a href="#target">대상</a><a href="ENEMY_MOVEMENT_GUIDE_KO.html#movement">일반 이동</a><a href="ENEMY_MOVEMENT_GUIDE_KO.html#navigation">경로</a><a href="ENEMY_ACTION_GUIDE_KO.html#action">액션</a><a href="ENEMY_ACTION_GUIDE_KO.html#delay">선딜</a><a href="ENEMY_ACTION_GUIDE_KO.html#damage">공격</a><a href="ENEMY_ACTION_GUIDE_KO.html#cancel">취소</a><a href="#groggy">그로기</a><a href="#death">사망</a><a href="#spawn">스폰</a><a href="#check">점검</a></div></nav>
+<main class="wrap"><div class="search-tools"><label for="node-search">노드·항목 찾기</label><input id="node-search" type="search" placeholder="Try Start Action, 이동, 기절, Handle…" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button></div>
+<div class="actions"><p>항목과 노드를 눌러 자세히 볼 수 있습니다.</p><button id="expand-all" type="button">모두 펼치기</button><button id="collapse-all" type="button">모두 접기</button></div><p class="search-result" id="search-result" role="status" aria-live="polite"></p>
+<details class="chapter" id="start" open><summary><span class="chapter-number">00</span>먼저 구분할 것 · 적 Actor와 아이템 런타임</summary><div class="chapter-body">
+<p>이 문서는 <code>ARBaseEnemy</code> 자식 Blueprint에서 적을 제작할 때 옆에 두는 공통 참고서입니다. 특정 적의 공격 수치나 패턴을 고정하는 계획서가 아닙니다. <strong>용도 → Target → 입력·출력 → 연결 시점 → 주의사항</strong> 순서로 노드를 확인하세요.</p>
+<div class="flow">대상 선택 → 이동/공격 조건 판단 → Try Start Action → 성공 핸들 보관 → 선딜/효과 → End Action<br>경직·기절·사망 취소 → 액션 소유 자원 회수 → 콘텐츠의 자체 상태 정리</div>
+<dl class="pins"><dt>적 Blueprint</dt><dd>월드에 배치/스폰되는 Actor. Self는 이 적 자신입니다. 추적·공격·사망 연출을 직접 구현합니다.</dd><dt>ARAIController</dt><dd>적 Pawn을 조종하고 경로 이동을 공유 이동 제한에 연결합니다. 기본 생성만으로 플레이어를 찾거나 공격하지 않습니다.</dd><dt>Action Component</dt><dd>현재 행동의 시작 가능 여부·핸들·취소·귀속 자원을 관리합니다. AI 의사결정 자체는 하지 않습니다.</dd><dt>아이템 런타임과의 차이</dt><dd>적 직접 공격에는 Execute Item Skill 이벤트나 아이템 DA가 필수는 아닙니다. 직접 Try Start Action을 호출하며, 비용·쿨타임·패턴 조건은 별도 콘텐츠 책임입니다.</dd></dl>
+<p class="note bad">Try Start Action은 자동 쿨타임/비용 결제/타깃 선택/피해 적용 노드가 아닙니다. 같은 적의 일반 공격 중복도 자동으로 금지하지 않으므로, 저장한 핸들의 Is Action Active 등으로 시작 전에 검사하세요.</p>
+<p>새 BP 클래스를 만들거나 이미 만든 BP를 레벨에 배치하면 됩니다. 별도의 C++ 객체 선언은 필요 없습니다. 단, BP 에셋만 만들고 배치/스폰하지 않으면 월드에서 실행되지 않습니다.</p>
+<p class="quick-links"><a href="../common/OBJECT_STAT_GUIDE_KO.html">객체별 스탯</a><a href="../common/DAMAGE_NODES_FORMULA_GUIDE_KO.html">피해 노드·공식</a><a href="../nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬 참고서</a><a href="../TEST_ENEMY_BLUEPRINT_KO.md">현재 테스트 적 사용 안내</a></p></div></details>
+<details class="chapter" id="setup"><summary><span class="chapter-number">01</span>부모 클래스 · 기본 설정 · 컴포넌트</summary><div class="chapter-body">
+<details class="node" id="direct-events"><summary><span class="tag event">직접 이벤트</span>바로 놓는 Character 이벤트 · Bind 없이 구현</summary><div class="node-body">
+<p>ARBaseEnemy/ARPlayerCharacter 등 ARBaseCharacter 자식 BP에서 우클릭 검색 또는 Overrides로 구현합니다. Self의 알림이므로 BeginPlay Bind가 필요 없습니다. 기존 디스패처는 외부 구독용으로 유지됩니다. <strong>동일 처리는 직접 이벤트와 Bind 중 한 방식에만 연결</strong>하세요.</p><p class="note "><strong>취소 후 직접 정리할 것:</strong> 경직·기절 등으로 실제 액션이 취소되면 시스템이 액션 생명주기와 액션 귀속 자원을 처리합니다. 하지만 <code>Set Timer by Event</code>로 만든 별도 타이머·독립 Actor·공격 Bool·연출까지 자동 회수하지는 않습니다. <code>On Action Cancelled</code>에서 해당 실행의 핸들을 확인한 뒤, 저장한 Timer Handle을 <code>Clear and Invalidate Timer by Handle</code>에 연결하고 자체 상태를 정리하세요. 모든 경직이 무조건 취소를 일으키지는 않습니다. <code>Action Delay</code> 내부 대기는 자동 정리되며, 정상 완료의 자체 정리는 별도 완료 경로에서 처리합니다.</p>
+<dl class="pins"><dt>등장: Event BeginPlay</dt><dd>기존 엔진 이벤트 사용. 배치/스폰 Actor 모두 플레이 시작 시 실행. 부모는 BP BeginPlay 전에 알림 연결을 준비합니다.</dd><dt>Event On Character Death</dt><dd>Killing Damage 출력. 공통 사망 액션 취소·이동 잠금·상태 해제 뒤 실행. 자동 Actor 삭제는 아님.</dd><dt>Event On Groggy Gauge Depleted</dt><dd>출력 핀 없음. 자기 게이지의 실제 소진 때 호출. 복구 전 0 상태에서 매 프레임 반복되지 않음.</dd><dt>Event On Shield Broken</dt><dd>Previous Shield / Reason 출력. 피해 또는 수동 제거로 총 실드가 0이 된 경우. <a href='#shield-broken'>파괴 기준</a>.</dd><dt>Event On Damage Applied</dt><dd>Damage Result 출력. HP/실드 피해 적용 뒤. 피해 재적용 노드가 아니며 회피/차단은 이 성공 알림에서 제외.</dd><dt>Event On Action Cancelled</dt><dd>Action Handle / Reason. 행동·귀속 자원 회수 후 실행. 자기 핸들을 비교하며 이미 취소된 행동을 다시 종료하지 않음.</dd><dt>Event On Status Removed</dt><dd>Status 출력. 실제 상태 제거·공통 이동 잠금 갱신 후 실행. 자기 기절의 정확한 핸들 비교.</dd></dl>
+<p>직접 이벤트에는 Target 입력이 없습니다. 일반 Actor에는 자동 제공되지 않으며, Health Component의 On Shield Broken 디스패처는 해당 컴포넌트 보유 Actor에서 구독 가능합니다.</p></div></details>
+<details class="node" id="shield-broken"><summary><span class="tag event">실드</span>On Shield Broken · 피해/수동 제거 · 총합 0</summary><div class="node-body">
+<p>총 실드가 양수에서 0이 되는 한 번의 전이입니다. 여러 층 중 하나만 소진되고 합계가 남아 있으면 제외합니다. 기존 On Shield Changed는 추가·소비·제거·시간 만료를 계속 알립니다.</p>
+<dl class="pins"><dt>Previous Shield</dt><dd>작업 직전 총 실드량. 개별 실드 핸들 또는 최대 스탯이 아님.</dd><dt>Reason</dt><dd>Damage=피해 소진, Other=Remove Shield / Remove Shields By Source / Clear Shields 등 명시적 제거. 만료의 Changed도 Other일 수 있지만 Broken은 발생하지 않음.</dd><dt>제외</dt><dd>시간 만료, Ignore Shield로 실드를 남긴 체력 피해, 빈 실드 제거, 실패/오래된 핸들, 부분 소진/제거.</dd><dt>콜백 재진입</dt><dd>작업 직후 상태를 기준으로 파괴를 판정합니다. 콜백에서 새로 실드를 추가해도 원래 전이의 알림은 유지하고 새 실드는 원래 피해를 다시 받지 않습니다.</dd></dl>
+<p>배치 제거의 총합 0 전이는 한 번만 알립니다. 파괴와 사망이 한 타격에서 발생할 수 있으므로 자신의 생존/행동 정책을 확인하세요. 이 이벤트만으로 실드 재생·기절·그로기가 자동 실행되지는 않습니다.</p></div></details>
+<details class="node" id="restore-resources"><summary><span class="tag">회복</span>Restore Health / Mana / Stamina · 현재값 더하기</summary><div class="node-body">
+<p>기존 현재 자원에 Amount를 더하고 최대치까지 제한합니다. 최대 스탯 보정이 아닙니다. Target=Actor, Amount=양수, Source=출처 구조체, Return Value=실제 회복량. 기본 적에는 Mana/Stamina 컴포넌트가 없으므로 필요 시 추가합니다.</p>
+<p>90/100에서 20 회복 요청 → 현재값100, 반환값10. Restore Health는 부활 노드가 아닙니다. <a href="../common/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing">힐·마나·스태미나 개별 핀 설명</a>을 보세요.</p></div></details>
+<details class="node" id="parent"><summary><span class="tag">부모 클래스</span>ARBaseEnemy로 시작하기</summary><div class="node-body"><p>기존 공통 전투·이동·CC 처리를 사용하려면 ARBaseEnemy 자식 BP를 만듭니다. ARBaseCharacter/APaperCharacter 기반이며 적 팀, ARAIController, 배치/스폰 시 AI 자동 소유 설정을 기본으로 갖습니다.</p><ol><li>Blueprint Class 생성 시 모든 클래스에서 ARBaseEnemy를 선택합니다.</li><li>Class Defaults와 상속 컴포넌트에서 체력·스탯·그로기 설정을 확인합니다.</li><li>외형 Sprite/Flipbook 또는 별도 Mesh를 추가합니다. 외형 스케일과 Capsule 충돌 크기는 따로 확인합니다.</li><li>레벨에 배치하고 Play로 확인합니다. 장애물 우회가 필요하면 <a href="ENEMY_MOVEMENT_GUIDE_KO.html#navigation">경로 이동</a> 설정도 합니다.</li></ol><p>일반 Actor에 메시만 붙인 것과는 다릅니다. 태그 이름만 Enemy로 붙여도 공통 전투 인터페이스·컴포넌트·사망 처리가 생기지는 않습니다.</p></div></details>
+<details class="node" id="components"><summary><span class="tag">프로젝트 노드</span>Get … Component · 적 자신의 관리자를 얻기</summary><div class="node-body"><p>ARBaseCharacter의 조회 노드입니다. Target=적 Self. 반환 참조를 타입에 맞는 변수로 캐시하면 긴 선 대신 Get 변수를 사용할 수 있습니다. 캐시는 BeginPlay에서 준비하고, 다른 적/플레이어의 컴포넌트와 섞지 마세요.</p><dl class="pins"><dt>Get Stats Component</dt><dd>기본/최종 스탯 조회·보정.</dd><dt>Get Health Component</dt><dd>현재 체력·실드·Is Dead 등 생존 정보.</dd><dt>Get Action Component</dt><dd>Try Start Action / End Action / Action Delay에 연결할 관리자.</dd><dt>Get Movement Control Component</dt><dd>일반 이동·액션 이동·정지·잠금.</dd><dt>Get Stagger Component</dt><dd>경직·슈퍼아머·그로기 게이지와 이벤트.</dd><dt>Get Status Effect Component</dt><dd>기절 등 상태 적용/해제·면역·변화 알림.</dd></dl><p>Blueprint의 Self는 적 Actor입니다. Component 노드의 Target은 Actor가 아니라 위 조회 결과입니다. Actor를 받는 공통 라이브러리 버전과 혼동하지 마세요.</p></div></details>
+<details class="node" id="defaults"><summary><span class="tag">에디터 설정</span>Class Defaults / Base Stats / Use Groggy Gauge</summary><div class="node-body"><p>Class Defaults는 새로 생성되는 이 클래스 인스턴스의 기본값입니다. 레벨에 배치된 인스턴스의 개별 덮어쓰기는 별도이므로, 클래스 변경 후 기존 배치 객체도 확인하세요.</p><dl class="pins"><dt>Stats Component → Base Stats</dt><dd>AttackPower, MoveSpeed, MaxHealth, MaxGroggy 등 기본 스탯. MoveSpeed는 공통 CharacterMovement의 MaxWalkSpeed에 연결됩니다.</dd><dt>Stagger Component → Use Groggy Gauge</dt><dd>그로기를 사용하는 적이면 켭니다. MaxGroggy와 회복 스탯도 함께 설정합니다.</dd><dt>AI Controller Class / Auto Possess AI</dt><dd>기본 ARAIController와 Placed in World or Spawned 경로를 유지하거나, 동일 공통 규칙을 지원하는 컨트롤러를 선택합니다.</dd><dt>Tick / Collision / Physics</dt><dd>Event Tick을 쓸 경우 시작 Tick이 활성인지 확인합니다. 외형 Mesh의 Simulate Physics는 의도 없이 켜지 않습니다. 이동 충돌은 Capsule 및 CharacterMovement 기준으로 확인합니다.</dd></dl></div></details>
+</div></details>
+<details class="chapter" id="target"><summary><span class="chapter-number">02</span>대상 선택 · 거리 · 생존 검사</summary><div class="chapter-body">
+<details class="node" id="player-pawn"><summary><span class="tag">언리얼 기본</span>Get Player Pawn / Is Valid</summary><div class="node-body"><p>간단한 로컬 테스트에서 Player Index 0의 Pawn을 가져와 TargetActor 변수에 저장합니다. 멀티플레이 타깃 선택·인지 범위·시야 검사까지 해 주는 노드는 아닙니다.</p><dl class="pins"><dt>Player Index</dt><dd>로컬 플레이어 인덱스. 0이 항상 모든 게임 상황에서 유일한 공격 대상이라는 뜻은 아닙니다.</dd><dt>Return Value</dt><dd>Pawn 참조. 플레이어 생성 전/교체/사망·파괴 시 비어 있거나 오래된 참조일 수 있습니다.</dd><dt>Is Valid</dt><dd>참조가 현재 사용 가능한 UObject인지 확인합니다. 살아 있는 적대 대상인지까지 판정하지 않습니다.</dd></dl><p>대상 소멸 시 재탐색하고, 공격 대기 완료 시에도 다시 검사하세요. Actor 참조의 Is Valid와 Action Handle의 Is Action Active는 서로 다른 검사입니다.</p></div></details>
+<details class="node" id="can-damage"><summary><span class="tag">프로젝트 노드</span>Can Damage Target</summary><div class="node-body"><p>현재 시스템에서 두 Actor 사이에 피해 요청이 가능한 대상 관계인지 확인합니다. 거리·벽·회피 확률·무적·실제 피해량을 모두 보장하는 명중 판정은 아닙니다.</p><dl class="pins"><dt>Attacker</dt><dd>공격하는 적 Self.</dd><dt>Target</dt><dd>공격 후보 Actor.</dd><dt>Return Value</dt><dd>전투 대상 관계 검사 통과 여부 Bool.</dd><dt>Failure Reason</dt><dd>무효 대상·같은 팀·사망 등의 요청 실패 이유.</dd></dl><p>대상 선정/피해 직전 필터로 사용하고, 실제 피해 결과는 Apply Combat Damage의 Return Value로 확인합니다. 일반 Actor Tag가 아니라 공통 전투 팀/대상 인터페이스 정책이 적용됩니다.</p></div></details>
+<details class="node" id="distance"><summary><span class="tag">언리얼 기본 · 계산</span>Get Actor Location · 거리/방향 계산</summary><div class="node-body"><p>Get Actor Location(Target=각 Actor)은 월드 위치를 반환합니다. 추적 방향은 <code>대상 위치 − 적 위치</code>, 평면 거리 판정은 두 위치 차이의 Z를 0으로 만든 뒤 Vector Length 또는 XY 길이를 사용합니다.</p><dl class="pins"><dt>방향 Vector</dt><dd>이동할 방향. 목적지 월드 좌표 자체를 Direction에 넣지 않습니다.</dd><dt>거리 Float</dt><dd>언리얼 기본 거리 단위는 cm. 3m 반경은 300cm이며 지름은 600cm입니다.</dd><dt>평면/입체 정책</dt><dd>XY 비교는 Z를 무시합니다. 층 구분·높이 제한이 필요하면 별도 Z 범위나 3D 거리 조건을 추가합니다.</dd><dt>판정 기준</dt><dd>Actor 원점 거리와 콜리전 표면 거리는 다릅니다. AI Acceptance Radius도 단순 중심 거리와 같다고 가정하지 않습니다.</dd></dl><p>순수 조회 노드는 연결된 시점의 값을 읽습니다. 선딜 시작 위치를 고정하려면 변수에 저장하고, 현재 위치 기준 공격이면 완료 시 재조회하세요.</p></div></details>
+</div></details>
+<details class="chapter" id="movement"><summary>일반 이동 · 상세 문서</summary><div class="chapter-body"><p>직선 방향 입력, 순간 정지, 이동 잠금·조회. 장애물 우회와는 다른 목적입니다.</p><p><a href="ENEMY_MOVEMENT_GUIDE_KO.html#movement">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="navigation"><summary>경로 이동 · NavMesh</summary><div class="chapter-body"><p>NavMesh 생성 단계, Get Controller 연결, AR AI Move To Actor/Location의 핀과 재요청.</p><p><a href="ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="action"><summary>액션 시작·종료</summary><div class="chapter-body"><p>직접 Try Start Action에서 성공 핸들을 저장하고 모든 완료 경로를 End Action으로 끝냅니다.</p><p><a href="ENEMY_ACTION_GUIDE_KO.html#action">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="delay"><summary>선딜·후딜</summary><div class="chapter-body"><p>Action Delay.Completed에서 공격합니다. Cancelled는 공격하지 않고 자체 정리로 연결합니다.</p><p><a href="ENEMY_ACTION_GUIDE_KO.html#delay">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="damage"><summary>피해·원 판정·히트박스</summary><div class="chapter-body"><p>공격력 비례 피해, 결과→경직/그로기, 단일/다중 대상 판정과 액션 귀속 Actor.</p><p><a href="ENEMY_ACTION_GUIDE_KO.html#damage">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="cancel"><summary>경직·기절 취소·자체 정리</summary><div class="chapter-body"><p>실제 취소 이벤트에서 자기 핸들을 확인하여 별도 Timer·변수·연출을 정리합니다.</p><p><a href="ENEMY_ACTION_GUIDE_KO.html#action-events">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="groggy"><summary><span class="chapter-number">03</span>그로기 소진 · 자기 기절 · 복구</summary><div class="chapter-body">
+<details class="node" id="apply-crowd-control"><summary><span class="tag">노드</span>Apply Crowd Control · 그로기 소진 반응</summary><div class="node-body"><p>소진 이벤트 자체는 기절을 만들지 않습니다. 간편 CC 노드로 자기 기절을 적용하고 성공 핸들을 저장합니다.</p><div class="flow">Event On Groggy Gauge Depleted → Apply Crowd Control<br>Target=Self / CC Type=Stun / Duration=원하는 초<br>Success → Return Value를 GroggyStunHandle에 저장</div><p class="note ">정확한 고정 3초를 의도하면 Affected By Tenacity를 해제합니다. CC 면역 등에 의해 실패할 수 있으므로 실패 시 게이지 복구/행동 정책도 정하세요.</p><p>CC 전체 핀과 상태 갱신은 <a href="../common/CC_STAGGER_GUIDE_KO.html#apply-crowd-control">간편 CC 참고서</a>, 실제 종료 뒤 게이지 복구는 <a href="#stun-recovery">On Status Removed</a>를 보세요. 게이지를 즉시 최대값으로 복구할지, 기절 종료 때 복구할지는 콘텐츠 정책입니다.</p></div></details>
+<details class="node" id="groggy-events"><summary><span class="tag">프로젝트 노드</span>On Groggy Gauge Depleted / On Groggy Changed</summary><div class="node-body"><p>Stagger Component의 다중 구독 이벤트입니다. 적 BP는 직접 <code>Event On Groggy Gauge Depleted</code>를 놓아 구현합니다. 외부 구독과 게이지 변화량은 기존 Bind 방식도 지원합니다. 게이지가 없어졌다고 모든 적이 자동으로 3초 기절하는 기본 구현은 아닙니다.</p><dl class="pins"><dt>Use Groggy Gauge</dt><dd>Stagger Component 설정을 켜고 MaxGroggy를 양수로 지정합니다.</dd><dt>On Groggy Gauge Depleted</dt><dd>직접 이벤트는 출력 핀 없이 Self의 소진을 통보. 디스패처는 Target Actor 출력. 소진 반응으로 자기 기절 상태 적용/연출을 호출.</dd><dt>On Groggy Changed</dt><dd>Target / Current / Maximum / Delta. 게이지 HUD나 단계 반응에 사용.</dd><dt>Reset Groggy Gauge</dt><dd>Target=Stagger Component, New Current Value=-1이면 최대치 복구. 사용자 값으로 초기화도 가능.</dd></dl><p>일반 HP 피해만으로 그로기를 줄이지 않습니다. 공격 측에서 양수 그로기 피해를 전투 결과 경로에 연결해야 합니다. 소진 이후 복구 시점은 콘텐츠가 정합니다.</p></div></details>
+
+<details class="node" id="stun-recovery"><summary><span class="tag">프로젝트 노드</span>On Status Removed · 정확한 기절 종료에 복구</summary><div class="node-body"><p>직접 <code>Event On Status Removed</code> 또는 기존 Bind 알림으로 <strong>실제로 해당 기절이 사라졌을 때</strong> 그로기 게이지를 복구합니다. 따로 만든 3초 타이머보다 조기 해제·갱신·강인함 변동 정책과 연결하기 좋습니다.</p><dl class="pins"><dt>이벤트 출력</dt><dd>직접 이벤트는 Status(FARStatusEffectView), 디스패처는 Target / Status. Status에는 Handle, Status Tag, Definition, Source, Remaining Time이 있습니다.</dd><dt>비교</dt><dd>Status.Handle.Id와 저장 GroggyStunHandle.Id 비교 → 일치할 때만 처리. 아무 상태 제거에 무조건 게이지를 초기화하지 않습니다.</dd><dt>복구</dt><dd>Health.Is Dead=false 등 생존 검사 → Reset Groggy Gauge(-1) → 필요 시 AI 판단/경로 재요청.</dd><dt>이동 해제</dt><dd>상태 제거의 공통 처리에 맡기고 Can Basic Move를 다시 확인합니다. 다른 잠금까지 강제로 지우지 않습니다.</dd></dl><p>On Status Added/Updated/Removed는 상태 전체의 변화입니다. 같은 상태 갱신·사망 시 일괄 상태 해제도 고려하세요. Apply Status Effect 실패 때 유효한 저장 핸들이 없으면 별도 복구 분기를 설계해야 합니다.</p></div></details>
+</div></details>
+<details class="chapter" id="death"><summary><span class="chapter-number">04</span>사망 · Actor 삭제 · 자체 자원 정리</summary><div class="chapter-body">
+<details class="node" id="character-death"><summary><span class="tag">프로젝트 노드</span>Event On Character Death / 기존 Bind 알림</summary><div class="node-body"><p>ARBaseCharacter의 사망 알림입니다. 적 BP는 직접 <code>Event On Character Death</code>를 놓고 연결합니다. 기존 Bind는 외부 구독에도 유지됩니다. 동일 처리를 양쪽에 중복 연결하지 않습니다.</p><dl class="pins"><dt>Character / Self</dt><dd>직접 이벤트는 죽은 적 Self에서 실행. 디스패처는 Character 참조 출력.</dd><dt>Killing Damage</dt><dd>죽음을 만든 Damage Result. 연출·기록 등에 활용.</dd><dt>공통 사망 처리</dt><dd>먼저 모든 액션 취소(Death), 움직임 정지/사망 잠금, 상태 정리가 실행되고 On Character Death가 통보됩니다.</dd><dt>콘텐츠 처리</dt><dd>드롭/점수/사망 연출/삭제는 적 콘텐츠에서 결정합니다. 이 알림 자체가 자동 Destroy Actor는 아닙니다.</dd></dl><p>즉시 삭제면 이벤트 → Destroy Actor(Self). 사망 애니메이션을 보여주려면 살아 있는 Actor 수명과 공격 불가 상태를 유지한 채 연출 완료 후 삭제합니다.</p></div></details>
+<details class="node" id="destroy"><summary><span class="tag">언리얼 기본</span>Destroy Actor / Set Life Span / Event EndPlay</summary><div class="node-body"><p>엔진 제공 Actor 수명 노드입니다. 체력 사망과 월드에서 제거되는 시점은 구분합니다.</p><dl class="pins"><dt>Destroy Actor.Target</dt><dd>삭제할 적/투사체 Actor. Self 삭제면 월드에서 제거됩니다.</dd><dt>Set Life Span</dt><dd>Actor의 삭제까지 남은 수명(초). 공격 선딜이나 액션 종료 노드가 아닙니다.</dd><dt>Event EndPlay</dt><dd>Actor가 파괴되거나 월드 종료 등으로 떠날 때의 정리. 사망 없이 제거될 수도 있으므로 자체 타이머/외부 구독 정리를 여기도 고려합니다.</dd></dl><p>삭제된 적의 늦은 콜백은 실행하지 않도록 참조·생존·활성 행동을 검사합니다. 액션 귀속 Actor는 자동 회수되지만 독립 투사체/외부 객체는 별도 수명 정책이 필요합니다.</p></div></details>
+<details class="node" id="cleanup-table"><summary><span class="tag">수명 기준</span>무엇이 자동 정리되고 무엇을 직접 정리하나</summary><div class="node-body"><div class="scroll"><table><thead><tr><th>대상</th><th>공통 처리</th><th>콘텐츠 책임</th></tr></thead><tbody><tr><td>액션 소유 보정/보장/잠금/등록 Actor</td><td>End/Cancel 시 회수</td><td>모든 완료/실패 경로의 종료</td></tr><tr><td>Action Delay 대기</td><td>종료/취소 시 정리</td><td>Cancelled의 자체 연출/변수 정리</td></tr><tr><td>일반 상태</td><td>수명/해제/사망 공통 정리</td><td>그로기 복구 같은 고유 후처리</td></tr><tr><td>직접 만든 Timer·외부 이벤트 구독</td><td>액션 목록에 자동 등록 안 됨</td><td>Clear / 자신이 Bind한 연결 해제</td></tr><tr><td>독립 Actor·다른 대상에 준 효과</td><td>각자 수명 정책</td><td>적 사망 때 유지/삭제할지 설계</td></tr><tr><td>공격 Bool·타깃 변수·연출</td><td>자동 초기화 안 됨</td><td>핸들 알림과 일관되게 정리</td></tr></tbody></table></div><p>공용 이벤트의 Unbind All로 다른 구독자의 연결까지 지우지 마세요. 취소/EndPlay가 연속 호출돼도 안전하도록 정리는 중복 호출 가능하게 작성합니다.</p></div></details>
+</div></details>
+<details class="chapter" id="spawn"><summary>스폰·확률</summary><div class="chapter-body"><p>배치·Spawn Actor·생성 실패, 확률/가중치 선택과 스포너 역할.</p><p><a href="../environment/ENEMY_SPAWN_GUIDE_KO.html">상세 노드·연결 방법 보기 →</a></p></div></details>
+<details class="chapter" id="check"><summary><span class="chapter-number">05</span>증상별 점검 · 완료 체크리스트</summary><div class="chapter-body">
+<div class="scroll"><table><thead><tr><th>증상</th><th>먼저 확인</th><th>바로가기</th></tr></thead><tbody>
+<tr><td>적이 안 보임/안 움직임</td><td>배치/스폰, 외형, Actor Tick, AI 소유, MoveSpeed, 잠금, Capsule/바닥</td><td><a href="#setup">기본 설정</a></td></tr>
+<tr><td>벽에서 멈춤</td><td>직선 입력인지, NavMesh/경로가 필요한지</td><td><a href="ENEMY_MOVEMENT_GUIDE_KO.html#navigation">경로 이동</a></td></tr>
+<tr><td>CC 뒤 추적이 안 돌아옴</td><td>취소된 경로 재요청, 남은 잠금, 고정 Bool</td><td><a href="ENEMY_MOVEMENT_GUIDE_KO.html#move-query">이동 조회</a></td></tr>
+<tr><td>Tick마다 공격이 중첩됨</td><td>시작 전 Is Action Active, 핸들 저장 값 연결</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#preconditions">중복 방지</a></td></tr>
+<tr><td>선딜 없이 즉시 피해</td><td>Action Delay.Completed가 아니라 즉시 출력 사용, Duration</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#action-delay">선딜</a></td></tr>
+<tr><td>선딜이 취소되는데 뒤늦게 피해</td><td>일반 Timer/Delay 콜백, 활성 핸들 재검사</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#timer-delay">대기 비교</a></td></tr>
+<tr><td>공격 후 계속 이동 불가</td><td>빗나감/타깃 소멸 출구의 End Action, 수동 잠금 누수</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#end-action">종료</a></td></tr>
+<tr><td>피해가 없음/연속 타격 무시</td><td>실제 Damage Result, 팀/생존, 공식, Damage Name 간격</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#apply-damage">피해</a></td></tr>
+<tr><td>그로기가 안 줄음</td><td>Use Groggy Gauge, MaxGroggy, 성공 결과+양수 그로기 요청</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#result-stagger">그로기 피해</a></td></tr>
+<tr><td>기절 뒤 게이지가 0 고정</td><td>적용 성공 핸들 저장, 실제 Status Removed 비교/복구</td><td><a href="#stun-recovery">복구</a></td></tr>
+<tr><td>다른 상태 종료에도 복구됨</td><td>정확한 자기 기절 Status Handle 비교</td><td><a href="#stun-recovery">알림 필터</a></td></tr>
+<tr><td>발사하자 투사체가 사라짐</td><td>액션 등록 Actor를 End Action 직후 삭제했는지</td><td><a href="ENEMY_ACTION_GUIDE_KO.html#hitbox">수명</a></td></tr>
+<tr><td>죽어도 적이 남음</td><td>On Character Death 직접 이벤트 또는 구독·Destroy/연출 완료 연결</td><td><a href="#character-death">사망</a></td></tr>
+</tbody></table></div>
+<ul><li>Actor/Controller/Component/Action Handle/Status Handle/Timer Handle을 역할별로 구분했다.</li><li>반복 판단에서 중복 시작을 막고, 성공한 실행의 핸들만 저장한다.</li><li>모든 정상 완료·빗나감·생성 실패 출구에 종료 책임을 두었다.</li><li>CC/사망 취소에서 늦은 피해가 없고, 잠금·자체 상태가 누수되지 않는다.</li><li>공격 범위의 중심·반경·높이·벽·다중 대상·재타격 정책을 정했다.</li><li>직접 Try Start Action에 없는 비용·쿨타임 처리를 자동이라고 가정하지 않는다.</li><li>그로기 소진/기절 실패/조기 해제/사망 중 상태 제거를 검증했다.</li><li>실제 레벨의 바닥·충돌·Controller·시각 연출까지 Play로 확인한다.</li></ul>
+</div></details>
+<div id="no-results" class="note" hidden>일치하는 항목이 없습니다. 노드의 영문 이름이나 더 짧은 검색어로 찾아보세요.</div></main>
+<footer><div class="wrap"><p>현재 프로젝트 소스 기준. 핀 이름은 에디터 언어/구조체 분할에 따라 띄어쓰기가 달라질 수 있습니다. 일반 엔진 노드와 공통 AR 노드를 구분해 검색하세요. 문서만 보고 실제 레벨 검증을 생략하지 않습니다.</p><p>소스 확인: <a href="../../../Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h">Character·이벤트</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Characters/ARBaseEnemy.cpp">Enemy 기본값</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h">AI 경로 노드</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/AI/ARAIController.cpp">경로·CC 연결</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h">이동 노드</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARMovementControlComponent.cpp">이동 검사</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Components/ARActionComponent.h">액션 노드</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARActionComponent.cpp">액션 시작·정리</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Actions/ARActionTypes.h">Action Request</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Actions/ARAsyncActionDelay.cpp">Action Delay</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h">피해·상태</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Status/ARStatusEffectDefinition.h">상태 Definition</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Components/ARStaggerComponent.h">그로기</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Combat/ARActionHitboxActor.cpp">히트박스</a></p></div></footer>
+<script src="../assets/guide.js"></script></body></html>

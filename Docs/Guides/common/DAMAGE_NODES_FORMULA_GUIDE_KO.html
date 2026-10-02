@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>데미지 노드·공식 참고서 · Action RogueLike</title>
+<style>
+:root { color-scheme:dark; --bg:#0b1020; --panel:#151e31; --panel2:#1d2940; --line:#34425b; --text:#edf4ff; --muted:#b8c8df; --accent:#8ed8ff; --good:#9cebc5; --warn:#ffd38a; --bad:#ffabac; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.65 system-ui,"Malgun Gothic",sans-serif; }
+    a { color:var(--accent); }
+    code { padding:.08em .32em; border-radius:4px; background:#2a3954; overflow-wrap:anywhere; }
+    .wrap { width:min(1120px,calc(100% - 32px)); margin:auto; }
+    header { padding:43px 0 31px; background:linear-gradient(125deg,#153a55,#18253e 65%,#111827); border-bottom:1px solid var(--line); }
+    h1 { font-size:clamp(2rem,4vw,3.1rem); line-height:1.18; margin:0 0 12px; }
+    h2 { font-size:1.43rem; margin:0 0 11px; }
+    h3 { font-size:1.12rem; margin:19px 0 7px; }
+    p { margin:8px 0 13px; }
+    ul,ol { padding-left:1.45em; }
+    li { margin:5px 0; }
+    .eyebrow { color:var(--good); font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:.83rem; }
+    .lead,.muted { color:var(--muted); }
+    nav { position:sticky; top:0; z-index:3; background:#10182aeb; border-bottom:1px solid var(--line); backdrop-filter:blur(10px); }
+    nav .wrap { display:flex; gap:17px; overflow-x:auto; white-space:nowrap; padding:10px 0; font-size:.92rem; }
+    nav a { text-decoration:none; color:var(--muted); }
+    nav a:hover { color:var(--accent); }
+    main { padding:26px 0 64px; }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:18px; }
+    .actions p { color:var(--muted); margin:0 auto 0 0; }
+    button { border:1px solid #5b88a8; border-radius:7px; padding:8px 13px; color:var(--text); background:#244260; font:inherit; cursor:pointer; }
+    button:hover { background:#315a80; }
+    .chapter { margin:0 0 12px; background:var(--panel); border:1px solid var(--line); border-radius:14px; scroll-margin-top:65px; overflow:hidden; }
+    .chapter[open] { border-color:#5c96ba; }
+    .chapter>summary { display:flex; align-items:center; gap:13px; padding:17px 23px; cursor:pointer; font-size:1.18rem; font-weight:750; list-style:none; background:var(--panel2); }
+    .chapter>summary::-webkit-details-marker,.node>summary::-webkit-details-marker { display:none; }
+    .chapter>summary::after,.node>summary::after { content:"＋"; margin-left:auto; color:var(--accent); font-size:1.35rem; line-height:1; }
+    .chapter[open]>summary::after,.node[open]>summary::after { content:"−"; }
+    .chapter>summary:hover,.node>summary:hover { background:#263855; }
+    summary:focus-visible,button:focus-visible,nav a:focus-visible { outline:3px solid var(--accent); outline-offset:-3px; }
+    .chapter-body { padding:18px 26px 26px; border-top:1px solid var(--line); }
+    .chapter-body>:first-child { margin-top:0; }
+    .chapter-number { color:var(--good); font-size:.88rem; font-weight:800; min-width:2.3em; }
+    .node { margin:10px 0; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#111b2d; }
+    .node>summary { display:flex; align-items:center; gap:9px; padding:11px 15px; cursor:pointer; list-style:none; font-weight:700; background:#19263c; }
+    .node[open]>summary { color:var(--accent); }
+    .node-body { padding:13px 17px 17px; }
+    .node-body>:first-child { margin-top:0; }
+    .tag { padding:1px 7px; border-radius:6px; font-size:.76rem; font-weight:700; background:#305274; color:white; white-space:nowrap; }
+    .tag.event { background:#5b416f; }
+    .tag.query { background:#32604d; }
+    .scroll { overflow-x:auto; margin:11px 0; }
+    table { border-collapse:collapse; width:100%; min-width:690px; }
+    th,td { padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { color:var(--accent); background:#22314b; }
+    tbody tr:nth-child(even) { background:#19243a; }
+    .fields th:first-child { width:27%; }
+    .spec-guide { margin:15px 0; border-color:#6598ad; }
+    .spec-guide>summary { background:#21435b; color:#fff; }
+    .spec-guide .node-body { background:#101c2e; }
+    .spec-guide .scroll table { min-width:780px; }
+    .note { padding:11px 15px; margin:13px 0; background:#2b2a2a; border-left:4px solid var(--warn); border-radius:5px; }
+    .note.good { background:#19312e; border-left-color:var(--good); }
+    .note.bad { background:#39262d; border-left-color:var(--bad); }
+    .flow { display:block; padding:12px 14px; margin:10px 0; background:#0d1728; border:1px solid var(--line); border-radius:7px; overflow-x:auto; line-height:1.9; }
+    footer { padding:22px 0 38px; border-top:1px solid var(--line); color:var(--muted); font-size:.88rem; }
+    @media (max-width:650px) { .chapter>summary { padding:15px 16px; font-size:1.04rem; } .chapter-body { padding:15px; } .node>summary { flex-wrap:wrap; } }
+    @media print { :root { color-scheme:light; --bg:#fff; --panel:#fff; --panel2:#f4f7fa; --line:#c7d0da; --text:#172232; --muted:#475569; --accent:#075b8e; --good:#146044; --warn:#755000; --bad:#8c2530; } nav,.actions { display:none; } header { background:#fff; } .chapter,.node { break-inside:avoid; } .chapter-body,.node-body { display:block; } code,.flow { background:#f0f3f6; } }
+.search-tools { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 16px; }
+.search-tools label { font-weight:700; }
+input[type="search"] { flex:1; min-width:180px; padding:10px 12px; border:1px solid #65839e; border-radius:7px; background:#101b2e; color:var(--text); font:inherit; }
+input:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.search-result { margin:0 0 18px; color:var(--muted); font-size:.9rem; }
+[hidden] { display:none!important; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; background:#0d1728; border:1px solid var(--line); border-radius:7px; font:14px/1.8 ui-monospace,Consolas,"Malgun Gothic",monospace; }
+.quick-links { display:flex; flex-wrap:wrap; gap:8px 18px; }
+@media(max-width:650px) { .search-tools label { width:100%; } .search-tools input { width:100%; } }
+@media print { .search-tools,.search-result { display:none; } pre { background:#f0f3f6; } }
+
+.node { scroll-margin-top:70px; }
+
+.node-purpose { padding:12px 14px; background:#19312e; border-left:4px solid var(--good); border-radius:5px; }
+.pin-group { margin:12px 0; border:1px solid #5c809c; border-radius:9px; overflow:hidden; scroll-margin-top:75px; }
+.pin-group>summary { display:flex; align-items:center; gap:10px; padding:12px 15px; cursor:pointer; list-style:none; background:#203b51; color:var(--accent); font-weight:700; }
+.pin-group>summary::-webkit-details-marker { display:none; }
+.pin-group>summary::after { content:"＋"; margin-left:auto; }
+.pin-group[open]>summary::after { content:"−"; }
+.pin-group>summary:hover { background:#2b4e69; }
+.pin-content { padding:12px 15px; }
+.pin-content>.node { border-color:#3c607a; }
+.pin-list { display:grid; gap:9px; min-width:0; }
+.pin-entry { padding:11px 14px; border:1px solid var(--line); border-radius:7px; background:var(--panel); }
+.pin-entry h4 { margin:0 0 6px; color:var(--accent); font-size:1rem; overflow-wrap:anywhere; }
+.pin-entry p { margin:5px 0; }
+.pin-label { display:inline-block; color:var(--muted); font-size:.86rem; margin-right:7px; }
+.struct-note { padding:10px 13px; color:var(--muted); border:1px dashed #5c809c; border-radius:7px; }
+@media(max-width:650px) { .pin-content,.node-body { padding:10px; } .pin-entry { padding:10px; } }
+@media print { .pin-group>summary,.node-purpose,.pin-entry { background:#f4f7fa; } }
+</style>
+<link rel="stylesheet" href="../assets/guide.css">
+</head>
+<body>
+<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common" aria-current="true">공통</a><a href="../index.html#item">아이템</a><a href="../index.html#enemy">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="OBJECT_STAT_GUIDE_KO.html">스탯</a><a href="DAMAGE_NODES_FORMULA_GUIDE_KO.html" aria-current="page">피해·회복</a><a href="CC_STAGGER_GUIDE_KO.html">CC·경직</a></div></div></nav><!-- GUIDE PORTAL END -->
+<header>
+<div class="wrap">
+<div class="eyebrow">Action RogueLike · 공통 피해 API · 2026-10-02 코드 기준</div>
+<h1>데미지 노드·공식 참고서</h1>
+<p class="lead">피해를 구현할 때 옆에 두고 찾는 개발 참고서입니다. 노드의 용도부터 확인한 뒤 입력·출력 핀을 읽고, 많은 값을 담은 핀은 그 자리에서 펼쳐 확인합니다. 공식과 용어는 뒤쪽에 정리했습니다.</p>
+<p><a href="../nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬 런타임 참고서</a> · <a href="../nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">아이템 런타임 노드 가이드</a> · <a href="../nsh/ITEM_ASSET_CREATION_GUIDE_KO.html">아이템 에셋 제작 가이드</a> · <a href="OBJECT_STAT_GUIDE_KO.html">객체별 스탯 가이드</a> · <a href="../hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html">적 제작 참고서</a></p>
+<p class="muted">프로젝트 코드의 현재 동작 기준입니다. 언리얼 전체의 표준 피해 공식이나 특정 아이템의 고정 수치가 아닙니다. 적 AI의 액션 저작 절차·상태 이상 상세 가이드는 포함하지 않습니다.</p>
+</div></header>
+<nav aria-label="목차">
+<div class="wrap"><a href="#quick">노드 선택</a><a href="#damage-nodes">직접 피해</a><a href="#results">피해 이벤트</a><a href="#dot">지속 피해</a><a href="#stagger">경직·그로기</a><a href="#hitbox">충돌 연결</a><a href="#shield">실드·판정</a><a href="#healing">회복</a><a href="#formula">공식</a><a href="#trouble">문제 찾기</a><a href="#terms">용어·속성</a>
+</div></nav>
+<main class="wrap">
+<div class="search-tools"><label for="node-search">노드·용어 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 핀, 용어, 공식 검색" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button>
+</div>
+<div class="actions">
+<p>노드 설명 → 입력 핀 → 출력 핀 순서로 읽습니다. 값 묶음은 제자리에서 펼칠 수 있습니다.</p><button id="expand-all" type="button">모두 펼치기</button><button id="collapse-all" type="button">모두 접기</button>
+</div>
+<p class="search-result" id="search-result" role="status" aria-live="polite"></p>
+<details class="chapter" id="quick" open>
+<summary><span class="chapter-number">00</span> 노드 선택과 연결 기준</summary>
+<div class="chapter-body">
+<p>피해는 <strong>충돌 감지 → 대상 선택 → 피해 요청 → 시스템 판정·계산 → 실드/체력 차감 → 결과 확인</strong>으로 처리합니다. 이 문서는 특정 무기·유물 예제가 아니라 현재 프로젝트의 공통 피해 API 참고서입니다. 적 AI의 액션 시작·관리 절차는 별도 범위입니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>필요한 작업</th><th>사용할 노드</th><th>주의할 점</th></tr></thead><tbody><tr><td>지금 한 번 피해 처리</td><td><a href="#apply-damage">Apply Combat Damage</a></td><td>Request에 공격자·피격자·수치를 넣음. 반복 횟수는 콘텐츠가 정함</td></tr><tr><td>시간에 걸쳐 반복 피해</td><td><a href="#apply-dot">Apply Damage Over Time</a></td><td>매 틱 피해량과 간격·기간 지정. 반환 Dot Handle 저장</td></tr><tr><td>팀·대상 가능 여부 사전 조회</td><td><a href="#can-damage">Can Damage Target</a></td><td>회피·치명타·최종 피해를 미리 확정하는 노드는 아님</td></tr><tr><td>피해 결과에 경직/그로기 추가</td><td><a href="#apply-stagger">Apply Stagger And Groggy Damage From Result</a></td><td>Return Value → Damage Result 연결. 성공 여부 내부 검사. DOT는 매 틱 체크 옵션</td></tr><tr><td>활성 DOT 조기 종료</td><td><a href="#remove-dot">Remove Damage Over Time</a></td><td>등록한 월드와 해당 Dot Handle 사용</td></tr><tr><td>피해량·성공 여부 확인</td><td><a href="#result">Break ARCombatDamageResult</a></td><td>Outcome과 Failure Reason을 함께 확인</td></tr><tr><td>현재 체력·마나·스태미나 회복</td><td><a href="#healing">Restore Health / Mana / Stamina</a></td><td>최대치까지만 더하고 실제 회복량을 반환</td></tr></tbody></table>
+</div>
+<p class="note good"><strong>아이템 런타임 Self는 UObject입니다.</strong> Request.Attacker에는 <code>Get Item Owner</code>의 플레이어 Actor, Request.Target에는 실제 맞은 Actor를 연결합니다. 투사체 Actor의 엔진 Owner만 지정해도 Request.Attacker가 자동으로 채워지는 것은 아닙니다.</p>
+<details class="node" id="node-targets">
+<summary><span class="tag">연결</span> 라이브러리 노드와 Subsystem 노드의 Target 차이</summary>
+<div class="node-body">
+<div class="scroll">
+<table class="fields"><thead><tr><th>형태</th><th>호출 대상</th><th>피해를 받는 Actor</th></tr></thead><tbody><tr><td>AR Combat Blueprint Library</td><td>정적 함수. World Context는 보통 현재 그래프에서 자동 공급</td><td>Request.Target 또는 Spec.DamageRequest.Target</td></tr><tr><td>AR Combat Subsystem</td><td>Get World Subsystem에서 ARCombatSubsystem을 선택해 얻는 월드 관리자</td><td>Request.Target / 함수의 Target 인수</td></tr><tr><td>AR Stagger Component</td><td>실제 피격자의 Stagger Component</td><td>HitContext.Target이 컴포넌트 Owner와 같아야 함</td></tr></tbody></table>
+</div>
+<p>이름이 같은 피해 노드는 라이브러리와 Subsystem 양쪽에 있을 수 있습니다. 계산 경로는 같습니다. Subsystem 버전의 왼쪽 Target은 <strong>관리자</strong>이고, 구조체 안의 Target은 <strong>피격 Actor</strong>입니다. 월드를 찾지 못하는 라이브러리 호출은 Invalid Owner/실패를 반환합니다.</p>
+</div>
+</details>
+<p class="note">언리얼 기본 <code>Apply Damage</code> / <code>Apply Point Damage</code> / <code>Apply Radial Damage</code>와 프로젝트의 <code>Apply Combat Damage</code>는 다른 API입니다. 현재 공통 피해 경로에 들어가려면 AR 노드를 사용하세요. 엔진 기본 피해를 AR 공식에 자동 연결하는 브리지는 전투 Subsystem에 없습니다.</p>
+<details class="pin-group">
+<summary>구조체 핀 연결 방법 · 통째 연결 / 핀 분할 / Make / Break</summary>
+<div class="pin-content">
+<p>구조체는 여러 값을 하나로 묶은 타입입니다. <strong>Request와 Spec은 값 묶음의 실제 핀 이름</strong>이며, 새로운 피해 종류를 뜻하지 않습니다. 각 노드 안의 펼침에서 내부값을 확인하세요.</p><ol><li><strong>통째 연결:</strong> Make 노드로 값을 채워 연결하거나 같은 타입의 구조체 변수를 Get해서 연결합니다.</li><li><strong>개별 입력:</strong> 연결되지 않은 구조체 핀을 우클릭해 구조체 핀 분할(Split Struct Pin)을 선택합니다. 중첩 구조체도 분할할 수 있습니다.</li><li><strong>결과 읽기:</strong> Break 노드 또는 출력 핀 분할로 필요한 값만 꺼냅니다. 읽기 전용 타격 기록은 임의로 성공값을 만들지 않습니다.</li></ol>
+<p>함수 버전·핀 노출 설정에 따라 자동 숨김 핀이나 고급 핀 표시가 다를 수 있습니다. 문서의 한글 설명은 실제 영문 핀 이름과 함께 제공합니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="damage-nodes">
+<summary><span class="chapter-number">01</span> 직접 피해 노드 · 용도와 핀별 설명</summary>
+<div class="chapter-body">
+<details class="node" id="can-damage">
+<summary><span class="tag">조회</span> Can Damage Target</summary>
+<div class="node-body">
+<p class="node-purpose">두 Actor 사이에 피해 요청을 할 수 있는지 미리 조회하는 초록색 노드입니다. 체력을 깎지 않고 팀·대상·생존 조건을 검사합니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>핀</th><th>타입 / 방향</th><th>의미</th></tr></thead><tbody><tr><td>Attacker</td><td>Actor / 입력</td><td>유효한 공격 원인 Actor. Combat Target Interface 또는 Combat Source Component로 팀을 알아야 함</td></tr><tr><td>Target</td><td>Actor / 입력</td><td>자신이 아닌 유효 피격 Actor. 전투 대상 가능 여부·팀·Health 활성 상태 검사</td></tr><tr><td>Return Value</td><td>Bool / 출력</td><td>공통 사전 대상 검사 통과 여부</td></tr><tr><td>Failure Reason</td><td>ARRequestResult / 출력</td><td>Invalid Source, Invalid Target, Forbidden Target, Same Team, Dead, Blocked 등</td></tr></tbody></table>
+</div>
+<p>순수 조회(초록색)입니다. <strong>회피·보장 무적 스탯·최종 피해량은 여기서 판정하지 않습니다.</strong> 피해 적용 시에는 다시 검사합니다. 사전 조회 True 후 상황이 바뀌면 실제 적용은 실패할 수 있습니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>공격 팀 → 피격 팀</th><th>허용</th></tr></thead><tbody><tr><td>Player → Enemy / Enemy → Player</td><td>허용 가능한 기본 조합</td></tr><tr><td>Environment → Player 또는 Enemy</td><td>대상 가능 조건을 만족하면 허용</td></tr><tr><td>같은 팀 / 자신 / Environment 대상</td><td>거절</td></tr><tr><td>Combat Source Component만 붙은 피격 Actor</td><td>팀 정보만 제공하므로 대상 가능 플래그가 없음. 그것만으로 피격 대상이 되지 않음</td></tr></tbody></table>
+</div>
+<p>실제 처리에는 Target의 <code>ARHealthComponent</code>와 <code>ARStatsComponent</code>가 필요합니다. 공격자 Stats가 없으면 기본 공격 스냅샷(공격력 0, 주문력 0 등)을 사용하므로 Base Damage만으로 피해가 가능합니다.</p>
+</div>
+</details>
+<details class="node" id="apply-damage">
+<summary><span class="tag">실행</span> Apply Combat Damage</summary>
+<div class="node-body">
+<p class="node-purpose"><strong>선택한 Actor에게 지금 한 번 피해를 적용하는 실행 노드입니다.</strong> 공격자·대상·기본 피해·계수·옵션을 받아 대상 검사부터 회피·무적·피해 공식·실드/HP 차감·전투 알림·흡혈까지 처리합니다. 충돌 탐색, 경직·그로기, 개별 상태 이상은 별도로 연결합니다.</p>
+<details class="pin-group" id="damage-name-limit"><summary>같은 피해 이름의 반복 피격 제한 · 기본 0.2초</summary><div class="pin-content"><p><strong>대상 + Damage Name</strong>의 Applied 피해가 다음 허용 시각을 기록합니다. 그 전의 제한 사용 요청은 <code>Outcome=Blocked / Failure Reason=Cooldown</code>이며 실드·체력 차감, 흡혈·온히트, 경직용 유효 타격이 발생하지 않습니다. 회피·무적·피해 0·무효 요청은 제한을 시작하지 않습니다.</p><p>공격자·출처·속성·직접/DOT가 달라도 같은 이름이면 공유합니다. 서로 다른 대상과 이름은 독립입니다. 공허·확정 명중도 이름 제한을 우회하지 않습니다. 이후 요청의 짧은 양수 간격으로 기존 제한을 단축하지 않습니다.</p><p><strong>None 이름 / 간격 0 / Ignore Damage Name Interval=True</strong>는 해당 요청의 검사·기록만 생략합니다. 기존 제한을 지우거나 연장하지 않습니다. 플레이어 피격 후 전체 무적과 다른 기능이며 별도 노드나 BP 타이머 없이 Request 안에서 지정합니다.</p><p>DOT는 등록 중복을 막는 것이 아니라 각 틱의 피해 적용을 제한합니다. 밀린 틱은 예정 시각 순서로 검사하므로 정상 간격의 틱을 한 프레임이라고 묶어 차단하지 않습니다.</p></div></details>
+<h3>입력 핀</h3>
+<p><strong>실행 입력(흰 핀)</strong> — 여기에 실행 흐름이 도달하면 피해를 한 번 요청합니다. 반복 호출하면 여러 번 요청합니다.</p>
+<details class="pin-group">
+<summary>피해 입력값 펼치기 · 공격자 / 대상 / 피해량 / 속성 / 판정 옵션</summary>
+<div class="pin-content">
+<p><strong>실제 핀 이름: Request</strong> · 타입: <code>ARCombatDamageRequest</code>. 피해에 필요한 값을 한 묶음으로 받습니다. 아래 두 묶음이 모두 같은 Request의 내용입니다.</p>
+<details class="node" id="request-values" open>
+<summary><span class="tag">구조체</span> 공격자·피격자·피해량·속성 · Request 내부 입력값</summary>
+<div class="node-body">
+<p class="node-purpose">피해에 필요한 대상·수치를 한 묶음으로 만드는 보조 노드입니다. 아래는 Apply Combat Damage에 실제로 넣는 값입니다.</p>
+<p>Apply Combat Damage의 Request 핀을 끌어 구조체 만들기 노드를 사용하거나, 핀 우클릭 → 구조체 핀 분할로 입력합니다. 각 항목의 기본값은 현재 C++ 선언 기준이며 저장된 BP의 변경값과는 다릅니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Attacker = None</h4>
+<p><span class="pin-label">타입</span> Actor</p>
+<p><span class="pin-label">받는 값의 의미</span> 공격 원인. 아이템이면 소유 플레이어, 환경 피해면 팀 정보가 있는 환경 Actor</p>
+</div>
+<div class="pin-entry">
+<h4>Target = None</h4>
+<p><span class="pin-label">타입</span> Actor</p>
+<p><span class="pin-label">받는 값의 의미</span> 현재 피해를 받을 실제 대상. 런타임 Self/투사체 자신을 잘못 넣지 않음</p>
+</div>
+<div class="pin-entry">
+<h4>Delivery = Direct</h4>
+<p><span class="pin-label">타입</span> Damage Delivery 열거형</p>
+<p><span class="pin-label">받는 값의 의미</span> 증가 스탯·온히트 분류. DamageOverTime으로 바꿔도 한 번 호출은 한 번 피해</p>
+</div>
+<div class="pin-entry">
+<h4>Attribute = Physical</h4>
+<p><span class="pin-label">타입</span> Damage Attribute 열거형</p>
+<p><span class="pin-label">받는 값의 의미</span> Physical / Fire / Magic / Void. 해당 속성의 증가·방어·취약·감소 선택</p>
+</div>
+<div class="pin-entry">
+<h4>Base Damage = 0</h4>
+<p><span class="pin-label">타입</span> Float</p>
+<p><span class="pin-label">받는 값의 의미</span> 고정 피해. DOT 등록에서는 틱당 고정 피해</p>
+</div>
+<div class="pin-entry">
+<h4>Attack Power Coefficient = 0</h4>
+<p><span class="pin-label">타입</span> Float</p>
+<p><span class="pin-label">받는 값의 의미</span> 공격자 Final Attack Power에 곱할 배수. 1.0은 공격력의 100%, 0.5는 50%입니다. 50을 넣으면 50배가 됩니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Spell Power Coefficient = 0</h4>
+<p><span class="pin-label">타입</span> Float</p>
+<p><span class="pin-label">받는 값의 의미</span> 공격자 Final Spell Power에 곱할 배수. 1.0은 주문력의 100%, 0.5는 50%입니다. Base Damage 및 공격력 기여분과 더합니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Source = Other / None / 빈 표시명</h4>
+<p><span class="pin-label">타입</span> ARSourceInfo</p>
+<p><span class="pin-label">받는 값의 의미</span> Category·Source Id·Display Name. 공식 수치가 아님</p>
+<details class="pin-group">
+<summary>출처 세부값 펼치기 · Category / Source Id / Display Name</summary>
+<div class="pin-content">
+<p>출처는 세 값을 묶은 <code>ARSourceInfo</code>입니다. 공격자 Actor나 피해 배수가 아닙니다.</p>
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Category · 기본 Other</h4>
+<p>출처 분류: Weapon / Relic / Buff / Other. All은 조회·제거 필터용입니다. 팀이나 피해 속성을 정하지 않습니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Source Id · 기본 None</h4>
+<p>출처 식별 이름입니다. DOT를 출처별로 제거할 때 등록한 Category와 Source Id가 일치해야 합니다. 공격자·Skill Id·입력 태그와 별개입니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Display Name · 기본 빈 값</h4>
+<p>출처 표시용 텍스트입니다. 계산·삭제 식별키가 아니며 자동 HUD 생성을 보장하지 않습니다.</p>
+</div>
+</div>
+</div>
+</details>
+</div>
+<div class="pin-entry">
+<h4>Damage Name = None</h4>
+<p><span class="pin-label">타입</span> Name</p>
+<p><span class="pin-label">받는 값의 의미</span> 같은 대상의 재피격 제한을 공유하는 식별 이름. 공격자·속성·직접/DOT가 달라도 이름이 같으면 공유합니다. None이면 이름별 제한을 적용하지 않습니다. 공격 종류나 배수를 자동 결정하지는 않습니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Damage Name Interval = 0.2</h4>
+<p><span class="pin-label">타입</span> Float · 초</p>
+<p>실제 피해 적용 성공 후 같은 대상·같은 이름의 다음 피해를 막을 시간입니다. 0.2는 최대 초당 5회, 0.5는 최대 초당 2회를 허용합니다. 0은 해당 요청의 제한 검사·기록을 끕니다. 제한 사용 중 음수·NaN·무한 값은 Invalid Definition입니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Ignore Damage Name Interval = False</h4>
+<p><span class="pin-label">타입</span> Bool · 체크박스</p>
+<p>True면 이 요청만 이름별 제한을 무시합니다. 기존 제한을 삭제하거나 연장하지 않고 새 제한도 기록하지 않습니다. 회피·무적·방어 검사는 그대로입니다. 편집창에서는 체크 시 Interval 편집을 비활성화합니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Attack Tag = None</h4>
+<p><span class="pin-label">타입</span> Gameplay Tag</p>
+<p><span class="pin-label">받는 값의 의미</span> 콘텐츠 분류 정보. Input Tag·Skill Id·Action Handle과 다름</p>
+</div>
+</div>
+</div>
+<p>공격자와 피격자의 팀은 Actor에서 읽습니다. Source.Category=Weapon으로 바꿔도 팀이 Player가 되지 않습니다. 사거리·충돌 크기·투사체 속도는 이 Request의 필드가 아니며 콘텐츠가 따로 구현합니다.</p>
+</div>
+</details>
+<details class="node" id="request-options">
+<summary><span class="tag">옵션</span> 명중·치명타·방어·실드·흡혈 · Request 판정 옵션</summary>
+<div class="node-body">
+<p class="node-purpose">같은 피해 요청에 포함되는 판정 스위치입니다. 각 옵션은 서로 다른 단계를 제어합니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Guaranteed Hit = False</h4>
+<p><span class="pin-label">True일 때</span> 회피·보장 회피 검사를 건너뜀</p>
+<p><span class="pin-label">False일 때 / 주의</span> Apply Evasion=True이면 회피 판정. 확정 명중은 무적/팀 규칙을 무시하지 않음</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Evasion = True</h4>
+<p><span class="pin-label">True일 때</span> Guaranteed Hit=False이면 대상 회피 판정</p>
+<p><span class="pin-label">False일 때 / 주의</span> 회피를 건너뜀. Apply Damage Over Time 경로는 틱에서 강제로 False</p>
+</div>
+<div class="pin-entry">
+<h4>Can Crit = True</h4>
+<p><span class="pin-label">True일 때</span> 치명타 확률·배수 적용</p>
+<p><span class="pin-label">False일 때 / 주의</span> 치명타 미적용. DOT에서도 별도로 지정</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Amplification = True</h4>
+<p><span class="pin-label">True일 때</span> 주는 피해 증가와 일반 속성의 받는 피해 증가 적용</p>
+<p><span class="pin-label">False일 때 / 주의</span> 두 증가 단계를 함께 건너뜀. 감소·방어·치명타는 그대로</p>
+</div>
+<div class="pin-entry">
+<h4>Ignore Defense = False</h4>
+<p><span class="pin-label">True일 때</span> 속성 방어·관통 단계 생략</p>
+<p><span class="pin-label">False일 때 / 주의</span> 일반 속성의 방어 공식을 적용. 공허는 값과 무관하게 생략</p>
+</div>
+<div class="pin-entry">
+<h4>Ignore Shield = False</h4>
+<p><span class="pin-label">True일 때</span> 실드를 남기고 체력에 직접 분배</p>
+<p><span class="pin-label">False일 때 / 주의</span> 실드 우선 흡수. 공허도 기본 False면 실드가 흡수</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Absorption = False</h4>
+<p><span class="pin-label">True일 때</span> 공격자 흡혈 스탯과 실제 Final Damage로 회복 계산</p>
+<p><span class="pin-label">False일 때 / 주의</span> 흡혈 미적용. 치명타/피해 적용과 별개</p>
+</div>
+<div class="pin-entry">
+<h4>Apply On Hit Effects = True</h4>
+<p><span class="pin-label">True일 때</span> Applied이면서 Direct이면 On Damage Hit 알림</p>
+<p><span class="pin-label">False일 때 / 주의</span> 온히트 알림만 끔. HP 피해·On Damage Received는 그대로</p>
+</div>
+</div>
+</div>
+<p class="note">Guaranteed Hit, Ignore Defense, Ignore Shield는 서로 다른 스위치입니다. 하나를 켠다고 나머지 검사가 모두 꺼지지 않습니다. <code>bUseOffensiveSnapshot</code>과 <code>OffensiveSnapshot</code>은 내부 C++용 필드라 BP Request 입력으로 노출되지 않습니다.</p>
+</div>
+</details>
+</div>
+</details>
+<p><strong>World Context Object</strong> — 현재 월드의 피해 관리자를 찾는 값입니다. 일반적인 Actor·아이템 런타임 그래프에서는 자동 공급되며, 피격자를 지정하는 입력이 아닙니다.</p>
+<h3>출력 핀</h3>
+<p><strong>실행 출력(흰 핀)</strong> — 요청이 반환된 뒤 다음 노드를 실행합니다. 이 선이 이어졌다고 피해 성공을 뜻하지는 않습니다.</p>
+<details class="pin-group">
+<summary>피해 결과 펼치기 · 적용 여부 / 치명타 / 실드·체력 감소 / 타격 기록</summary>
+<div class="pin-content">
+<p><strong>실제 핀 이름: Return Value</strong> · 타입: <code>ARCombatDamageResult</code>. <code>Outcome=Applied</code>로 실제 적용 여부를 확인합니다.</p>
+<details class="node" id="result" open>
+<summary><span class="tag">출력</span> 피해 적용 여부·실드/체력 감소량 · Return Value 내부 결과</summary>
+<div class="node-body">
+<p class="node-purpose">피해 적용 노드가 돌려준 결과를 개별 값으로 꺼내 읽는 보조 노드입니다. 피해를 다시 적용하는 노드가 아닙니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Outcome</h4>
+<p><span class="pin-label">의미</span> Invalid / Queued / Applied / Evaded / Blocked</p>
+<p><span class="pin-label">확인 기준</span> 실제로 적용됐는지는 Applied로 판단</p>
+</div>
+<div class="pin-entry">
+<h4>Failure Reason</h4>
+<p><span class="pin-label">의미</span> 공통 요청 결과 코드</p>
+<p><span class="pin-label">확인 기준</span> Outcome=Evaded여도 회피 처리 자체는 Success일 수 있음. Success만 보고 피해 적용을 판단하지 않음</p>
+</div>
+<div class="pin-entry">
+<h4>Critical</h4>
+<p><span class="pin-label">의미</span> 이번 처리의 치명타 여부</p>
+<p><span class="pin-label">확인 기준</span> 후속 단계에서 Blocked가 되면 치명타여도 피해 없음</p>
+</div>
+<div class="pin-entry">
+<h4>Killed Target</h4>
+<p><span class="pin-label">의미</span> 이번 적용으로 대상 HP가 0이 되었는가</p>
+<p><span class="pin-label">확인 기준</span> 이미 죽은 대상은 사전 검사에서 거절. Actor 자동 Destroy 의미가 아님</p>
+</div>
+<div class="pin-entry">
+<h4>On Hit Effects Triggered</h4>
+<p><span class="pin-label">의미</span> Direct + Apply On Hit Effects 조건 충족 여부</p>
+<p><span class="pin-label">확인 기준</span> 콘텐츠 버프·상태 이상을 자동 부여했다는 뜻이 아님</p>
+</div>
+<div class="pin-entry">
+<h4>Final Damage</h4>
+<p><span class="pin-label">의미</span> 실제 Shield Damage + Health Damage</p>
+<p><span class="pin-label">확인 기준</span> 공식 계산 중간값·초과 피해량·틱 전체 합계가 아님</p>
+</div>
+<div class="pin-entry">
+<h4>Shield Damage</h4>
+<p><span class="pin-label">의미</span> 실제로 소모한 실드 양(정수 내림)</p>
+<p><span class="pin-label">확인 기준</span> HP 피해와 분리</p>
+</div>
+<div class="pin-entry">
+<h4>Health Damage</h4>
+<p><span class="pin-label">의미</span> 실제로 감소한 HP 양(정수 내림)</p>
+<p><span class="pin-label">확인 기준</span> 남은 HP로 제한된 결과</p>
+</div>
+<div class="pin-entry">
+<h4>Hit Context</h4>
+<p><span class="pin-label">의미</span> 타격 식별·대상·전달 방식·속성·공격 스탯 일부</p>
+<p><span class="pin-label">확인 기준</span> 별도 경직/그로기 요청에 전달</p>
+<details class="node" id="hit-context">
+<summary><span class="tag">출력</span> 유효 타격·대상·경직력 기록 · Hit Context 내부값</summary>
+<div class="node-body">
+<p class="node-purpose">실제로 적용된 타격의 기록을 꺼내 읽습니다. 경직·그로기 노드에 전달할 근거이며 임의로 성공 기록을 만드는 용도가 아닙니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Hit Id</h4>
+<p><span class="pin-label">의미</span> 피해 계산에서 발급한 GUID. 자체 액션·스킬 핸들과 다름</p>
+</div>
+<div class="pin-entry">
+<h4>Attacker / Target</h4>
+<p><span class="pin-label">의미</span> 이번 요청의 공격자·피격 Actor. 공격자가 소멸한 DOT 틱은 Attacker=None일 수 있음</p>
+</div>
+<div class="pin-entry">
+<h4>Delivery / Attribute</h4>
+<p><span class="pin-label">의미</span> 이번 타격의 전달 방식·속성</p>
+</div>
+<div class="pin-entry">
+<h4>Valid Hit</h4>
+<p><span class="pin-label">의미</span> Applied 경로에서 True로 설정. 체력만이 아니라 실드에 적용된 타격도 유효</p>
+</div>
+<div class="pin-entry">
+<h4>Stagger Power Snapshot</h4>
+<p><span class="pin-label">의미</span> 해당 피해 처리 때 공격자의 경직력 스탯</p>
+</div>
+<div class="pin-entry">
+<h4>Groggy Damage Amplification Snapshot</h4>
+<p><span class="pin-label">의미</span> 해당 피해 처리 때 공격자의 그로기 피해 증가 스탯</p>
+</div>
+</div>
+</div>
+<p>경직 컴포넌트는 Valid Hit=True, 유효 Hit Id, 유효 Target, 자기 Owner와 같은 Target을 요구합니다. <strong>실제 Result.Hit Context를 그대로 사용</strong>하세요. Make로 성공값을 임의 작성하면 검증 근거를 콘텐츠가 위조하는 형태가 됩니다. 현재 이 구조체는 동일 Hit Id의 별도 경직 요청 재사용을 자동 차단하지 않으므로 같은 타격에 중복 호출하지 않도록 합니다.</p>
+</div>
+</details>
+</div>
+</div>
+</div>
+<p>Queued는 내부 큐에 수락된 요청이며 아직 Hit Context가 유효하지 않습니다. <strong>Blocked + Failure Reason=Cooldown</strong>이면 피해 이름별 재피격 제한에 막힌 것입니다. Invalid/Blocked/Evaded에서 HP 차감을 실행 노드로 다시 만들지 말고 실패 원인을 확인하세요.</p>
+</div>
+</details>
+</div>
+</details>
+<p class="struct-note">구조체 연결: Request는 <code>Make ARCombatDamageRequest</code>의 출력이나 구조체 변수로 통째 연결할 수 있습니다. 입력 핀을 분할해 개별 값으로 넣을 수도 있습니다. 결과는 <code>Break ARCombatDamageResult</code> 또는 출력 핀 분할로 읽습니다. 위 펼침은 문서에서 내부값을 확인하는 기능이며 실제 노드의 핀 이름을 바꾸는 것이 아닙니다.</p>
+<p class="note">피해 이벤트 안에서 또 피해를 요청하면 재진입 보호 큐에 들어갈 수 있습니다. 이때 반환은 <strong>Queued</strong>이며 최종 수치가 아닙니다. 현재 체인의 처리 제한은 기본 256입니다. 반사/추가 타격 이벤트가 서로 끝없이 재호출되지 않도록 콘텐츠 측 조건을 두세요.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="results">
+<summary><span class="chapter-number">02</span> 피해 이벤트 · 피격 후 후속 처리</summary>
+<div class="chapter-body">
+<p>적용 결과의 전체 핀 설명은 <a href="#result">Apply Combat Damage 안의 피해 결과 펼침</a>에 있습니다. 여기서는 결과를 받는 공용 이벤트와 발생 순서를 확인합니다.</p>
+<details class="node" id="damage-events">
+<summary><span class="tag">이벤트</span> On Damage Received / Hit / Evaded / Blocked</summary>
+<div class="node-body">
+<p class="node-purpose">피해 처리 뒤 발생하는 공용 알림입니다. 이벤트를 구독해 피격 연출이나 후속 처리를 연결할 때 사용하며, 이 이벤트 자체가 피해를 주지는 않습니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>Subsystem 알림</th><th>Subject 핀</th><th>발생 조건</th></tr></thead><tbody><tr><td>On Damage Received</td><td>피격자 Request.Target</td><td>Applied 후. Direct와 DOT 모두 포함</td></tr><tr><td>On Damage Hit</td><td>공격자 Request.Attacker</td><td>Applied + Direct + Apply On Hit Effects=True</td></tr><tr><td>On Damage Evaded</td><td>피격자 Request.Target</td><td>회피 판정 성공</td></tr><tr><td>On Damage Blocked</td><td>피격자 Request.Target</td><td>피해 이름별 간격 차단 또는 수치 계산기 차단(무적·피해 0 등)</td></tr></tbody></table>
+</div>
+<p>각 알림은 Subject Actor와 Damage Result를 제공합니다. Bind한 뒤 Subject·Target·필요한 실행 정보로 필터링해야 다른 공격의 결과를 잘못 처리하지 않습니다. 이름별 간격 차단은 Failure Reason=Cooldown입니다. <strong>초기 팀·Actor·Health 검사에서 거절되는 Invalid 요청은 On Damage Blocked를 자동 방송하지 않습니다.</strong></p>
+<p>순서: 실드·HP 적용 및 Health Component의 피해/사망 알림 → On Damage Received → 조건부 On Damage Hit → 흡혈. 이벤트 안에서 추가 피해를 호출하면 큐 처리된다는 점을 고려합니다. 사망 뒤 액터 파괴·연출은 해당 캐릭터 콘텐츠의 책임입니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="dot">
+<summary><span class="chapter-number">03</span> 지속 피해 노드 · 기간 · 틱 · 중첩 · 정리</summary>
+<div class="chapter-body">
+<details class="node" id="apply-dot">
+<summary><span class="tag">등록</span> Apply Damage Over Time</summary>
+<div class="node-body">
+<p class="node-purpose"><strong>일정 시간 동안 피해를 반복하도록 등록하는 실행 노드입니다.</strong> 한 번 연결해 등록하면 Combat Subsystem이 이후 틱을 관리합니다. 호출할 때 즉시 한 번 때리는 Apply Combat Damage와 다릅니다.</p>
+<h3>입력 핀</h3>
+<p><strong>실행 입력</strong> — 지속 피해를 등록하거나 같은 이름의 효과를 갱신합니다.</p>
+<details class="pin-group">
+<summary>지속 피해 설정 펼치기 · 매 틱 피해 / 기간 / 간격 / 이름 / 중첩 / 경직</summary>
+<div class="pin-content">
+<p><strong>실제 핀 이름: Spec</strong> · 타입: <code>ARDamageOverTimeSpec</code>. 반복 피해 설정을 한 묶음으로 받습니다.</p>
+<details class="node" id="dot-spec" open>
+<summary><span class="tag">구조체</span> 틱당 피해·기간·간격·중첩 · Spec 내부 입력값</summary>
+<div class="node-body">
+<p class="node-purpose">지속 피해의 피해량·기간·간격·중첩 정책을 한 묶음으로 구성하는 보조 노드입니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Damage Request</h4>
+<p><span class="pin-label">의미</span> ARCombatDamageRequest</p>
+<p><span class="pin-label">제작 기준</span> Base Damage·계수는 매 틱 피해. Delivery와 Apply Evasion은 DOT 경로가 덮어씀. Can Crit, Apply Amplification, Ignore Defense, Ignore Shield, Apply Absorption은 계속 유효</p>
+<details class="pin-group">
+<summary>매 틱 피해 입력값 펼치기 · 공격자 / 대상 / 피해량 / 속성 / 옵션</summary>
+<div class="pin-content">
+<p>타입은 <code>ARCombatDamageRequest</code>입니다. Base Damage와 계수는 총 피해나 DPS가 아니라 <strong>한 틱에 사용할 값</strong>입니다.</p>
+<details class="node" open>
+<summary><span class="tag">구조체</span> 공격자·피격자·피해량·속성 · Request 내부 입력값</summary>
+<div class="node-body">
+<p class="node-purpose">피해에 필요한 대상·수치를 한 묶음으로 만드는 보조 노드입니다. 아래는 Apply Combat Damage에 실제로 넣는 값입니다.</p>
+<p>Apply Combat Damage의 Request 핀을 끌어 구조체 만들기 노드를 사용하거나, 핀 우클릭 → 구조체 핀 분할로 입력합니다. 각 항목의 기본값은 현재 C++ 선언 기준이며 저장된 BP의 변경값과는 다릅니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Attacker = None</h4>
+<p><span class="pin-label">타입</span> Actor</p>
+<p><span class="pin-label">받는 값의 의미</span> 공격 원인. 아이템이면 소유 플레이어, 환경 피해면 팀 정보가 있는 환경 Actor</p>
+</div>
+<div class="pin-entry">
+<h4>Target = None</h4>
+<p><span class="pin-label">타입</span> Actor</p>
+<p><span class="pin-label">받는 값의 의미</span> 현재 피해를 받을 실제 대상. 런타임 Self/투사체 자신을 잘못 넣지 않음</p>
+</div>
+<div class="pin-entry">
+<h4>Delivery = Direct</h4>
+<p><span class="pin-label">타입</span> Damage Delivery 열거형</p>
+<p><span class="pin-label">받는 값의 의미</span> 증가 스탯·온히트 분류. DamageOverTime으로 바꿔도 한 번 호출은 한 번 피해</p>
+</div>
+<div class="pin-entry">
+<h4>Attribute = Physical</h4>
+<p><span class="pin-label">타입</span> Damage Attribute 열거형</p>
+<p><span class="pin-label">받는 값의 의미</span> Physical / Fire / Magic / Void. 해당 속성의 증가·방어·취약·감소 선택</p>
+</div>
+<div class="pin-entry">
+<h4>Base Damage = 0</h4>
+<p><span class="pin-label">타입</span> Float</p>
+<p><span class="pin-label">받는 값의 의미</span> 고정 피해. DOT 등록에서는 틱당 고정 피해</p>
+</div>
+<div class="pin-entry">
+<h4>Attack Power Coefficient = 0</h4>
+<p><span class="pin-label">타입</span> Float</p>
+<p><span class="pin-label">받는 값의 의미</span> 공격자 Final Attack Power에 곱할 배수. 1.0은 공격력의 100%, 0.5는 50%입니다. 50을 넣으면 50배가 됩니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Spell Power Coefficient = 0</h4>
+<p><span class="pin-label">타입</span> Float</p>
+<p><span class="pin-label">받는 값의 의미</span> 공격자 Final Spell Power에 곱할 배수. 1.0은 주문력의 100%, 0.5는 50%입니다. Base Damage 및 공격력 기여분과 더합니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Source = Other / None / 빈 표시명</h4>
+<p><span class="pin-label">타입</span> ARSourceInfo</p>
+<p><span class="pin-label">받는 값의 의미</span> Category·Source Id·Display Name. 공식 수치가 아님</p>
+<details class="pin-group">
+<summary>출처 세부값 펼치기 · Category / Source Id / Display Name</summary>
+<div class="pin-content">
+<p>출처는 세 값을 묶은 <code>ARSourceInfo</code>입니다. 공격자 Actor나 피해 배수가 아닙니다.</p>
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Category · 기본 Other</h4>
+<p>출처 분류: Weapon / Relic / Buff / Other. All은 조회·제거 필터용입니다. 팀이나 피해 속성을 정하지 않습니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Source Id · 기본 None</h4>
+<p>출처 식별 이름입니다. DOT를 출처별로 제거할 때 등록한 Category와 Source Id가 일치해야 합니다. 공격자·Skill Id·입력 태그와 별개입니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Display Name · 기본 빈 값</h4>
+<p>출처 표시용 텍스트입니다. 계산·삭제 식별키가 아니며 자동 HUD 생성을 보장하지 않습니다.</p>
+</div>
+</div>
+</div>
+</details>
+</div>
+<div class="pin-entry">
+<h4>Damage Name = None</h4>
+<p><span class="pin-label">타입</span> Name</p>
+<p><span class="pin-label">받는 값의 의미</span> 같은 대상의 재피격 제한을 공유하는 식별 이름. 공격자·속성·직접/DOT가 달라도 이름이 같으면 공유합니다. None이면 이름별 제한을 적용하지 않습니다. 공격 종류나 배수를 자동 결정하지는 않습니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Damage Name Interval = 0.2</h4>
+<p><span class="pin-label">타입</span> Float · 초</p>
+<p>실제 피해 적용 성공 후 같은 대상·같은 이름의 다음 피해를 막을 시간입니다. 0.2는 최대 초당 5회, 0.5는 최대 초당 2회를 허용합니다. 0은 해당 요청의 제한 검사·기록을 끕니다. 제한 사용 중 음수·NaN·무한 값은 Invalid Definition입니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Ignore Damage Name Interval = False</h4>
+<p><span class="pin-label">타입</span> Bool · 체크박스</p>
+<p>True면 이 요청만 이름별 제한을 무시합니다. 기존 제한을 삭제하거나 연장하지 않고 새 제한도 기록하지 않습니다. 회피·무적·방어 검사는 그대로입니다. 편집창에서는 체크 시 Interval 편집을 비활성화합니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Attack Tag = None</h4>
+<p><span class="pin-label">타입</span> Gameplay Tag</p>
+<p><span class="pin-label">받는 값의 의미</span> 콘텐츠 분류 정보. Input Tag·Skill Id·Action Handle과 다름</p>
+</div>
+</div>
+</div>
+<p>공격자와 피격자의 팀은 Actor에서 읽습니다. Source.Category=Weapon으로 바꿔도 팀이 Player가 되지 않습니다. 사거리·충돌 크기·투사체 속도는 이 Request의 필드가 아니며 콘텐츠가 따로 구현합니다.</p>
+</div>
+</details>
+<details class="node">
+<summary><span class="tag">옵션</span> 명중·치명타·방어·실드·흡혈 · Request 판정 옵션</summary>
+<div class="node-body">
+<p class="node-purpose">같은 피해 요청에 포함되는 판정 스위치입니다. 각 옵션은 서로 다른 단계를 제어합니다.</p>
+<div class="scroll">
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Guaranteed Hit = False</h4>
+<p><span class="pin-label">True일 때</span> 회피·보장 회피 검사를 건너뜀</p>
+<p><span class="pin-label">False일 때 / 주의</span> Apply Evasion=True이면 회피 판정. 확정 명중은 무적/팀 규칙을 무시하지 않음</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Evasion = True</h4>
+<p><span class="pin-label">True일 때</span> Guaranteed Hit=False이면 대상 회피 판정</p>
+<p><span class="pin-label">False일 때 / 주의</span> 회피를 건너뜀. Apply Damage Over Time 경로는 틱에서 강제로 False</p>
+</div>
+<div class="pin-entry">
+<h4>Can Crit = True</h4>
+<p><span class="pin-label">True일 때</span> 치명타 확률·배수 적용</p>
+<p><span class="pin-label">False일 때 / 주의</span> 치명타 미적용. DOT에서도 별도로 지정</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Amplification = True</h4>
+<p><span class="pin-label">True일 때</span> 주는 피해 증가와 일반 속성의 받는 피해 증가 적용</p>
+<p><span class="pin-label">False일 때 / 주의</span> 두 증가 단계를 함께 건너뜀. 감소·방어·치명타는 그대로</p>
+</div>
+<div class="pin-entry">
+<h4>Ignore Defense = False</h4>
+<p><span class="pin-label">True일 때</span> 속성 방어·관통 단계 생략</p>
+<p><span class="pin-label">False일 때 / 주의</span> 일반 속성의 방어 공식을 적용. 공허는 값과 무관하게 생략</p>
+</div>
+<div class="pin-entry">
+<h4>Ignore Shield = False</h4>
+<p><span class="pin-label">True일 때</span> 실드를 남기고 체력에 직접 분배</p>
+<p><span class="pin-label">False일 때 / 주의</span> 실드 우선 흡수. 공허도 기본 False면 실드가 흡수</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Absorption = False</h4>
+<p><span class="pin-label">True일 때</span> 공격자 흡혈 스탯과 실제 Final Damage로 회복 계산</p>
+<p><span class="pin-label">False일 때 / 주의</span> 흡혈 미적용. 치명타/피해 적용과 별개</p>
+</div>
+<div class="pin-entry">
+<h4>Apply On Hit Effects = True</h4>
+<p><span class="pin-label">True일 때</span> Applied이면서 Direct이면 On Damage Hit 알림</p>
+<p><span class="pin-label">False일 때 / 주의</span> 온히트 알림만 끔. HP 피해·On Damage Received는 그대로</p>
+</div>
+</div>
+</div>
+<p class="note">Guaranteed Hit, Ignore Defense, Ignore Shield는 서로 다른 스위치입니다. 하나를 켠다고 나머지 검사가 모두 꺼지지 않습니다. <code>bUseOffensiveSnapshot</code>과 <code>OffensiveSnapshot</code>은 내부 C++용 필드라 BP Request 입력으로 노출되지 않습니다.</p>
+</div>
+</details>
+</div>
+</details>
+</div>
+<div class="pin-entry">
+<h4>Duration = 1.0</h4>
+<p><span class="pin-label">의미</span> 초 단위 전체 기간</p>
+<p><span class="pin-label">제작 기준</span> 유한 양수 필수. 음수로 영구 DOT를 등록하는 기능이 아님</p>
+</div>
+<div class="pin-entry">
+<h4>Tick Interval = 0.25</h4>
+<p><span class="pin-label">의미</span> 초 단위 피해 간격</p>
+<p><span class="pin-label">제작 기준</span> 유한 양수 필수. 편집기 ClampMin=0.001은 편집 제한, 런타임 하한 0.001 보장과 다름</p>
+</div>
+<div class="pin-entry">
+<h4>Dot Name = None</h4>
+<p><span class="pin-label">의미</span> 지속 피해 이름</p>
+<p><span class="pin-label">제작 기준</span> Independent는 비워도 됨. RefreshSameName이면 필수</p>
+</div>
+<div class="pin-entry">
+<h4>Stack Policy = Independent</h4>
+<p><span class="pin-label">의미</span> 새로 추가 / 동일 이름 갱신</p>
+<p><span class="pin-label">제작 기준</span> 아래 갱신의 매칭·비교 규칙 확인</p>
+</div>
+<div class="pin-entry">
+<h4>Apply Stagger And Groggy Each Tick = False</h4>
+<p><span class="pin-label">의미</span> 각 Applied 틱에 별도 경직/그로기 호출</p>
+<p><span class="pin-label">제작 기준</span> 켜면 유효 Hit Context를 자동 전달</p>
+</div>
+<div class="pin-entry">
+<h4>Stagger Template</h4>
+<p><span class="pin-label">의미</span> ARStaggerRequestTemplate</p>
+<p><span class="pin-label">제작 기준</span> 위 옵션이 True일 때만 사용. 체력 피해 계수와 독립</p>
+<details class="pin-group">
+<summary>매 틱 경직·그로기 수치 펼치기 · 피해량 / 배수 / 출처 / 효과 이름</summary>
+<div class="pin-content">
+<p>타입: <code>ARStaggerRequestTemplate</code>. 위 매 틱 적용 옵션을 켰을 때만 사용합니다. Hit Context는 시스템이 해당 틱의 실제 피해 결과로 채웁니다.</p>
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Template.Base Stagger Damage = 0</h4>
+<p><span class="pin-label">의미</span> 한 타격의 기본 경직 피해</p>
+</div>
+<div class="pin-entry">
+<h4>Template.Stagger Multiplier = 1</h4>
+<p><span class="pin-label">의미</span> 경직 피해에만 곱하는 추가 배수. 1=그대로</p>
+</div>
+<div class="pin-entry">
+<h4>Template.Base Groggy Damage = 0</h4>
+<p><span class="pin-label">의미</span> 한 타격의 기본 그로기 게이지 피해</p>
+</div>
+<div class="pin-entry">
+<h4>Template.Source</h4>
+<p><span class="pin-label">의미</span> 출처 Category·Source Id·Display Name</p>
+<details class="pin-group">
+<summary>출처 세부값 펼치기 · Category / Source Id / Display Name</summary>
+<div class="pin-content">
+<p>출처는 세 값을 묶은 <code>ARSourceInfo</code>입니다. 공격자 Actor나 피해 배수가 아닙니다.</p>
+<div class="pin-list">
+<div class="pin-entry">
+<h4>Category · 기본 Other</h4>
+<p>출처 분류: Weapon / Relic / Buff / Other. All은 조회·제거 필터용입니다. 팀이나 피해 속성을 정하지 않습니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Source Id · 기본 None</h4>
+<p>출처 식별 이름입니다. DOT를 출처별로 제거할 때 등록한 Category와 Source Id가 일치해야 합니다. 공격자·Skill Id·입력 태그와 별개입니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Display Name · 기본 빈 값</h4>
+<p>출처 표시용 텍스트입니다. 계산·삭제 식별키가 아니며 자동 HUD 생성을 보장하지 않습니다.</p>
+</div>
+</div>
+</div>
+</details>
+</div>
+<div class="pin-entry">
+<h4>Template.Effect Name = None</h4>
+<p><span class="pin-label">의미</span> 효과 이름. 현재 경직 계산에서 조건 분기·공식 키로 사용하지 않음</p>
+</div>
+</div>
+</div>
+</details>
+</div>
+</div>
+</div>
+<p>틱당 값과 초당 피해를 혼동하지 마세요. 간격이 0.25초이면 통상 1초에 4틱이므로, 원하는 DPS를 콘텐츠가 틱당 수치로 환산해야 합니다. 시스템이 Base Damage를 기간이나 간격으로 자동 나누지 않습니다.</p>
+</div>
+</details>
+</div>
+</details>
+<p><strong>World Context Object</strong> — 현재 월드의 관리자를 찾습니다. 일반적인 그래프에서는 자동 공급됩니다.</p>
+<h3>출력 핀</h3>
+<div class="pin-list">
+<div class="pin-entry">
+<h4>실행 출력</h4>
+<p>등록 요청 후 다음 흐름입니다. 틱이 모두 끝나는 시점의 출력이 아닙니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Return Value · ARDotHandle</h4>
+<p>등록된 지속 피해의 식별 핸들입니다. 변수에 저장해 Remove Damage Over Time에 연결하면 조기 제거할 수 있습니다. 타이머·액션·스탯 핸들과 다른 타입입니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Success · Bool</h4>
+<p>등록 또는 갱신 성공입니다. 한 틱의 피해 성공이나 전체 기간 완료를 뜻하지 않습니다.</p>
+</div>
+<div class="pin-entry">
+<h4>Failure Reason · ARRequestResult</h4>
+<p>대상·팀 조건, 잘못된 기간·간격, 갱신 정의 불일치 등의 실패 이유입니다.</p>
+</div>
+</div>
+<p class="struct-note">구조체 연결: <code>Make ARDamageOverTimeSpec</code> 또는 Spec 변수로 통째 연결하거나 입력 핀을 분할합니다. 안쪽 Damage Request도 구조체로 연결할 수 있습니다.</p>
+<p>Combat Subsystem이 월드 시간 기준으로 반복 처리합니다. 틱의 Damage Request는 Delivery=DamageOverTime, Apply Evasion=False로 강제됩니다. <strong>등록 즉시 피해를 주지 않고 첫 틱은 등록 시점+Tick Interval</strong>입니다.</p>
+<p>등록 검사는 기간·간격과 대상 가능 여부를 확인합니다. 등록 Success라도 틱의 Base Damage 합계가 0이거나 일반 속성 무적이면 실제 피해가 없을 수 있습니다. Success 출력만으로 피해 성공을 판단하지 않습니다.</p>
+</div>
+</details>
+<details class="node" id="dot-time">
+<summary><span class="tag">시간</span> 틱 시점 · 최소 간격 · 프레임 지연</summary>
+<div class="node-body"><pre>ExpireAt = 등록 시점 + Duration
+NextTickAt = 등록 시점 + TickInterval
+NextTickAt ≤ 현재 시간 AND NextTickAt ≤ ExpireAt → 한 틱
+NextTickAt += TickInterval</pre>
+<p>종료 시점과 같은 틱도 처리 대상입니다. 이상적인 1초/0.25초 설정이면 0.25·0.5·0.75·1초의 4틱입니다. 부동소수 시각과 프레임 경계 때문에 매우 촘촘한 스케줄은 실제 실행에서 검증하세요. Interval&gt;Duration이면 발생하는 틱이 없을 수 있습니다.</p>
+<p>프레임이 늦어지면 누락된 틱을 <strong>한 프레임에서 따라잡습니다.</strong> 각 틱의 예정 시각으로 이름별 간격을 검사하므로 한 프레임 1틱 제한이 아닙니다. 이름 제한보다 촘촘한 틱이나 같은 이름의 병렬 틱은 의도적으로 차단됩니다. 기본 Catch Up 경고 기준 32와 활성 DOT 경고 기준 512는 경고 기준이지 잘라내는 상한이 아닙니다.</p>
+<p class="note">같은 대상 + 같은 <strong>Damage Name</strong>은 기본 <strong>0.2초</strong> 재피격 제한을 공유합니다. Source Id가 같다는 이유로 묶이지는 않습니다. DOT의 Tick Interval은 발생 일정이고 Damage Name Interval은 실제 적용 제한입니다. 둘이 겹치면 일부 틱이 차단될 수 있으며, 의도적인 독립 중첩 피해는 무시 체크를 선택할 수 있습니다. None 이름은 제한 대상이 아닙니다.</p>
+</div>
+</details>
+<details class="node" id="dot-stack">
+<summary><span class="tag">중첩</span> Independent / Refresh Same Name · 중첩과 갱신</summary>
+<div class="node-body">
+<div class="scroll">
+<table class="fields"><thead><tr><th>정책</th><th>매칭·동작</th><th>주의</th></tr></thead><tbody><tr><td>Independent</td><td>매번 새 핸들·새 DOT를 추가</td><td>동일 Source Id / Dot Name도 동시에 여러 개 존재 가능. 피해가 누적될 수 있음</td></tr><tr><td>Refresh Same Name</td><td>같은 Target + 같은 Dot Name을 찾음</td><td>공격자나 Source Id를 매칭 키로 쓰지 않음. 다른 출처도 같은 이름이면 갱신 경합 가능</td></tr><tr><td>갱신 성공</td><td>기존 핸들 유지, ExpireAt=현재+Duration, NextTickAt=현재+Interval</td><td>기존 Spec·공격자·출처를 교체하지 않음. 자주 갱신하면 첫 틱이 계속 밀릴 수 있음</td></tr><tr><td>갱신 정의 불일치</td><td>기존 DOT 유지, 새 요청은 Success=False / Invalid Definition</td><td>더 강한 값으로 자동 덮어쓰기하거나 두 개 중 최대값을 택하지 않음</td></tr></tbody></table>
+</div>
+<p>갱신 비교 필드: <strong>Duration, Tick Interval, Base Damage, 두 공격 계수, Attribute, Can Crit, Apply Amplification, Ignore Defense, Ignore Shield, Damage Name, Ignore Damage Name Interval, Damage Name Interval</strong>. 숫자는 Nearly Equal로 비교하며 무시 체크가 True면 비활성 Interval 값은 비교하지 않습니다.</p>
+<p class="note">현재 비교 목록에 Attacker, Source, Apply Absorption, 매 틱 경직 옵션/Template 등은 없습니다. 다르게 보내도 기존 Spec이 유지되므로 새 옵션으로 바뀌지 않습니다. 이름별 DOT의 정의를 콘텐츠에서 일관되게 관리하세요.</p>
+</div>
+</details>
+<details class="node" id="dot-snapshot">
+<summary><span class="tag">수명</span> DOT 공격자 소멸 · 스탯 갱신 · 수명</summary>
+<div class="node-body">
+<p>공격자가 유효하면 <strong>매 틱</strong> 최신 공격 스탯을 캡처합니다. 등록 때 영구 고정되는 스냅샷 방식이 아닙니다. 대상 방어·취약·감소도 틱마다 현재 스탯을 읽습니다.</p>
+<p>공격자 Actor가 소멸하면 마지막 공격 스냅샷으로 남은 틱을 계속 계산하고, 공격자/팀 재검증은 생략합니다. 대상의 유효성·Health 활성 상태·Stats는 계속 필요합니다. 그때 Hit Context.Attacker=None이 될 수 있습니다. 공격자가 죽었지만 Actor가 유효한 경우는 ‘소멸’과 다르며 일반 경로로 진행합니다.</p>
+<p>대상 Actor가 소멸하면 DOT는 제거됩니다. 대상이 사망했지만 Actor가 남아 있으면 틱 피해가 거절되며 기간 만료 전까지 등록 개수에 남을 수 있습니다. 자동 종료 시점은 기간 만료 또는 대상 소멸입니다.</p>
+<p class="note">일반 DOT는 <strong>액션/아이템 소유 효과 목록에 자동 등록되지 않습니다.</strong> End Action·아이템 해제와 함께 없애려면 저장한 Dot Handle 또는 정확한 출처 필터로 수동 제거해야 합니다. 이미 틱 처리 목록에 수집된 요청을 제거 호출이 소급 취소하지는 않습니다.</p>
+</div>
+</details>
+<details class="node" id="remove-dot">
+<summary><span class="tag">제거</span> Remove Damage Over Time · 핸들 제거</summary>
+<div class="node-body">
+<p class="node-purpose">저장한 핸들로 활성 지속 피해 한 인스턴스를 조기 종료하는 실행 노드입니다. 이미 들어간 피해를 되돌리거나 일시 정지하는 노드가 아닙니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>핀</th><th>의미</th></tr></thead><tbody><tr><td>Handle</td><td>등록/갱신에서 받은 ARDotHandle. 타이머·액션·스탯 핸들이 아님</td></tr><tr><td>Return Value</td><td>해당 활성 DOT가 제거되었으면 True. 이미 만료·제거된 핸들은 False</td></tr></tbody></table>
+</div>
+<p>라이브러리 버전은 월드에서 관리자를 찾습니다. Subsystem 버전은 해당 월드 관리자 Target이 필요합니다. 만료는 자동이지만 조기 취소·해제 정책은 제작자가 정합니다. 지운 핸들로 재개하는 노드는 없으며 다시 Apply Damage Over Time으로 등록합니다.</p>
+</div>
+</details>
+<details class="node" id="dot-management">
+<summary><span class="tag">관리</span> 출처별 DOT 제거 · 전체 제거 · 개수 조회</summary>
+<div class="node-body">
+<p>다음 노드들은 <strong>ARCombatSubsystem 참조에서</strong> 꺼냅니다. 라이브러리에 동일한 정적 래퍼가 없는 관리자 전용 함수입니다. 왼쪽 노드 Target은 Subsystem이며 함수 인수 Target은 피해를 받고 있는 Actor입니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>노드</th><th>추가 입력</th><th>반환/필터</th></tr></thead><tbody><tr><td>Remove Damage Over Time By Source</td><td>피격 Actor Target, Category, Source Id, Dot Name(기본 None)</td><td>제거된 인스턴스 수. Target 동일 AND 나머지 필터 조건을 모두 만족</td></tr><tr><td>Remove All Damage Over Time From Target</td><td>피격 Actor Target</td><td>그 대상의 모든 DOT 제거 수. 다른 아이템·공격자 DOT도 포함</td></tr><tr><td>Get Active Damage Over Time Count</td><td>피격 Actor Target</td><td>그 대상에 등록된 DOT 인스턴스 개수. 총 틱 수/피해량/단순 스택 수가 아님</td></tr></tbody></table>
+</div>
+<p>Category=All은 카테고리 전체, Source Id=None은 출처 전체, Dot Name=None은 이름 전체를 뜻합니다. 정리 범위를 좁혀야 할 때 None/All을 그대로 사용하면 타 콘텐츠 DOT까지 제거할 수 있습니다. 공격자 필터는 이 함수에 없습니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="stagger">
+<summary><span class="chapter-number">04</span> 경직·그로기 피해 노드와 공식</summary>
+<div class="chapter-body">
+<span id="stagger-result"></span><details class="node" id="apply-stagger">
+<summary><span class="tag">실행 · 권장</span> Apply Stagger And Groggy Damage From Result</summary>
+<div class="node-body">
+<p class="node-purpose"><strong>직접 피해 노드의 Return Value를 그대로 받아 경직·그로기를 추가합니다.</strong> 피해가 실제로 적용됐는지와 타격 기록의 유효성을 내부에서 확인하므로, 결과를 Break하거나 Outcome을 비교하는 Branch/Switch 또는 Make ARStaggerRequest가 필요 없습니다. HP 피해를 다시 주는 노드가 아닙니다.</p>
+<h3>연결 방법</h3>
+<div class="flow">Apply Combat Damage 흰 실행 출력 → 이 노드의 흰 실행 입력<br>Apply Combat Damage.Return Value → 이 노드의 Damage Result</div>
+<p>두 연결을 모두 이어주고 아래 기본 경직력·배율·그로기 피해를 입력합니다. 별도 Target이나 Action Handle 없이 실제 피해 결과의 대상과 공격 스탯 스냅샷을 사용합니다.</p>
+<h3>입력 핀</h3>
+<div class="pin-list">
+<div class="pin-entry"><h4>Damage Result</h4><p>타입: <code>ARCombatDamageResult</code>. Apply Combat Damage의 Return Value를 <strong>통째로 연결</strong>합니다. 직접 피해 요청(Request)이나 DOT 등록 핸들을 연결하는 핀이 아닙니다.</p>
+<details class="pin-group"><summary>피해 결과 안에서 확인하는 값 펼치기</summary><div class="pin-content">
+<p><strong>Outcome</strong> — Applied일 때만 처리합니다. Invalid / Queued / Evaded / Blocked이면 아무 효과도 적용하지 않습니다. Queued는 아직 완료되지 않은 요청이며 이 노드가 나중에 자동 재실행되지 않습니다.</p>
+<p><strong>Hit Context</strong> — 실제 Hit Id·Valid Hit·Target이 유효해야 합니다. Target에서 Stagger Component를 찾고, 그 타격 당시의 Stagger Power Snapshot·Groggy Damage Amplification Snapshot을 사용합니다.</p>
+<p>Final Damage / Shield Damage / Health Damage는 이 노드의 경직 수치가 아닙니다. 실드만 맞아 Health Damage=0이어도 Applied인 유효 타격이면 처리합니다.</p>
+</div></details></div>
+<div class="pin-entry"><h4>Base Stagger Damage · 기본 0</h4><p>이번 타격의 기본 경직력입니다. 0이면 일반 경직을 시도하지 않습니다. 최종 경직력이 대상 저항보다 <strong>커야</strong> 경직이 발생합니다.</p></div>
+<div class="pin-entry"><h4>Stagger Multiplier · 기본 1</h4><p>경직력에만 곱하는 배율입니다. 1은 그대로이며 그로기 피해에는 적용하지 않습니다.</p></div>
+<div class="pin-entry"><h4>Base Groggy Damage · 기본 0</h4><p>이번 타격의 기본 그로기 게이지 피해입니다. 0이면 그로기 게이지를 깎지 않습니다. 대상이 그로기 게이지를 사용해야 실제로 감소합니다.</p></div>
+<div class="pin-entry"><h4>Source · 고급 핀</h4><p>타입: <code>ARSourceInfo</code>. 연결하지 않아도 됩니다. 노드 아래 고급 핀 펼침으로 확인합니다.</p>
+<details class="pin-group"><summary>출처 세부값 펼치기 · Category / Source Id / Display Name</summary><div class="pin-content"><p><strong>Category</strong> — Weapon / Relic / Buff / Other 출처 분류. 기본 Other.</p><p><strong>Source Id</strong> — 출처 식별 이름. 기본 None. 피해 이름별 간격 검사에 쓰는 Damage Name과 별개입니다.</p><p><strong>Display Name</strong> — 출처 표시 텍스트. 기본 빈 값. 현재 경직 공식은 출처 값으로 수치를 바꾸지 않습니다.</p></div></details></div>
+<div class="pin-entry"><h4>Effect Name · 기본 None · 고급 핀</h4><p>효과 이름입니다. 현재 경직 계산의 조건 분기·공식 키나 피해 이름 제한 키로 사용하지 않습니다.</p></div>
+</div>
+<h3>출력 핀</h3>
+<p><strong>실행 출력</strong> — 처리 또는 무시가 끝난 뒤 이어갑니다. 흰 실행선이 이어졌다는 것만으로 경직 성공을 뜻하지 않습니다.</p>
+<details class="pin-group"><summary>Return Value 펼치기 · 경직·그로기 적용 결과</summary><div class="pin-content">
+<p>타입: <code>ARStaggerResult</code>. 필요할 때만 Break로 분리해 확인합니다.</p>
+<p><strong>Valid Request</strong> — 피해 적용 결과·타격 기록·대상 컴포넌트 검사를 통과했는지. 무시된 결과는 False입니다.</p>
+<p><strong>Stagger Attempted / Staggered / Blocked By Super Armor</strong> — 양수 경직 시도 / 실제 경직 성공 / 슈퍼아머 차단 여부입니다.</p>
+<p><strong>Final Stagger Damage / Final Groggy Damage</strong> — 기존 공식으로 계산된 수치입니다. 경직 실패나 그로기 게이지 미사용 시 실제 적용과 다를 수 있습니다.</p>
+<p><strong>Groggy Depleted / Current Groggy</strong> — 이번 소진 여부 / 처리 후 게이지입니다. 무시된 요청의 기본 결과 Current Groggy=0은 대상의 실제 게이지 조회값이 아닙니다.</p>
+</div></details>
+<p class="note">같은 피해 결과로 한 번만 호출하세요. 기존 Hit Context 기반 노드나 On Damage Hit에서도 같은 타격의 경직을 적용하면 중복될 수 있습니다. 이 편의 노드는 피해 결과 재사용 자체를 자동 차단하지 않습니다.</p>
+<p class="struct-note">Damage Result는 구조체 통째 연결을 권장합니다. 구조체 핀을 분할할 수는 있지만 성공 여부·Hit Context를 수동으로 다시 조립할 필요가 없습니다. 경직력·배율·그로기 피해는 개별 핀으로 입력합니다.</p>
+<h3>DOT는 체크 옵션 사용</h3>
+<p>Apply Damage Over Time의 Spec에서 <strong>Apply Stagger And Groggy Each Tick</strong>을 체크하고 <strong>Stagger Template</strong>을 지정합니다. 실제 적용된 틱만 내부에서 처리하고, 피해 이름 제한에 막힌 틱은 경직·그로기도 적용하지 않습니다. DOT의 Return Value는 등록 핸들이므로 Damage Result에 연결하지 않으며 같은 틱을 콘텐츠에서 다시 처리하지 않습니다.</p>
+</div>
+</details>
+<span id="apply-stagger-context"></span><details class="node" id="stagger-template"><summary><span class="tag">DOT 구조체</span>Stagger Template · DOT 경직 수치</summary><div class="node-body"><p>DOT의 Apply Stagger And Groggy Each Tick을 체크한 뒤 지정할 경직·그로기 수치 구조체입니다. 직접 피해에서는 위 From Result 노드의 개별 핀을 사용합니다.</p><dl class="pins"><dt>Base Stagger Damage</dt><dd>틱의 기본 경직력. 0이면 경직 시도 없음.</dd><dt>Stagger Multiplier</dt><dd>경직 피해 배율, 기본1. 그로기 피해 배율이 아닙니다.</dd><dt>Base Groggy Damage</dt><dd>틱의 기본 그로기 피해. 0이면 게이지 피해 없음. 대상이 게이지를 사용해야 실제 감소.</dd><dt>Source / Effect Name</dt><dd>출처 구조체와 효과 이름. 피해 이름 제한을 대신하지 않습니다.</dd></dl><p class="note ">DOT 등록 핸들을 Damage Result에 연결하지 않습니다. 실제 적용된 틱의 경직 요청은 시스템이 처리하므로 같은 틱을 별도 콜백에서도 다시 처리하지 마세요. 저수준 Hit Context 요청 조립 노드는 새 콘텐츠의 일반 경로에서 안내하지 않습니다.</p></div></details>
+<details class="node" id="stagger-formula">
+<summary><span class="tag">공식</span> 경직 공식 · 저항보다 엄격히 커야 발생</summary>
+<div class="node-body"><pre>K = max(0, 1 + HitContext.StaggerPowerSnapshot / 100)
+FinalStaggerDamage
+  = max(0, floor(BaseStaggerDamage × K × max(0, StaggerMultiplier)))
+
+경직 가능 조건:
+FinalStaggerDamage &gt; 0
+AND 대상이 경직 가능
+AND 슈퍼아머 아님
+AND 경직 후 면역 시간 아님
+AND FinalStaggerDamage &gt; 대상 StaggerResistance</pre>
+<p>저항과 같은 값은 경직되지 않습니다. 피해 감소나 속성 방어 공식을 다시 사용하지 않습니다. 경직 시간은 대상 Stagger Component의 Base Stagger Duration이고, 이 Request에는 별도 시간 입력이 없습니다.</p>
+<p>실제 경직 상태·알림 이후 액션 취소는 대상 액션 시스템의 취소 규칙에 따릅니다. 피해 요청에 ‘액션 무조건 취소’ 기능이 있는 것은 아닙니다. 슈퍼아머는 체력 피해를 막지 않습니다.</p>
+</div>
+</details>
+<details class="node" id="groggy-formula">
+<summary><span class="tag">공식</span> 그로기 공식 · 경직과 독립된 게이지 감소</summary>
+<div class="node-body"><pre>G = max(0, 1 + HitContext.GroggyDamageAmplificationSnapshot / 100)
+FinalGroggyDamage = max(0, floor(BaseGroggyDamage × K × G))</pre>
+<p>Stagger Multiplier·HP 주는 피해 증가·속성 방어·HP 받는 피해 증가·HP 감소·치명타 배수는 이 공식에 들어가지 않습니다. 슈퍼아머로 경직이 막혀도 그로기는 별도로 처리됩니다.</p>
+<p>대상이 그로기 게이지를 사용하고, 소진 잠금이 없으며, 피해가 양수이면 게이지를 깎습니다. 0이 되면 소진 잠금과 On Groggy Gauge Depleted 알림을 발생시킵니다. 이후 상태 이상·연출은 콘텐츠가 구현하며 다시 사용하려면 <code>Reset Groggy Gauge</code>로 잠금을 해제해야 합니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="hitbox">
+<summary><span class="chapter-number">05</span> 충돌·히트박스와 피해 요청의 경계</summary>
+<div class="chapter-body">
+<details class="node" id="accept-target">
+<summary><span class="tag">판정</span> Try Accept Target / On Hitbox Target Accepted</summary>
+<div class="node-body">
+<p><code>ARActionHitboxActor</code>의 Try Accept Target은 초기화 여부·유효 Candidate·자기 공격자 제외·중복 정책만 검사합니다. <strong>팀·회피·피해량을 계산하거나 HP를 깎는 노드가 아닙니다.</strong> 성공하면 On Target Accepted 및 BP의 On Hitbox Target Accepted를 호출합니다.</p>
+<div class="scroll">
+<table class="fields"><thead><tr><th>정책/노드</th><th>실제 의미</th></tr></thead><tbody><tr><td>Once Per Target</td><td>한 히트박스 인스턴스가 같은 Actor를 한 번만 수락</td></tr><tr><td>Every Accepted Overlap</td><td>Try Accept Target이 호출되어 유효한 후보이면 반복 수락. 자동 시간 간격 없음</td></tr><tr><td>Reset Accepted Targets</td><td>기록한 대상 집합 초기화. Once Per Target 대상 재수락 가능</td></tr><tr><td>Has Accepted Target</td><td>이 인스턴스가 대상 수락 기록을 갖고 있는지 조회</td></tr></tbody></table>
+</div>
+<p>먼저 팀 검사를 할지, 수락 이벤트에서 피해 요청을 할지는 콘텐츠의 연결 기준입니다. 히트박스는 피해 적용 전에 수락 기록을 남기므로 <strong>피해가 회피되거나 거절돼도</strong> Once Per Target 수락 기록이 남을 수 있습니다.</p>
+<p class="note">Try Accept Target 뒤의 True 실행과 On Hitbox Target Accepted 양쪽에서 Apply Combat Damage를 호출하면 같은 수락에 두 번 피해를 줄 수 있습니다. 피해 적용 진입점을 하나로 정하세요.</p>
+</div>
+</details>
+<details class="node" id="collision-responsibility">
+<summary><span class="tag">연결</span> 일반 투사체·범위 공격 · 자동으로 되지 않는 것</summary>
+<div class="node-body">
+<p>Apply Combat Damage는 단일 Target 요청입니다. 구체·박스 오버랩, 라인 트레이스, 범위 내 Actor 배열 수집은 콘텐츠가 구성합니다. 각 대상에 요청할 때 Attacker·Attribute·계수·옵션을 일관되게 지정합니다.</p>
+<p>투사체 이동·사거리 도달 시 제거·피격 후 제거·충돌 중복 방지는 피해 노드에 없습니다. 여러 충돌 콜백에서 같은 요청이 반복될 수 있으므로 자체 타격 정책을 둡니다. 피해 스탯 Range를 사용하는 거리 환산도 콘텐츠 책임입니다.</p>
+<p>Apply Combat Damage에는 Action Handle 입력이 없고 액션 활성 여부를 자동 검사하지 않습니다. 행동이 끝나면 공격도 끝나야 하는 콘텐츠는 액션 소유 히트박스·활성 핸들 검사·충돌/Actor 정리로 연결해야 합니다. 자세한 액션 수명은 <a href="../nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html#spatial">아이템 스킬 런타임 참고서</a>에서 확인합니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="shield">
+<summary><span class="chapter-number">06</span> 실드 · 회피 · 무적 · 흡혈</summary>
+<div class="chapter-body">
+<details class="node" id="shield-broken">
+<summary><span class="tag">이벤트</span> Event On Shield Broken · 실드가 모두 파괴됐을 때</summary>
+<div class="node-body"><p class="node-purpose"><strong>용도:</strong> 자신의 총 실드가 피해 또는 수동 제거로 양수에서 0이 됐을 때 후속 효과를 실행합니다. 피해를 주거나 실드를 제거하는 호출 노드가 아니라, 발생을 받는 이벤트입니다.</p>
+<p>ARBaseCharacter 계열 플레이어·적 BP에서 이벤트를 직접 놓습니다. 등장 초기화는 기존 Event BeginPlay를 사용하며 별도 Bind가 필요하지 않습니다. 일반 Actor는 Health Component의 <code>Bind Event to On Shield Broken</code>으로 관찰합니다.</p>
+<div class="pin-entry"><h4>실행 출력</h4><p>실드 파괴가 발생하면 연결한 후속 노드를 실행합니다.</p></div>
+<div class="pin-entry"><h4>Previous Shield · Float</h4><p>이번 차감/제거 직전의 총 실드입니다. 개별 실드층의 최초 생성량이나 만료 시간은 아닙니다.</p></div>
+<div class="pin-entry"><h4>Reason · Resource Change Reason</h4><p>피해 소진은 <code>Damage</code>, Remove Shield / Remove Shields By Source / Clear Shields로 수동 제거한 경우는 <code>Other</code>입니다.</p></div>
+<details class="pin-group"><summary>발생하지 않는 경우 · 대상 핀 · 중복 연결 주의</summary><div class="pin-content"><p>시간 만료, 부분 차감, 한 층만 없어지고 다른 실드가 남음, 이미 0인 실드 제거, 실패한 핸들 제거는 이벤트가 없습니다. <code>Ignore Shield</code>는 기존 실드를 남기므로 파괴가 아닙니다. 배치 제거 한 번으로 총합 0이 되면 한 번 알립니다.</p><p>직접 이벤트의 대상은 <code>Self</code>이므로 Target 핀이 없습니다. Health Component 디스패처에는 <code>Target</code> Actor 출력이 추가됩니다. 직접 이벤트와 Bind에 같은 효과를 모두 연결하지 마세요. 한 피해가 실드를 깨고 HP까지 소진하면 실드 파괴와 사망 이벤트가 모두 발생할 수 있습니다.</p></div></details>
+<p><a href="../hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events">캐릭터 직접 이벤트 전체 참고</a></p></div></details>
+<details class="node" id="shield-allocation">
+<summary><span class="tag">분배</span> 실드 우선 분배와 체력 제한</summary>
+<div class="node-body"><pre>S = IgnoreShield이면 0,
+    아니면 min(공식 정수 피해 N, floor(현재 실드))
+H = min(N − S, ceil(현재 HP))
+
+실제 실드·HP를 차감한 뒤:
+ShieldDamage = floor(실제 실드 소모량)
+HealthDamage = floor(실제 HP 감소량)
+FinalDamage = ShieldDamage + HealthDamage</pre>
+<p>실드는 <strong>가장 나중에 추가한 것부터</strong> 소모합니다(LIFO). 실드가 전부 흡수해 Health Damage=0이어도 Applied이고 유효 Hit Context가 만들어집니다. 별도 경직·그로기는 가능하며 자동 차단되지 않습니다.</p>
+<p>Ignore Shield는 기존 실드를 지우는 옵션이 아니라 이번 피해의 실드 흡수를 우회하는 옵션입니다. 실드 생성·삭제는 자원 노드(<code>Apply Shield</code>, <code>Remove Shield</code>)에서 별도로 관리합니다.</p>
+</div>
+</details>
+<details class="node" id="evasion-invulnerability">
+<summary><span class="tag">판정</span> 회피와 보장 무적의 순서</summary>
+<div class="node-body">
+<p>회피가 먼저입니다. Guaranteed Hit=False·Apply Evasion=True일 때 대상의 최종 Evasion을 사용하고, 보장 회피가 있으면 회피 확률 100으로 취급합니다. 일반 Evasion은 Stats Component의 Max Evasion 상한을 먼저 받습니다(기본 50%).</p>
+<p>회피를 통과한 다음 일반 속성의 보장 무적을 검사합니다. <strong>확정 명중은 보장 무적을 뚫지 않습니다.</strong> 공허는 보장 무적을 건너뛰지만 일반 회피는 요청이 켜 두었으면 그대로 적용됩니다. HP Component의 피해 시스템 비활성·사망·잘못된 팀은 공허로도 우회하지 못합니다.</p>
+<p>DOT 노드는 회피를 끄지만 보장 무적은 일반 속성에서 계속 판정합니다. 구르기 무적/회피·피격 후 보호는 별도 기능이며 현재 상태에 따라 일반 피해 요청이 거절되거나 회피될 수 있습니다.</p>
+</div>
+</details>
+<details class="node" id="absorption">
+<summary><span class="tag">공식</span> 흡혈 · Apply Absorption</summary>
+<div class="node-body"><pre>누적 회복 소수 = 이전 누적 소수 + 실제 FinalDamage × Absorption / 1000
+정수 회복 요청 = floor(누적 회복 소수)
+누적 소수에서 그 정수분을 뺌</pre>
+<p>Apply Absorption=True, 실제 Final Damage&gt;0, Absorption&gt;0, 유효하고 살아 있는 공격자의 Health Component가 있어야 합니다. <strong>Absorption은 /1000 단위</strong>입니다. 값 100은 실제 피해의 10%, 10은 1%입니다.</p>
+<p>실드에 준 피해도 Final Damage에 포함되어 흡혈 기준에 들어갑니다. 남은 HP/실드보다 큰 초과 피해는 제외됩니다. 소수는 공격자별로 누적하며 회복은 최대 HP에서 제한됩니다. 현재 이 경로는 Recovery Power 배수를 별도로 곱하지 않습니다. 공격자가 사라진 DOT는 스냅샷으로 피해는 가능해도 흡혈은 하지 못합니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="healing">
+<summary><span class="chapter-number">회복</span> 힐 · 마나 · 스태미나 · 현재값 더하기</summary><div class="chapter-body">
+<p>피해는 현재 자원을 줄이고, 회복 노드는 현재 자원을 더합니다. <strong>Apply Stat Modifier로 최대 스탯을 올리는 것과 현재값 회복은 다릅니다.</strong> 이 노드들은 이미 존재하는 API이며, 필요한 곳에서 호출할 때 한 번 회복합니다.</p>
+<div class="flow">회복할 Actor → Restore Health / Mana / Stamina(Target, Amount, Source) → Return Value로 실제 회복량 확인</div>
+<details class="node" id="restore-health">
+<summary><span class="tag">현재 자원 회복</span> Restore Health</summary>
+<div class="node-body"><p class="node-purpose"><strong>용도:</strong> 대상의 현재 체력에 회복량을 더합니다. 최대 체력 스탯을 늘리는 보정이나 부활·지속 회복 등록 노드가 아닙니다.</p>
+<h3>입력 핀</h3><div class="pin-list">
+<div class="pin-entry"><h4>Target · Actor</h4><p>회복할 Actor를 연결합니다. 플레이어 또는 적 Self도 가능하나 Health Component가 있어야 합니다. 일반 Actor나 컴포넌트 없는 대상은 실제 회복량 0을 반환합니다.</p></div>
+<div class="pin-entry"><h4>Amount · Float</h4><p>이번 호출에서 더할 양수 회복량. 최대치까지만 적용하며, 음수·0·NaN·Infinity는 회복 요청으로 사용하지 않습니다. 감소는 피해/소비 노드로 처리합니다.</p></div>
+<details class="pin-group" id="restore-health-source"><summary>Source · Category / Source Id / Display Name 펼치기</summary><div class="pin-content"><p>FARSourceInfo 출처 구조체입니다. 통째로 Make ARSourceInfo를 연결하거나 Split Struct Pin으로 각 값을 입력할 수 있습니다.</p>
+<div class="pin-list"><div class="pin-entry"><h4>Category</h4><p>Weapon / Relic / Buff / Other 등 출처 분류. All은 제거/조회 필터용이며 회복 출처에는 구체적인 분류를 사용합니다.</p></div><div class="pin-entry"><h4>Source Id</h4><p>출처 이름 FName. 자동 회복 배수·쿨타임·스킬 실행을 정하는 키가 아닙니다.</p></div><div class="pin-entry"><h4>Display Name</h4><p>표시용 FText. 입력만으로 회복 팝업/HUD가 자동 생성되지는 않습니다.</p></div></div></div></details></div>
+<h3>출력 핀</h3><div class="pin-list"><div class="pin-entry"><h4>Return Value · Float</h4><p>실제로 증가한 체력량. 현재 90 / 최대 100에서 Amount=20이면 현재값=100, 반환값=10입니다. 새로운 현재값 자체가 필요하면 Get Current Resource로 조회합니다.</p></div></div>
+<p>Restore Health는 사망 상태를 회복시키지 않습니다. 현재 Health 변화 알림에는 Source가 직접 포함되지 않으며 회복 효과·출처별 표시 정책은 콘텐츠에서 관리합니다.</p>
+<p>AR | Resource 라이브러리 버전은 Actor Target을 받고, 컴포넌트의 Restore Health 버전은 해당 컴포넌트를 Target으로 받습니다. 현재 구현은 Recovery Power를 자동으로 곱하지 않습니다. 필요하면 콘텐츠가 회복량 정책을 계산한 뒤 Amount에 전달합니다.</p>
+</div></details>
+<details class="node" id="restore-mana">
+<summary><span class="tag">현재 자원 회복</span> Restore Mana</summary>
+<div class="node-body"><p class="node-purpose"><strong>용도:</strong> 대상의 현재 마나에 회복량을 더합니다. 최대 마나 스탯을 늘리는 보정이나 부활·지속 회복 등록 노드가 아닙니다.</p>
+<h3>입력 핀</h3><div class="pin-list">
+<div class="pin-entry"><h4>Target · Actor</h4><p>회복할 Actor를 연결합니다. 플레이어 또는 적 Self도 가능하나 Mana Component가 있어야 합니다. 일반 Actor나 컴포넌트 없는 대상은 실제 회복량 0을 반환합니다.</p></div>
+<div class="pin-entry"><h4>Amount · Float</h4><p>이번 호출에서 더할 양수 회복량. 최대치까지만 적용하며, 음수·0·NaN·Infinity는 회복 요청으로 사용하지 않습니다. 감소는 피해/소비 노드로 처리합니다.</p></div>
+<details class="pin-group" id="restore-mana-source"><summary>Source · Category / Source Id / Display Name 펼치기</summary><div class="pin-content"><p>FARSourceInfo 출처 구조체입니다. 통째로 Make ARSourceInfo를 연결하거나 Split Struct Pin으로 각 값을 입력할 수 있습니다.</p>
+<div class="pin-list"><div class="pin-entry"><h4>Category</h4><p>Weapon / Relic / Buff / Other 등 출처 분류. All은 제거/조회 필터용이며 회복 출처에는 구체적인 분류를 사용합니다.</p></div><div class="pin-entry"><h4>Source Id</h4><p>출처 이름 FName. 자동 회복 배수·쿨타임·스킬 실행을 정하는 키가 아닙니다.</p></div><div class="pin-entry"><h4>Display Name</h4><p>표시용 FText. 입력만으로 회복 팝업/HUD가 자동 생성되지는 않습니다.</p></div></div></div></details></div>
+<h3>출력 핀</h3><div class="pin-list"><div class="pin-entry"><h4>Return Value · Float</h4><p>실제로 증가한 마나량. 현재 90 / 최대 100에서 Amount=20이면 현재값=100, 반환값=10입니다. 새로운 현재값 자체가 필요하면 Get Current Resource로 조회합니다.</p></div></div>
+<p>현재 마나와 최대값은 Mana Component가 관리합니다. 적 기본 클래스에는 이 컴포넌트가 없으므로 필요 시 추가해야 합니다.</p>
+<p>AR | Resource 라이브러리 버전은 Actor Target을 받고, 컴포넌트의 Restore 버전은 해당 컴포넌트를 Target으로 받습니다. 현재 구현은 Recovery Power를 자동으로 곱하지 않습니다. 필요하면 콘텐츠가 회복량 정책을 계산한 뒤 Amount에 전달합니다.</p>
+</div></details>
+<details class="node" id="restore-stamina">
+<summary><span class="tag">현재 자원 회복</span> Restore Stamina</summary>
+<div class="node-body"><p class="node-purpose"><strong>용도:</strong> 대상의 현재 스태미나에 회복량을 더합니다. 최대 스태미나 스탯을 늘리는 보정이나 부활·지속 회복 등록 노드가 아닙니다.</p>
+<h3>입력 핀</h3><div class="pin-list">
+<div class="pin-entry"><h4>Target · Actor</h4><p>회복할 Actor를 연결합니다. 플레이어 또는 적 Self도 가능하나 Stamina Component가 있어야 합니다. 일반 Actor나 컴포넌트 없는 대상은 실제 회복량 0을 반환합니다.</p></div>
+<div class="pin-entry"><h4>Amount · Float</h4><p>이번 호출에서 더할 양수 회복량. 최대치까지만 적용하며, 음수·0·NaN·Infinity는 회복 요청으로 사용하지 않습니다. 감소는 피해/소비 노드로 처리합니다.</p></div>
+<details class="pin-group" id="restore-stamina-source"><summary>Source · Category / Source Id / Display Name 펼치기</summary><div class="pin-content"><p>FARSourceInfo 출처 구조체입니다. 통째로 Make ARSourceInfo를 연결하거나 Split Struct Pin으로 각 값을 입력할 수 있습니다.</p>
+<div class="pin-list"><div class="pin-entry"><h4>Category</h4><p>Weapon / Relic / Buff / Other 등 출처 분류. All은 제거/조회 필터용이며 회복 출처에는 구체적인 분류를 사용합니다.</p></div><div class="pin-entry"><h4>Source Id</h4><p>출처 이름 FName. 자동 회복 배수·쿨타임·스킬 실행을 정하는 키가 아닙니다.</p></div><div class="pin-entry"><h4>Display Name</h4><p>표시용 FText. 입력만으로 회복 팝업/HUD가 자동 생성되지는 않습니다.</p></div></div></div></details></div>
+<h3>출력 핀</h3><div class="pin-list"><div class="pin-entry"><h4>Return Value · Float</h4><p>실제로 증가한 스태미나량. 현재 90 / 최대 100에서 Amount=20이면 현재값=100, 반환값=10입니다. 새로운 현재값 자체가 필요하면 Get Current Resource로 조회합니다.</p></div></div>
+<p>현재 스태미나와 최대값은 Stamina Component가 관리합니다. 적 기본 클래스에는 이 컴포넌트가 없으므로 필요 시 추가해야 합니다.</p>
+<p>AR | Resource 라이브러리 버전은 Actor Target을 받고, 컴포넌트의 Restore 버전은 해당 컴포넌트를 Target으로 받습니다. 현재 구현은 Recovery Power를 자동으로 곱하지 않습니다. 필요하면 콘텐츠가 회복량 정책을 계산한 뒤 Amount에 전달합니다.</p>
+</div></details>
+<details class="node" id="get-current-resource"><summary><span class="tag query">조회</span> Get Current Resource</summary><div class="node-body">
+<p class="node-purpose">Actor의 현재 자원·최대치·비율을 조회합니다. 값을 바꾸거나 회복하지 않습니다.</p><div class="pin-list">
+<div class="pin-entry"><h4>Target / Resource Type</h4><p>Actor와 Health / Mana / Stamina / Shield / Groggy 중 조회할 종류를 지정합니다.</p></div>
+<div class="pin-entry"><h4>Current / Maximum / Ratio</h4><p>현재값·최대값·비율 출력. Health/Mana/Stamina는 자신의 최대 스탯 기준. 실드는 고정 최대 스탯이 없어 현재 구현에서 Maximum=현재 실드 합계로 반환합니다.</p></div>
+<div class="pin-entry"><h4>Return Value · Bool</h4><p>해당 자원을 조회할 컴포넌트를 찾았는지 여부. false이면 출력값을 유효 자원으로 사용하지 않습니다.</p></div></div></div></details>
+<p class="note">지속 힐은 회복 노드를 한 번 놓는 것으로 완성되지 않습니다. 콘텐츠가 기간·주기·취소 정책을 정하고 반복 호출합니다. 액션/타이머의 수명 관리도 별도입니다. 실드 추가는 <code>Apply Shield</code>를 사용합니다.</p>
+</div></details>
+<details class="chapter" id="formula">
+<summary><span class="chapter-number">07</span> 체력 피해 공식 · 계산 순서</summary>
+<div class="chapter-body">
+<p>아래 스탯은 <strong>이미 보정·안전 규칙을 통과한 Final Stat</strong>입니다. Damage Request에 최종 공식을 직접 계산해 넣을 필요는 없습니다. 상수·계수와 옵션만 정하고 시스템에 맡깁니다.</p>
+<div class="flow">대상/팀 검사 → 피해 이름별 재피격 제한 → 회피 → 보장 무적 → 기본 피해 → 주는 피해 증가 → 치명타 → 방어/관통 → 받는 피해 증가 → 피해 감소 → 정수화 → 제한 기록 → 실드/HP 분배 → 이벤트·흡혈</div>
+<details class="node" id="base-formula">
+<summary><span class="tag">공식</span> 기본 피해 · 상수 + 공격력 계수 + 주문력 계수</summary>
+<div class="node-body"><pre>B = BaseDamage + AttackPower × AttackPowerCoefficient
+               + SpellPower × SpellPowerCoefficient</pre>
+<p>Base Damage와 두 계수는 유한한 숫자여야 합니다. B가 0 이하이면 Blocked입니다. 에디터의 Base Damage 최소값 표시는 0이지만, 런타임은 최종 B를 확인하므로 음수 계수를 보내 피해를 보정하는 것은 권장하지 않습니다.</p>
+<p>공격력·주문력 계수 둘 다 0이면 Base Damage만 사용합니다. 속성을 바꾸어도 계수는 자동 변경되지 않습니다.</p>
+</div>
+</details>
+<details class="node" id="outgoing">
+<summary><span class="tag">공식</span> 주는 피해 증가 · 합연산</summary>
+<div class="node-body"><pre>A = OverallDamageAmplification
+  + (Direct이면 DirectDamageAmplification,
+     DOT이면 DamageOverTimeAmplification)
+  + 선택 속성의 DamageAmplification
+
+D₁ = B × max(0, 1 + A / 100)</pre>
+<p><code>Apply Amplification=True</code>일 때 적용합니다. 공허에는 속성 전용 증가 스탯이 없어 마지막 항이 0이며 전체·전달 방식 증가는 그대로 받습니다.</p>
+<p>전체 +20, 단타 +30, 물리 +10이면 합계 +60% → <strong>1.6배</strong>입니다. 1.2×1.3×1.1로 곱하지 않습니다.</p>
+</div>
+</details>
+<details class="node" id="critical">
+<summary><span class="tag">공식</span> 치명타 · 확률과 배수</summary>
+<div class="node-body"><pre>치명타 확률 = clamp(Final CriticalChance, 0, 100)
+C = 치명타 발생 시 max(0, CriticalDamage / 100), 아니면 1
+D₂ = D₁ × C</pre>
+<p><code>Can Crit=True</code>일 때 매 피해 처리에서 확률을 뽑습니다. DOT도 허용하면 <strong>틱마다</strong> 치명타 판정을 합니다. 스탯 컴포넌트의 Max Critical Chance 상한도 먼저 적용됩니다(기본 100).</p>
+<p>Critical Damage 기본 150은 1.5배입니다. 치명타가 나도 배수가 0이면 피해는 Blocked가 될 수 있습니다. Result.Critical과 Outcome을 함께 확인합니다.</p>
+</div>
+</details>
+<details class="node" id="defense">
+<summary><span class="tag">공식</span> 방어력과 관통 · 속성별 방어</summary>
+<div class="node-body"><pre>P = clamp(DefensePenetration, 0, 100)
+E = max(0, 선택 속성 Defense) × (1 − P / 100)
+D₃ = D₂ × 100 / (100 + E)</pre>
+<p>방어 100·관통 0이면 피해 50%, 방어 100·관통 50이면 약 66.67%가 남습니다. 관통은 고정 방어력 차감이 아닙니다.</p>
+<p><code>Ignore Defense=True</code> 또는 공허이면 이 단계만 건너뜁니다. Ignore Defense는 받는 피해 증가·피해 감소·실드·무적까지 무시하지 않습니다.</p>
+</div>
+</details>
+<details class="node" id="incoming">
+<summary><span class="tag">공식</span> 받는 피해 증가 · 전체 + 속성 합연산</summary>
+<div class="node-body"><pre>T = OverallDamageTakenIncrease + 선택 속성 DamageTakenIncrease
+D₄ = D₃ × max(0, 1 + T / 100)</pre>
+<p>일반 속성에서 <code>Apply Amplification=True</code>일 때 적용합니다. 전체 +50·화염 +20이면 화염 피해는 1.7배입니다. 전체 증가도 <strong>공허에는 적용되지 않습니다.</strong></p>
+<p class="note">Apply Amplification은 공격자 쪽 증가뿐 아니라 <strong>대상 쪽 받는 피해 증가도 함께 끕니다.</strong> 치명타·방어·피해 감소는 각각 별도 규칙으로 남습니다. 받는 피해 증가 Final Stat은 현재 0 이상으로 제한됩니다.</p>
+</div>
+</details>
+<details class="node" id="reduction">
+<summary><span class="tag">공식</span> 전체·속성 피해 감소 · 남는 비율의 곱</summary>
+<div class="node-body"><pre>각 감소 스탯의 일반 감소값 R
+  = (BaseStat + Flat 합) × (1 + AdditivePercent 합 / 100)
+                        × Multiplicative 곱
+남는 비율 M = max(0, 1 − R / 100)
+            × ∏ max(0, 1 − 독립감소값 / 100)
+
+D₅ = D₄ × M전체 × M선택속성</pre>
+<p>동일 감소 스탯의 일반 보정은 먼저 합산·배율 계산하고, <code>Independent Damage Reduction</code>은 각각 남는 비율을 곱합니다. 전체 감소와 속성 감소도 서로 곱합니다. 공허는 이 단계 전체를 건너뜁니다.</p>
+<p>전체 감소 20%·속성 감소 30%라면 0.8×0.7=0.56, 합계 피해 감소는 <strong>44%</strong>입니다. 독립 감소 50%를 두 개 적용하면 75% 감소입니다.</p>
+</div>
+</details>
+<details class="node" id="rounding">
+<summary><span class="tag">반환</span> 정수화 · 최소 피해 · 실제 반환값</summary>
+<div class="node-body"><pre>D₅ ≤ 0 → Blocked, 피해 0
+D₅ &gt; 0 → 공식 정수 피해 N = max(1, floor(D₅))</pre>
+<p>양수인 미세 피해만 최소 1입니다. 기본 피해 0·무적·완전 감소·회피를 최소 1로 뚫지 않습니다. 배율 단계마다 반올림하지 않고 마지막에 내림합니다.</p>
+<p><strong>Apply Combat Damage의 반환 Final Damage는 이 N이 아니라 실제 차감 결과</strong>입니다. 실드·남은 체력으로 제한된 Shield Damage + Health Damage로 다시 기록됩니다. 체력이 부족한 대상에 큰 피해를 주면 초과 피해는 반환값에서 빠집니다. 자원이 소수일 때 결과 필드도 내림되므로 Applied이지만 기록 피해 0인 소수 경계가 있을 수 있습니다.</p>
+</div>
+</details>
+<details class="node" id="full-formula">
+<summary><span class="tag">요약</span> 한 줄 공식과 빠른 검산</summary>
+<div class="node-body"><pre>일반 속성:
+B × max(0, 1 + A/100) × C
+  × 100/(100 + E)
+  × max(0, 1 + T/100) × M전체 × M속성
+
+공허:
+B × max(0, 1 + A/100) × C</pre>
+<p>각 요청 옵션이 끈 단계는 배수 1로 취급합니다. 공허도 기본 대상 검사와 회피·치명타·실드 분배를 별도로 거칩니다.</p>
+<p>검산용 수치: B=100, A=50, 치명타 없음, E=100, T=20, M전체=0.8, M속성=1이면 100×1.5×0.5×1.2×0.8=72. 공식 정수 피해는 72이고, 실드 20·충분한 체력이면 Shield Damage=20, Health Damage=52, Final Damage=72입니다.</p>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="trouble">
+<summary><span class="chapter-number">08</span> 증상별 조회 · 개발 점검표</summary>
+<div class="chapter-body">
+<div class="scroll">
+<table class="fields"><thead><tr><th>증상</th><th>먼저 확인할 것</th><th>항목</th></tr></thead><tbody><tr><td>피해가 전혀 없음</td><td>팀·대상 가능 여부, Target의 Health/Stats, Base+계수 합, 무적, Outcome/Failure Reason</td><td><a href="#can-damage">대상 검사</a> · <a href="#result">결과</a></td></tr><tr><td>값이 너무 큼/작음</td><td>계수 0.5와 퍼센트 50 혼동, 증가 합연산, 감소 남는 비율, 정수 내림</td><td><a href="#formula">공식</a></td></tr><tr><td>공허가 회피되거나 실드에 막힘</td><td>공허도 회피·실드가 별도 옵션이라는 점</td><td><a href="#attributes">속성</a></td></tr><tr><td>확정 명중인데 무적을 못 뚫음</td><td>Guaranteed Hit는 회피만 우회</td><td><a href="#evasion-invulnerability">무적·회피</a></td></tr><tr><td>DOT 등록 성공인데 즉시 피해 없음</td><td>첫 틱은 Interval 뒤. 기간보다 간격이 큰지, 기본 피해가 양수인지</td><td><a href="#dot-time">틱 시점</a></td></tr><tr><td>지속 피해로 설정했는데 한 번만 발생</td><td>Request.Delivery만 바꾸었는가? Apply Damage Over Time 등록 필요</td><td><a href="#apply-dot">DOT 등록</a></td></tr><tr><td>지속 피해가 예상보다 많이 겹침</td><td>Independent 중복 등록·Tick Interval·호출 횟수</td><td><a href="#dot-stack">중첩</a></td></tr><tr><td>DOT를 갱신해도 피해/옵션이 안 바뀜</td><td>RefreshSameName은 기존 정의 유지. 매칭과 비교 필드 확인</td><td><a href="#dot-stack">갱신</a></td></tr><tr><td>계속 갱신하니 틱이 안 나옴</td><td>갱신 때마다 NextTickAt이 현재+Interval로 이동</td><td><a href="#dot-stack">갱신</a></td></tr><tr><td>아이템 버려도 DOT가 남음</td><td>일반 DOT는 아이템/액션 소유로 자동 정리되지 않음</td><td><a href="#dot-snapshot">수명</a></td></tr><tr><td>HP 피해는 되는데 경직이 안 됨</td><td>별도 경직 호출, Template 기본 0, 엄격한 저항 비교, 슈퍼아머·면역</td><td><a href="#stagger-formula">경직</a></td></tr><tr><td>그로기 수치는 있는데 게이지가 안 줄음</td><td>게이지 사용 여부, 소진 잠금, Base Groggy Damage</td><td><a href="#groggy-formula">그로기</a></td></tr><tr><td>피해가 두 번 들어감</td><td>충돌 다중 콜백, 수락 이벤트와 True 경로 양쪽 요청</td><td><a href="#accept-target">히트박스</a></td></tr><tr><td>DOT 온히트가 안 나옴</td><td>On Damage Hit는 Direct만. DOT는 On Damage Received 확인</td><td><a href="#damage-events">알림</a></td></tr><tr><td>흡혈이 적거나 0</td><td>Apply Absorption, /1000 단위, 실제 차감량·소수 누적·공격자 상태</td><td><a href="#absorption">흡혈</a></td></tr><tr><td>Success인데 반환 피해가 0</td><td>Queued/회피 처리 Success 구분, 남은 소수 자원 내림</td><td><a href="#result">결과</a></td></tr><tr><td>DOT를 지우다가 다른 효과도 삭제</td><td>Category=All, SourceId/DotName=None 필터 범위</td><td><a href="#dot-management">제거 필터</a></td></tr></tbody></table>
+</div>
+<details class="node" id="checklist">
+<summary><span class="tag">점검</span> 구현 전후 체크리스트</summary>
+<div class="node-body"><ul><li>프로젝트 AR 피해 노드를 사용하며 Attacker·Target을 실제 Actor로 연결한다.</li><li>Delivery와 Attribute, 계수 배수와 퍼센트 스탯 단위를 구분한다.</li><li>공격자 최종 스탯을 Base Damage에 미리 곱한 뒤 시스템이 또 계수를 적용하는 중복 계산을 피한다.</li><li>Outcome=Applied와 Failure Reason=Success의 의미를 구분한다.</li><li>체력/실드 실제 감소 결과를 사용하며 초과 피해량을 별도로 가정하지 않는다.</li><li>온히트 알림·경직·상태 이상은 HP 피해와 별도 책임으로 연결한다.</li><li>같은 충돌/틱에 피해·경직이 중복 요청되지 않는다.</li><li>DOT 기간·간격·틱당 피해·중첩 정책·Dot Name과 수동 정리 책임을 정한다.</li><li>회피·무적·공허·실드·치명타·대상 사망·공격자 소멸·아이템 해제 경계를 실제 플레이에서 검증한다.</li><li>임의 BP 수치와 코드 기본값을 구분한다. 코드 공식 변경 시 이 참고서도 함께 갱신한다.</li></ul>
+</div>
+</details>
+</div>
+</details>
+
+<details class="chapter" id="terms">
+<summary><span class="chapter-number">09</span> 용어 · 속성 · 단타와 지속 피해</summary>
+<div class="chapter-body">
+<div class="scroll">
+<table class="fields"><thead><tr><th>용어</th><th>의미</th><th>개발 시 구분</th></tr></thead><tbody><tr><td>Attacker / Target</td><td>공격의 원인 Actor / 피해를 받는 Actor</td><td>효과 출처 Source와 다른 정보</td></tr><tr><td>Delivery · 전달 방식</td><td>Direct 또는 DamageOverTime</td><td>속성과 독립. 물리 DOT, 마법 Direct 모두 가능</td></tr><tr><td>Direct · 단타/직접 피해</td><td>한 피해 요청의 분류</td><td>한 번만 공격해야 한다는 뜻이 아님. 다단히트는 여러 Direct 요청 가능</td></tr><tr><td>Damage Over Time · DOT/지속 피해</td><td>틱마다 발생하는 피해 분류</td><td>Apply Damage Over Time이 실제 반복 스케줄을 등록</td></tr><tr><td>Tick / Tick Interval</td><td>피해 발생 1회 / 발생 간격(초)</td><td>DamageRequest의 Base Damage는 틱당 값, 초당 DPS나 기간 총합이 아님</td></tr><tr><td>Base Damage · 기본 피해</td><td>스탯 계수 적용 전의 상수 피해</td><td>공격력·주문력 기여분과 합산</td></tr><tr><td>Coefficient · 계수</td><td>스탯 값에 직접 곱하는 배수</td><td>1.0=100%, 0.5=50%. 50을 넣으면 50배</td></tr><tr><td>Amplification · 주는 피해 증가</td><td>공격자 쪽 전체·전달 방식·속성 증가</td><td>서로 합산한 뒤 피해에 곱함</td></tr><tr><td>Damage Taken Increase · 받는 피해 증가</td><td>대상 쪽 전체·속성 취약</td><td>합산. 받는 피해 감소와 별도 단계</td></tr><tr><td>Defense / Penetration</td><td>속성별 방어력 / 방어 관통률</td><td>관통은 방어력의 일정 비율을 무시</td></tr><tr><td>Damage Reduction · 피해 감소</td><td>방어 공식 이후 남는 피해 비율</td><td>전체와 속성의 남는 비율을 곱함</td></tr><tr><td>Critical · 치명타</td><td>확률 판정 성공 시 치명타 피해 배수</td><td>Critical Damage 150=1.5배, 추가 150%가 아님</td></tr><tr><td>Shield / Health Damage</td><td>실드 흡수량 / 체력에서 빠진 양</td><td>최종 공식값과 실제 자원 감소 결과를 구분</td></tr><tr><td>Stagger · 경직</td><td>한 타격의 경직력이 저항을 넘으면 발생</td><td>체력 피해와 별도 요청·공식</td></tr><tr><td>Groggy · 그로기</td><td>별도의 그로기 게이지에 주는 피해</td><td>게이지 소진 이벤트. HP 피해 증폭이나 기절을 자동 의미하지 않음</td></tr><tr><td>Super Armor / CC Immunity</td><td>경직 차단 / 신규 CC 유효 지속시간 0</td><td>HP 무적과 다름. 일반 피해 감소 기능이 아님</td></tr><tr><td>Hit Context</td><td>적용된 한 타격의 대상·식별·공격 스탯 일부 기록</td><td>경직 요청에 전달하는 근거. 액션 핸들이 아님</td></tr><tr><td>Dot Handle</td><td>등록된 지속 피해 인스턴스 식별값</td><td>Source Id·Dot Name·Stat Modifier Handle과 다른 타입</td></tr></tbody></table>
+</div>
+<details class="node" id="attributes">
+<summary><span class="tag">참고</span> 속성 선택 · Physical / Fire / Magic / Void</summary>
+<div class="node-body">
+<div class="scroll">
+<table class="fields"><thead><tr><th>Attribute</th><th>참조하는 속성 스탯</th><th>예외</th></tr></thead><tbody><tr><td>Physical · 물리</td><td>Physical Damage Amplification / Physical Defense / Physical Damage Taken Increase / Physical Damage Reduction</td><td>공통 전체 증가·전달 방식 증가도 적용</td></tr><tr><td>Fire · 화염</td><td>Fire Damage Amplification / Fire Defense / Fire Damage Taken Increase / Fire Damage Reduction</td><td>공통 전체 증가·전달 방식 증가도 적용</td></tr><tr><td>Magic · 마법</td><td>Magic Damage Amplification / Magic Defense / Magic Damage Taken Increase / Magic Damage Reduction</td><td>Spell Power 계수만 쓰도록 강제하지 않음</td></tr><tr><td>Void · 공허</td><td>전체·전달 방식 주는 피해 증가, 요청의 공격력·주문력 계수</td><td>속성 방어·전체/속성 받는 피해 증가·전체/속성 감소·보장 무적을 건너뜀</td></tr></tbody></table>
+</div>
+<p class="note"><strong>속성과 계수는 독립입니다.</strong> 물리라도 Spell Power Coefficient를 사용할 수 있고, 마법이라도 Attack Power Coefficient를 사용할 수 있습니다. 공허도 회피·치명타·실드 적용 여부는 별도로 판정합니다. 공허는 모든 규칙을 무조건 무시하는 피해가 아닙니다.</p>
+</div>
+</details>
+<details class="node" id="names">
+<summary><span class="tag">참고</span> Source · Damage Name · Attack Tag · Dot Name</summary>
+<div class="node-body">
+<div class="scroll">
+<table class="fields"><thead><tr><th>필드</th><th>의미</th><th>현재 시스템에서의 사용</th></tr></thead><tbody><tr><td>Source.Category</td><td>Weapon / Relic / Buff / Other. All은 조회·제거 필터용</td><td>피해 공식 배수를 정하지 않음</td></tr><tr><td>Source.Source Id</td><td>효과 출처 식별용 FName</td><td>DOT 출처별 제거에 사용. 팀·공격자를 결정하지 않음</td></tr><tr><td>Source.Display Name</td><td>출처 표시용 FText</td><td>공식/스킬 실행 식별키가 아님. 자동 UI 생성 보장 없음</td></tr><tr><td>Damage Name</td><td>피해 요청 이름 FName</td><td>같은 대상의 재피격 제한 식별키. 기본 0.2초, None이면 제한 없음. 피해 배수 키는 아님</td></tr><tr><td>Attack Tag</td><td>피해 요청의 Gameplay Tag</td><td>현재 공통 계산기에서 스킬 선택·추가 배수에 사용하지 않음. 제거한 Action Tag와 다른 필드</td></tr><tr><td>Dot Name</td><td>지속 피해 종류 이름 FName</td><td>RefreshSameName의 Target+DotName 매칭 및 DOT 제거 필터에 사용</td></tr></tbody></table>
+</div>
+<p>피해 결과에는 Source·Damage Name·Attack Tag가 그대로 노출되지 않습니다. 이벤트 결과에서 출처별 분기를 하고 싶다면 필요한 정보를 콘텐츠 측에서 별도로 관리해야 합니다. 이름 제한은 Source Id가 아니라 <strong>Damage Name</strong>을 기준으로 합니다. 자세한 규칙은 <a href="#damage-name-limit">피해 이름별 재피격 제한</a>에서 확인하세요.</p>
+</div>
+</details>
+</div>
+</details>
+<div id="no-results" class="note" hidden>일치하는 항목이 없습니다. 노드의 영문 이름이나 더 짧은 검색어로 찾아보세요.</div>
+</main>
+<footer>
+<div class="wrap">
+<p>표의 기본값은 C++ 선언 기준입니다. 저장된 데이터 에셋·블루프린트의 값은 다를 수 있습니다. 문서는 게임 코드나 에셋을 변경하지 않습니다.</p>
+<p>소스 확인: <a href="../../../Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintLibrary.h">피해 라이브러리 노드</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Combat/ARDamageTypes.h">Damage Request·Result·Hit Context</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Combat/ARDamageResolver.cpp">수치 공식</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Combat/ARCombatSubsystem.cpp">검사·DOT·알림·흡혈</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Combat/ARCombatSubsystem.h">DOT 관리·알림 노드</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Combat/ARDotTypes.h">DOT Spec</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Combat/ARStaggerTypes.h">경직 구조체</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARStaggerComponent.cpp">경직·그로기 계산</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARHealthComponent.cpp">실드·HP 분배</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARStatsComponent.cpp">최종 스탯·피해 감소</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Core/ARFoundationTypes.h">열거형·출처</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Combat/ARActionHitboxActor.cpp">대상 중복 판정</a></p>
+</div></footer>
+<script>
+const chapters=[...document.querySelectorAll('.chapter')];
+const nodes=[...document.querySelectorAll('.node')];
+const details=[...document.querySelectorAll('details')];
+const search=document.getElementById('node-search');
+const result=document.getElementById('search-result');
+const empty=document.getElementById('no-results');
+let savedOpen=null;
+function applySearch(){
+  const terms=search.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  if(terms.length && savedOpen===null) savedOpen=details.map(d=>d.open);
+  const matches=text=>terms.every(term=>text.toLocaleLowerCase().includes(term));
+  for(const chapter of chapters){
+    const children=[...chapter.querySelectorAll('.node')];
+    const hit=!terms.length || matches(chapter.textContent);
+    chapter.hidden=!hit;
+    const childHits=children.filter(n=>matches(n.textContent));
+    const wholeChapter=!terms.length || childHits.length===0 || matches(chapter.querySelector('summary').textContent);
+    for(const node of children){
+      node.hidden=!!terms.length && !wholeChapter && !childHits.includes(node);
+      if(terms.length && !node.hidden) node.open=true;
+    }
+    if(terms.length && hit) chapter.open=true;
+    for(const group of chapter.querySelectorAll('.pin-group')){if(terms.length && matches(group.textContent))group.open=true;}
+  }
+  if(!terms.length && savedOpen!==null){details.forEach((d,i)=>d.open=savedOpen[i]);savedOpen=null}
+  const chapterCount=chapters.filter(c=>!c.hidden).length;
+  const nodeCount=nodes.filter(n=>!n.closest('[hidden]')).length;
+  empty.hidden=chapterCount>0;
+  result.textContent=terms.length
+    ? '검색 결과: '+chapterCount+'개 항목 · '+nodeCount+'개 노드 묶음'
+    : '전체 '+chapters.length+'개 항목 · '+nodes.length+'개 노드 묶음. 검색은 접힌 내용도 포함합니다.';
+}
+search.addEventListener('input',applySearch);
+document.getElementById('clear-search').addEventListener('click',()=>{search.value='';applySearch();search.focus()});
+document.getElementById('expand-all').addEventListener('click',()=>details.filter(d=>!d.closest('[hidden]')).forEach(d=>d.open=true));
+document.getElementById('collapse-all').addEventListener('click',()=>details.filter(d=>!d.closest('[hidden]')).forEach(d=>d.open=false));
+function revealTarget(hash){
+  const target=document.getElementById(hash.slice(1));
+  if(!target)return;
+  if(search.value.trim()){search.value='';applySearch()}
+  for(let el=target;el;el=el.parentElement){if(el instanceof HTMLDetailsElement)el.open=true}
+}
+document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',()=>revealTarget(a.hash)));
+window.addEventListener('hashchange',()=>revealTarget(location.hash));
+applySearch();
+if(location.hash)revealTarget(location.hash);
+let printState=[];
+window.addEventListener('beforeprint',()=>{
+  printState=details.map(d=>({open:d.open,hidden:d.hidden}));
+  details.forEach(d=>{d.hidden=false;d.open=true});empty.hidden=true;
+});
+window.addEventListener('afterprint',()=>{
+  details.forEach((d,i)=>{d.open=printState[i]?.open??false;d.hidden=printState[i]?.hidden??false});
+  empty.hidden=chapters.some(c=>!c.hidden);
+});
+</script>
+</body>
+</html>

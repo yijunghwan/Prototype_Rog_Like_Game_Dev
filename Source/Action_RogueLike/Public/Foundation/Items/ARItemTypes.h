@@ -20,6 +20,14 @@ enum class EARLoadoutItemKind : uint8
 	PassiveRelic
 };
 
+/** DirectTag keeps the legacy tag route; ActiveRelicSlot resolves the equipped slot at input time. */
+UENUM(BlueprintType)
+enum class EARSkillInputMode : uint8
+{
+	DirectTag,
+	ActiveRelicSlot
+};
+
 UENUM(BlueprintType)
 enum class EARItemRemovalReason : uint8
 {
@@ -55,7 +63,7 @@ struct ACTION_ROGUELIKE_API FARUIStateDisplayDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) FText DisplayName;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) EARItemUIStateDisplayType DisplayType = EARItemUIStateDisplayType::Number;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="1", ClampMax="6", EditCondition="DisplayType==EARItemUIStateDisplayType::SmallStack")) int32 MaxDisplaySlots = 6;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="1", ClampMax="6", EditCondition="DisplayType==EARItemUIStateDisplayType::SmallStack", EditConditionHides)) int32 MaxDisplaySlots = 6;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) bool bShowNumberAlongside = false;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) EARItemUIStatePlacement Placement = EARItemUIStatePlacement::Both;
 };
@@ -77,7 +85,11 @@ struct ACTION_ROGUELIKE_API FARSkillDefinition
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Identity") FName SkillId = NAME_None;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") FGameplayTag InputTag;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") EARSkillInputMode InputMode = EARSkillInputMode::DirectTag;
+	/** Used only by DirectTag; old assets keep their existing input behavior. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input", meta=(EditCondition="InputMode == EARSkillInputMode::DirectTag", EditConditionHides)) FGameplayTag InputTag;
+	/** One-based skill number local to an active relic; the equipped slot supplies the physical key. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input", meta=(EditCondition="InputMode == EARSkillInputMode::ActiveRelicSlot", EditConditionHides, ClampMin="1")) int32 SlotSkillIndex = 1;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input") int32 InputPriority = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cost") FARResourceCost ResourceCost;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cooldown", meta=(ClampMin="0.0")) float BaseCooldown = 0.0f;
@@ -87,7 +99,7 @@ struct ACTION_ROGUELIKE_API FARSkillDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display", meta=(MultiLine="true")) FText SkillDescription;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display") TSoftObjectPtr<UTexture2D> SkillIcon;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display") bool bShowOnHUD = true;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display") int32 HUDSortOrder = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display", meta=(EditCondition="bShowOnHUD", EditConditionHides, HideEditConditionToggle)) int32 HUDSortOrder = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -98,7 +110,12 @@ struct ACTION_ROGUELIKE_API FARRegisteredSkillUIData
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FARRegisteredSkillHandle RegisteredHandle;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGuid ItemInstanceId;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FName SkillId = NAME_None;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) EARSkillInputMode InputMode = EARSkillInputMode::DirectTag;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FGameplayTag InputTag;
+	/** One-based active relic slot; zero for DirectTag skills. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 ActiveRelicSlot = 0;
+	/** One-based local skill number; zero for DirectTag skills. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) int32 SlotSkillIndex = 0;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText DisplayName;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) FText Description;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TSoftObjectPtr<UTexture2D> Icon;

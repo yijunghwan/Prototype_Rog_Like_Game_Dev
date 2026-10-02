@@ -26,6 +26,7 @@ class ACTION_ROGUELIKE_API UARCombatSubsystem : public UTickableWorldSubsystem
 
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 
@@ -56,7 +57,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="AR|Combat") FARCombatResultEventSignature OnDamageBlocked;
 
 private:
-	FARCombatDamageResult ProcessDamageRequest(const FARCombatDamageRequest& Request, bool bSourceAlreadyValidated = false);
+	FARCombatDamageResult ProcessDamageRequest(const FARCombatDamageRequest& Request, bool bSourceAlreadyValidated = false, double DamageTime = -1.0);
+	void PruneDamageNameIntervals(double Now);
 	FAROffensiveStatSnapshot CaptureOffensiveSnapshot(const AActor* Attacker, EARDamageDelivery Delivery, EARDamageAttribute Attribute) const;
 	bool TryGetCombatTeam(const AActor* Actor, EARCombatTeam& OutTeam, bool& bOutCanBeTarget) const;
 	void ApplyAbsorption(const FARCombatDamageRequest& Request, const FARCombatDamageResult& Result, const FAROffensiveStatSnapshot& Offense);
@@ -65,6 +67,8 @@ private:
 	UPROPERTY(Transient) TArray<FARCombatDamageRequest> QueuedDamageRequests;
 	TArray<FARActiveDotInstance> ActiveDots;
 	TMap<TWeakObjectPtr<AActor>, double> AbsorptionRemainders;
+	// Weak target identity prevents retaining actors or sharing windows with a reused actor address.
+	TMap<TWeakObjectPtr<AActor>, TMap<FName, double>> DamageNameIntervals;
 	FRandomStream CombatRandomStream;
 	bool bProcessingDamage = false;
 

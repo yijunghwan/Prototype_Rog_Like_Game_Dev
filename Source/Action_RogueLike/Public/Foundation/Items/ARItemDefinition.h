@@ -28,7 +28,7 @@ public:
 	bool HasAdditionalTag(const FString& Tag) const;
 
 	/** The lookup key is (ItemTypeTag, ItemId); 0 is reserved for unassigned content. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Identity") FGameplayTag ItemTypeTag;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Identity", meta=(Categories="Item.Type")) FGameplayTag ItemTypeTag;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Identity", meta=(ClampMin="1")) int32 ItemId = 0;
 	/** Free-form family labels. A label may be shared by many item definitions. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Identity") TArray<FString> AdditionalTags;

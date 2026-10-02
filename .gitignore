@@ -30,3 +30,6 @@ Desktop.ini
 *.temp
 *.log
 
+# Python-generated caches for local scripts
+__pycache__/
+*.py[cod]

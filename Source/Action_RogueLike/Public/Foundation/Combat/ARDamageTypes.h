@@ -71,6 +71,10 @@ struct ACTION_ROGUELIKE_API FARCombatDamageRequest
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bApplyOnHitEffects = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FARSourceInfo Source;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FName DamageName = NAME_None;
+	/** Named hits share a target/name interval across attackers, attributes and delivery types. NAME_None is unthrottled. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", Units="s", EditCondition="!bIgnoreDamageNameInterval")) float DamageNameInterval = 0.2f;
+	/** Bypasses the interval without consuming, clearing or extending its existing window. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bIgnoreDamageNameInterval = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FGameplayTag AttackTag;
 
 	bool bUseOffensiveSnapshot = false;

@@ -38,6 +38,8 @@ struct FARActiveShield
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FARHealthChangedSignature, AActor*, Target, float, CurrentHealth, float, MaxHealth, float, Delta, EARResourceChangeReason, Reason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(FARShieldChangedSignature, AActor*, Target, float, CurrentShield, float, Delta, FARShieldHandle, Handle, EARResourceChangeReason, Reason);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FARShieldBrokenSignature, AActor*, Target, float, PreviousShield, EARResourceChangeReason, Reason);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FARShieldBrokenNativeSignature, AActor*, float, EARResourceChangeReason);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARDamageAppliedSignature, AActor*, Target, const FARCombatDamageResult&, Result);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FARDeathSignature, AActor*, Target, const FARCombatDamageResult&, KillingDamage);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FARDamageAppliedNativeSignature, AActor*, const FARCombatDamageResult&);
@@ -95,6 +97,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARHealthChangedSignature OnHealthChanged;
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARShieldChangedSignature OnShieldChanged;
+	/** Total shield transitions from positive to zero by damage or explicit removal. Expiry and shield bypass do not trigger this. */
+	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARShieldBrokenSignature OnShieldBroken;
+	FARShieldBrokenNativeSignature OnShieldBrokenNative;
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARDamageAppliedSignature OnDamageApplied;
 	UPROPERTY(BlueprintAssignable, Category="AR|Health") FARDeathSignature OnDeath;
 	/** C++-only observer used for deterministic core-system reactions. */
@@ -111,6 +116,7 @@ private:
 	void HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue);
 
 	float ConsumeShieldLifo(float Amount);
+	void NotifyShieldChanged(float Before, float Delta, FARShieldHandle Handle, EARResourceChangeReason Reason);
 	void RefreshShieldTickState();
 	double GetNow() const;
 

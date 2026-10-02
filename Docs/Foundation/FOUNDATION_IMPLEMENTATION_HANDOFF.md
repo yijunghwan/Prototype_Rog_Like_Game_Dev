@@ -1,5 +1,19 @@
 # Foundation 구현 인수인계 기록
 
+## 2026-10-03 — 플레이어 돈·기본값 영구 증감
+
+- Money=47, Count=48; PermanentFlat=4(DisplayName=Permanent Flat). 기존 스탯/연산 번호 유지. 플레이어 기본 돈0, 소수 유지하는 기존 float 형식. 적·환경의 조회/적용/기본값 변경에서는 Money 미지원, 전체 스탯 목록에서도 제외.
+- 일반 Apply Stat Modifier에서만 Permanent Flat을 기본값 직접 수정으로 분기. 보정 기록/핸들/타이머/Source 알림 없음, Success=true여도 반환 핸들 비어 있음. Duration/Source/HUD/Tenacity/Stack Group 무시. Stack Only와 무적/회피 보장은 실패. 대상 객체 수명에만 유지하며 세이브/상점/돈 HUD는 별도.
+- 기존 비율/배율과 안전 범위 및 OnFinalStatChanged 유지. 돈 차감은 기본 잔액 기준, 음수 결과면 원자적 실패. 임시 돈 버프를 영구 잔액으로 소비하지 않음. 부정확한 초기 잔액(음수/비유한)은0으로 초기화. C++ 직접 Money setter도 음수/비유한 거절.
+- 컴포넌트 보정 등록(AddStatModifier)에서 Permanent Flat 거절하여 아이템/액션/DA 기본 효과가 돌이킬 수 없는 변경을 일으키지 못하게 함. 일반 노드는 아이템/픽업 BP에서도 Target을 플레이어로 지정하여 사용 가능.
+- Docs/Guides/OBJECT_STAT_GUIDE_KO.html #permanent-flat 및 유물 런타임 참고서/에셋 참고서 갱신, Foundation 생성 레퍼런스48스탯. 조건부 Details metadata 및 에디터 테스트 갱신. 기존 콘텐츠 그래프/DA 저장·교체 없음.
+
+## 2026-10-03 — DA 없는 기본 CC 노드
+
+- `Apply Crowd Control` 추가. Stun/Root, 대상 Actor, 양수 초 단위 Duration, 기본 켜진 강인함 적용. Source는 선택 고급 입력. Success와 기존 FARStatusEffectHandle 반환, Failure Reason/Applied Duration 고급 출력.
+- 새 규칙 엔진이나 저장 DA를 만들지 않고 일회성 transient Definition을 기존 상태 컴포넌트에 적용. 면역·동일 태그 더 긴 시간 갱신·자동 만료·On Status Removed·이동 잠금/행동 취소 재사용. Stun은 취소 규칙에 따른 행동 취소와 전체 이동/새 스킬 차단; Root는 기본 이동/구르기 차단과 구르기 취소, 스킬 허용. CC 면역을 우회하지 않는다.
+- 기존 상태/면역 API, 적/GUN 그래프·에셋 유지. 새 테스트3개를 포함한 AR.Foundation 51/51 통과. 적 HTML 참고서·노드 목록·Foundation 레퍼런스 동기화.
+
 ## 2026-09-30 — 슈퍼아머·CC 면역 보장 효과
 
 - 아이템 런타임에 `ApplyItemSuperArmor`/`RemoveOwnItemSuperArmor`, `ApplyItemCCImmunity`/`RemoveOwnItemCCImmunity`를 추가했다. 각 아이템 인스턴스가 준 효과만 등록 해제 시 자동 회수한다. 스킬 행동에는 기존 `ApplyActionSuperArmor`와 새 `ApplyActionCCImmunity`가 있고 행동 종료·취소 시 자동 해제된다.
@@ -13,7 +27,7 @@
 - `FindItemByKey`, `FindItemsByAdditionalTag`, `CountOwnedItemsByAdditionalTag`, `TryAcquireItem`, `ValidateItemCatalog`가 현행 조회·검증 진입점이다. Asset Manager 등록은 `ARItem` 단일 유형이다.
 - 사용자 요청에 따라 테스트 유물 에셋 5개는 Windows 휴지통으로 이동했고 테스트 전용 C++ 클래스/태그를 제거했다. 새 실제 아이템 에셋은 아직 없다.
 - Unreal Editor Win64 Development 빌드 성공, `AR.Foundation` 테스트 30/30 통과. 저장된 실제 아이템 에셋의 카탈로그 조회·에디터 픽업 동작은 콘텐츠 제작 후 추가 검증이 필요하다. 이번 변경은 커밋·푸시하지 않았다.
-- 제작 설명은 [통합 아이템 제작 가이드](ITEM_DATA_ASSET_FIELD_GUIDE.html)를 우선한다. 기존 전체 노드 카탈로그의 아이템 표는 이전 스냅샷이므로 그대로 따라 만들면 안 된다.
+- 제작 설명은 [아이템 에셋 제작 가이드](../Guides/ITEM_ASSET_CREATION_GUIDE_KO.html)를 우선한다. 기존 전체 노드 카탈로그의 아이템 표는 이전 스냅샷이므로 그대로 따라 만들면 안 된다.
 
 > 다음 에이전트는 먼저 [최신 작업 인계 요약](../AGENT_HANDOFF_CURRENT.md)을 읽는다. 이 파일은 전체 구현 이력이며, 날짜별 보완 기록과 최신 검증 결과를 함께 확인해야 한다.
 

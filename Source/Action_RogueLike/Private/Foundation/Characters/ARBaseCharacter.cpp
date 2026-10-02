@@ -33,26 +33,38 @@ AARBaseCharacter::AARBaseCharacter()
 
 void AARBaseCharacter::BeginPlay()
 {
-	Super::BeginPlay();
+	// Actor::BeginPlay dispatches BP BeginPlay after component initialization. Bind
+	// first so damage/status/action work performed by that BP also reaches the hooks.
 	StatsComponent->OnFinalStatChanged.AddDynamic(this, &AARBaseCharacter::HandleFinalStatChanged);
-	HandleFinalStatChanged(this, EARStatType::MoveSpeed, 0.0f, StatsComponent->GetFinalStat(EARStatType::MoveSpeed));
 	HealthComponent->OnDeath.AddDynamic(this, &AARBaseCharacter::HandleCharacterDeath);
+	HealthComponent->OnShieldBrokenNative.AddUObject(this, &AARBaseCharacter::HandleShieldBroken);
+	HealthComponent->OnDamageAppliedNative.AddUObject(this, &AARBaseCharacter::HandleDamageApplied);
+	ActionComponent->OnActionCancelled.AddDynamic(this, &AARBaseCharacter::HandleActionCancelled);
+	StaggerComponent->OnGroggyGaugeDepleted.AddDynamic(this, &AARBaseCharacter::HandleGroggyGaugeDepleted);
 	StaggerComponent->OnStaggeredNative.AddUObject(this, &AARBaseCharacter::HandleStaggered);
 	StaggerComponent->OnStaggerStateChangedNative.AddUObject(this, &AARBaseCharacter::HandleStaggerStateChanged);
 	StatusEffectComponent->OnStatusAddedNative.AddUObject(this, &AARBaseCharacter::HandleStatusAdded);
 	StatusEffectComponent->OnStatusUpdatedNative.AddUObject(this, &AARBaseCharacter::HandleStatusUpdated);
 	StatusEffectComponent->OnStatusRemovedNative.AddUObject(this, &AARBaseCharacter::HandleStatusRemoved);
+	Super::BeginPlay();
+	HandleFinalStatChanged(this, EARStatType::MoveSpeed, 0.0f, StatsComponent->GetFinalStat(EARStatType::MoveSpeed));
 }
 
 void AARBaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StatsComponent->OnFinalStatChanged.RemoveDynamic(this, &AARBaseCharacter::HandleFinalStatChanged);
+	HealthComponent->OnDeath.RemoveDynamic(this, &AARBaseCharacter::HandleCharacterDeath);
+	HealthComponent->OnShieldBrokenNative.RemoveAll(this);
+	HealthComponent->OnDamageAppliedNative.RemoveAll(this);
+	StaggerComponent->OnGroggyGaugeDepleted.RemoveDynamic(this, &AARBaseCharacter::HandleGroggyGaugeDepleted);
 	StaggerComponent->OnStaggeredNative.RemoveAll(this);
 	StaggerComponent->OnStaggerStateChangedNative.RemoveAll(this);
 	StatusEffectComponent->OnStatusAddedNative.RemoveAll(this);
 	StatusEffectComponent->OnStatusUpdatedNative.RemoveAll(this);
 	StatusEffectComponent->OnStatusRemovedNative.RemoveAll(this);
 	Super::EndPlay(EndPlayReason);
+	// Keep cancellation forwarding alive through component EndPlay cleanup.
+	ActionComponent->OnActionCancelled.RemoveDynamic(this, &AARBaseCharacter::HandleActionCancelled);
 }
 
 void AARBaseCharacter::HandleFinalStatChanged(AActor* Target, EARStatType StatType, float OldValue, float NewValue)
@@ -93,7 +105,28 @@ void AARBaseCharacter::HandleCharacterDeath(AActor* Target, const FARCombatDamag
 		DeathMovementLock = MovementControlComponent->AcquireMovementLock(TEXT("State.Death"), EARMovementLockType::AllMovement);
 	}
 	StatusEffectComponent->ClearAllStatusEffects();
+	ReceiveCharacterDeath(KillingDamage);
 	OnCharacterDeath.Broadcast(this, KillingDamage);
+}
+
+void AARBaseCharacter::HandleGroggyGaugeDepleted(AActor* Target)
+{
+	ReceiveGroggyGaugeDepleted();
+}
+
+void AARBaseCharacter::HandleShieldBroken(AActor* Target, float PreviousShield, EARResourceChangeReason Reason)
+{
+	ReceiveShieldBroken(PreviousShield, Reason);
+}
+
+void AARBaseCharacter::HandleDamageApplied(AActor* Target, const FARCombatDamageResult& DamageResult)
+{
+	ReceiveDamageApplied(DamageResult);
+}
+
+void AARBaseCharacter::HandleActionCancelled(FARActionHandle ActionHandle, EARActionCancelReason Reason)
+{
+	ReceiveActionCancelled(ActionHandle, Reason);
 }
 
 void AARBaseCharacter::HandleStaggered(AActor* Target, const FARStaggerResult& Result)
@@ -139,6 +172,7 @@ void AARBaseCharacter::HandleStatusUpdated(AActor* Target, const FARStatusEffect
 void AARBaseCharacter::HandleStatusRemoved(AActor* Target, const FARStatusEffectView& Status)
 {
 	RefreshStatusMovementLock();
+	ReceiveStatusRemoved(Status);
 }
 
 void AARBaseCharacter::RefreshStatusMovementLock()

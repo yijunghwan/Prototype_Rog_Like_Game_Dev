@@ -4,6 +4,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "EngineUtils.h"
+#include "TimerManager.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/RootMotionSource.h"
@@ -19,7 +20,10 @@
 #include "Foundation/Actions/ARActionTypes.h"
 #include "Foundation/AI/ARAIController.h"
 #include "Foundation/Blueprint/ARResourceBlueprintLibrary.h"
+#include "Foundation/Blueprint/ARStatsBlueprintLibrary.h"
 #include "Foundation/Blueprint/ARItemCatalogBlueprintLibrary.h"
+#include "Foundation/Blueprint/ARCombatBlueprintLibrary.h"
+#include <limits>
 #include "Foundation/Characters/ARBaseEnemy.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Combat/ARCombatSubsystem.h"
@@ -45,6 +49,86 @@
 
 namespace ARFoundationTests
 {
+	struct FItemSkillEventRecord
+	{
+		TWeakObjectPtr<UARLoadoutItemInstance> Instance;
+		FName SkillId;
+		FARActionHandle Handle;
+		EARActionCancelReason Reason = EARActionCancelReason::None;
+	};
+
+	// Test-only native thunks observe the real reflected BP events without creating or saving test assets.
+	struct FScopedItemSkillEventRecorder;
+	static FScopedItemSkillEventRecorder* ActiveItemSkillRecorder = nullptr;
+	struct FScopedItemSkillEventRecorder
+	{
+		FScopedItemSkillEventRecorder()
+		{
+			check(!ActiveItemSkillRecorder);
+			ExecuteFunction = UARLoadoutItemInstance::StaticClass()->FindFunctionByName(TEXT("ExecuteItemSkill"));
+			CancelFunction = UARLoadoutItemInstance::StaticClass()->FindFunctionByName(TEXT("ReceiveItemSkillCancelled"));
+			check(ExecuteFunction && CancelFunction);
+			ExecuteFlags = ExecuteFunction->FunctionFlags;
+			CancelFlags = CancelFunction->FunctionFlags;
+			ExecuteNative = ExecuteFunction->GetNativeFunc();
+			CancelNative = CancelFunction->GetNativeFunc();
+			ActiveItemSkillRecorder = this;
+			ExecuteFunction->FunctionFlags |= FUNC_Native;
+			CancelFunction->FunctionFlags |= FUNC_Native;
+			ExecuteFunction->SetNativeFunc(&RecordExecute);
+			CancelFunction->SetNativeFunc(&RecordCancel);
+		}
+
+		~FScopedItemSkillEventRecorder()
+		{
+			ExecuteFunction->SetNativeFunc(ExecuteNative);
+			CancelFunction->SetNativeFunc(CancelNative);
+			ExecuteFunction->FunctionFlags = ExecuteFlags;
+			CancelFunction->FunctionFlags = CancelFlags;
+			ActiveItemSkillRecorder = nullptr;
+		}
+
+		static void RecordExecute(UObject* Context, FFrame& Stack, RESULT_DECL)
+		{
+			P_GET_PROPERTY(FNameProperty, SkillId);
+			P_GET_STRUCT(FARActionHandle, ActionHandle);
+			P_FINISH;
+			UARLoadoutItemInstance* Instance = CastChecked<UARLoadoutItemInstance>(Context);
+			FItemSkillEventRecord Record;
+			Record.Instance = Instance;
+			Record.SkillId = SkillId;
+			Record.Handle = ActionHandle;
+			ActiveItemSkillRecorder->Executions.Add(Record);
+			if (ActiveItemSkillRecorder->OnExecute) ActiveItemSkillRecorder->OnExecute(Record);
+		}
+
+		static void RecordCancel(UObject* Context, FFrame& Stack, RESULT_DECL)
+		{
+			P_GET_PROPERTY(FNameProperty, SkillId);
+			P_GET_STRUCT(FARActionHandle, ActionHandle);
+			P_GET_ENUM(EARActionCancelReason, Reason);
+			P_FINISH;
+			FItemSkillEventRecord Record;
+			Record.Instance = CastChecked<UARLoadoutItemInstance>(Context);
+			Record.SkillId = SkillId;
+			Record.Handle = ActionHandle;
+			Record.Reason = Reason;
+			ActiveItemSkillRecorder->Cancellations.Add(Record);
+			if (ActiveItemSkillRecorder->OnCancel) ActiveItemSkillRecorder->OnCancel(Record);
+		}
+
+		TArray<FItemSkillEventRecord> Executions;
+		TArray<FItemSkillEventRecord> Cancellations;
+		TFunction<void(const FItemSkillEventRecord&)> OnExecute;
+		TFunction<void(const FItemSkillEventRecord&)> OnCancel;
+		UFunction* ExecuteFunction = nullptr;
+		UFunction* CancelFunction = nullptr;
+		EFunctionFlags ExecuteFlags = FUNC_None;
+		EFunctionFlags CancelFlags = FUNC_None;
+		FNativeFuncPtr ExecuteNative = nullptr;
+		FNativeFuncPtr CancelNative = nullptr;
+	};
+
 	struct FScopedTestWorld
 	{
 		FScopedTestWorld()
@@ -115,7 +199,6 @@ namespace ARFoundationTests
 		Skill.InputTag = InputTag;
 		Skill.InputPriority = Priority;
 		Skill.ResourceCost.Mana = ManaCost;
-		Skill.ActionRequest.ActionTag = ARGameplayTags::Action_Roll;
 		return Skill;
 	}
 
@@ -194,7 +277,6 @@ bool FARActionOwnedCleanupTest::RunTest(const FString& Parameters)
 	Stats->SetBaseStat(EARStatType::AttackPower, 100.0f);
 
 	FARActionRequest Request;
-	Request.ActionTag = ARGameplayTags::Action_Roll;
 	Request.CancelRules.bCancelOnStagger = false;
 	FARRequestStatus StartStatus;
 	const FARActionHandle Handle = Action->TryStartAction(Request, StartStatus);
@@ -213,6 +295,41 @@ bool FARActionOwnedCleanupTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Action remains active"), Action->IsActionActive(Handle));
 	TestTrue(TEXT("Manual cancellation succeeds"), Action->CancelAction(Handle, EARActionCancelReason::Manual));
 	TestEqual(TEXT("Action cleanup removes owned modifier"), Stats->GetFinalStat(EARStatType::AttackPower), 100.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARActionTagFreeLifecycleTest,
+	"AR.Foundation.Action.TagFreeLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARActionTagFreeLifecycleTest::RunTest(const FString& Parameters)
+{
+	TestNull(TEXT("Action Tag is no longer an authored or Blueprint field"),
+		FARActionRequest::StaticStruct()->FindPropertyByName(TEXT("ActionTag")));
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	UARStatsComponent* Stats = nullptr;
+	UARActionComponent* Action = nullptr;
+	UARStaggerComponent* Stagger = nullptr;
+	UARStatusEffectComponent* Status = nullptr;
+	if (!TestNotNull(TEXT("Test actor created"),
+		ARFoundationTests::MakeActorWithComponents(TestWorld.World, Stats, Action, Stagger, Status))) return false;
+
+	FARActionRequest First;
+	First.CancelRules.bCancelOnStagger = false;
+	FARActionRequest Second;
+	FARRequestStatus StartStatus;
+	TestTrue(TEXT("Tag-free action passes the precheck"), Action->CanStartAction(First).IsSuccess());
+	const FARActionHandle FirstHandle = Action->TryStartAction(First, StartStatus);
+	TestTrue(TEXT("First tag-free action starts"), StartStatus.IsSuccess() && FirstHandle.IsValid());
+	const FARActionHandle SecondHandle = Action->TryStartAction(Second, StartStatus);
+	TestTrue(TEXT("Second tag-free action starts independently"), StartStatus.IsSuccess() && SecondHandle.IsValid());
+	TestFalse(TEXT("Handles distinguish the two actions without a tag"), FirstHandle == SecondHandle);
+	TestEqual(TEXT("Cancellation still follows each action's own rules"),
+		Action->CancelActionsByReason(EARActionCancelReason::Stagger), 1);
+	TestTrue(TEXT("First action survives stagger cancellation"), Action->IsActionActive(FirstHandle));
+	TestFalse(TEXT("Second action is cancelled"), Action->IsActionActive(SecondHandle));
+	TestTrue(TEXT("Remaining action ends by handle"), Action->EndAction(FirstHandle));
+	TestEqual(TEXT("No actions remain"), Action->GetActiveActionCount(), 0);
 	return true;
 }
 
@@ -265,6 +382,159 @@ bool FARStaggerGroggyRulesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARStaggerFromDamageResultTest,
+	"AR.Foundation.Combat.StaggerFromDamageResult",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARStaggerFromDamageResultTest::RunTest(const FString& Parameters)
+{
+	const UFunction* Function = UARCombatBlueprintLibrary::StaticClass()->FindFunctionByName(TEXT("ApplyStaggerAndGroggyDamageFromResult"));
+	if (!TestNotNull(TEXT("Result-based node is reflected for Blueprint"), Function)) return false;
+	TestTrue(TEXT("Node has execution pins"), Function->HasAnyFunctionFlags(FUNC_BlueprintCallable) && !Function->HasAnyFunctionFlags(FUNC_BlueprintPure));
+	TestEqual(TEXT("Default base stagger is zero"), Function->GetMetaData(TEXT("CPP_Default_BaseStaggerDamage")), FString(TEXT("0.0")));
+	TestEqual(TEXT("Default stagger multiplier is one"), Function->GetMetaData(TEXT("CPP_Default_StaggerMultiplier")), FString(TEXT("1.0")));
+	TestEqual(TEXT("Default base groggy is zero"), Function->GetMetaData(TEXT("CPP_Default_BaseGroggyDamage")), FString(TEXT("0.0")));
+	TestEqual(TEXT("Unconnected source is allowed"), Function->GetMetaData(TEXT("AutoCreateRefTerm")), FString(TEXT("Source")));
+
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Attacker = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARBaseEnemy* Target = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	if (!TestNotNull(TEXT("Attacker spawned"), Attacker) || !TestNotNull(TEXT("Target spawned"), Target)) return false;
+	ARFoundationTests::BeginCombatActor(Attacker, 100.0f);
+	ARFoundationTests::BeginCombatActor(Target, 1000.0f);
+	Attacker->GetStatsComponent()->SetBaseStat(EARStatType::StaggerPower, 100.0f);
+	Attacker->GetStatsComponent()->SetBaseStat(EARStatType::GroggyDamageAmplification, 50.0f);
+	Target->GetStatsComponent()->SetBaseStat(EARStatType::StaggerResistance, 44.0f);
+	Target->GetStatsComponent()->SetBaseStat(EARStatType::MaxGroggy, 100.0f);
+	UARStaggerComponent* Stagger = Target->GetStaggerComponent();
+	Stagger->bUseGroggyGauge = true;
+	Stagger->BeginPlay();
+	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
+	FARCombatDamageRequest Request = ARFoundationTests::MakeDotSpec(Attacker, Target, NAME_None, EARDotStackPolicy::Independent).DamageRequest;
+	Request.DamageName = TEXT("ResultHit");
+	const FARCombatDamageResult Damage = UARCombatBlueprintLibrary::ApplyCombatDamage(Attacker, Request);
+	TestTrue(TEXT("Real direct hit supplies a usable context"), Damage.WasApplied() && Damage.HitContext.IsUsable());
+	FARSourceInfo Source;
+	Source.Category = EARModifierSourceCategory::Relic;
+	Source.SourceId = TEXT("ResultNodeTest");
+	const auto Apply = [&](const FARCombatDamageResult& Input, float BaseStagger = 11.0f, float Multiplier = 2.0f, float BaseGroggy = 20.0f)
+	{
+		return UARCombatBlueprintLibrary::ApplyStaggerAndGroggyDamageFromResult(Input, BaseStagger, Multiplier, BaseGroggy, Source, TEXT("ResultEffect"));
+	};
+	const float HealthAfterHit = Target->GetHealthComponent()->GetCurrentHealth();
+	TestTrue(TEXT("Zero defaults still accept a valid hit"), Apply(Damage, 0.0f, 1.0f, 0.0f).bValidRequest);
+	TestEqual(TEXT("Zero defaults do not reduce groggy"), Stagger->GetCurrentGroggy(), 100.0f);
+
+	// Reject all non-applied outcomes even if a caller retained a usable context.
+	for (const EARDamageOutcome Outcome : { EARDamageOutcome::Invalid, EARDamageOutcome::Queued, EARDamageOutcome::Evaded, EARDamageOutcome::Blocked })
+	{
+		FARCombatDamageResult Rejected = Damage;
+		Rejected.Outcome = Outcome;
+		TestFalse(TEXT("Non-applied result is a no-op"), Apply(Rejected).bValidRequest);
+	}
+	TestFalse(TEXT("Default result is a no-op"), Apply(FARCombatDamageResult()).bValidRequest);
+	FARCombatDamageResult InvalidHit = Damage;
+	InvalidHit.HitContext.bValidHit = false;
+	TestFalse(TEXT("Applied without a valid hit is rejected"), Apply(InvalidHit).bValidRequest);
+	InvalidHit = Damage; InvalidHit.HitContext.HitId.Invalidate();
+	TestFalse(TEXT("Applied without a hit ID is rejected"), Apply(InvalidHit).bValidRequest);
+	InvalidHit = Damage; InvalidHit.HitContext.Target = nullptr;
+	TestFalse(TEXT("Applied without a target is rejected"), Apply(InvalidHit).bValidRequest);
+	AActor* NoComponent = TestWorld.World->SpawnActor<AActor>();
+	InvalidHit.HitContext.Target = NoComponent;
+	TestFalse(TEXT("Target without a stagger component is safe"), Apply(InvalidHit).bValidRequest);
+	NoComponent->Destroy();
+	TestFalse(TEXT("Destroyed target is safe"), Apply(InvalidHit).bValidRequest);
+	const FARCombatDamageResult Repeat = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("Named repeat is blocked"), Repeat.Outcome, EARDamageOutcome::Blocked);
+	TestFalse(TEXT("Named repeat cannot deal stagger or groggy"), Apply(Repeat).bValidRequest);
+	TestEqual(TEXT("Rejected requests leave groggy unchanged"), Stagger->GetCurrentGroggy(), 100.0f);
+	TestFalse(TEXT("Rejected requests do not stagger"), Stagger->IsStaggered());
+
+	// Later stat changes must not alter the captured hit's offensive snapshot.
+	Attacker->GetStatsComponent()->SetBaseStat(EARStatType::StaggerPower, 0.0f);
+	Attacker->GetStatsComponent()->SetBaseStat(EARStatType::GroggyDamageAmplification, 0.0f);
+	FARStaggerResult Result = Apply(Damage);
+	TestTrue(TEXT("Applied result is processed without a BP branch"), Result.bValidRequest);
+	TestEqual(TEXT("Stagger uses captured power and multiplier"), Result.FinalStaggerDamage, 44);
+	TestFalse(TEXT("Equal resistance does not stagger"), Result.bStaggered);
+	TestEqual(TEXT("Groggy uses captured power and amplification but not stagger multiplier"), Result.FinalGroggyDamage, 60);
+	TestEqual(TEXT("Groggy gauge is reduced"), Result.CurrentGroggy, 40.0f);
+	TestEqual(TEXT("Result node does not apply HP damage again"), Target->GetHealthComponent()->GetCurrentHealth(), HealthAfterHit);
+	Stagger->ResetGroggyGauge();
+	bool bArmorAdded = false;
+	FARSuperArmorSpec Armor;
+	const FARSuperArmorHandle ArmorHandle = Stagger->AddSuperArmor(Armor, bArmorAdded);
+	TestTrue(TEXT("Super armor registered"), bArmorAdded);
+	Result = Apply(Damage, 12.0f);
+	TestTrue(TEXT("Super armor still blocks stagger"), Result.bBlockedBySuperArmor && !Result.bStaggered);
+	TestEqual(TEXT("Super armor does not block groggy"), Result.CurrentGroggy, 40.0f);
+	Stagger->RemoveSuperArmor(ArmorHandle);
+	Result = Apply(Damage, 12.0f, 2.0f, 0.0f);
+	TestTrue(TEXT("Sufficient stagger still applies through the result node"), Result.bStaggered);
+
+	FARShieldSpec Shield;
+	Shield.Amount = 20.0f;
+	bool bShieldAdded = false;
+	Target->GetHealthComponent()->ApplyShield(Shield, bShieldAdded);
+	TestTrue(TEXT("Shield registered"), bShieldAdded);
+	Request.DamageName = TEXT("ShieldResultHit");
+	const FARCombatDamageResult ShieldHit = Combat->ApplyCombatDamage(Request);
+	TestTrue(TEXT("Shield-only hit is Applied"), ShieldHit.WasApplied() && ShieldHit.HealthDamage == 0 && ShieldHit.ShieldDamage > 0);
+	Stagger->ResetGroggyGauge();
+	Result = Apply(ShieldHit, 0.0f, 1.0f, 5.0f);
+	TestTrue(TEXT("Shield-only result can apply groggy"), Result.bValidRequest);
+	TestEqual(TEXT("Shield-only groggy uses that hit's snapshot"), Result.CurrentGroggy, 95.0f);
+	Target->Destroy();
+	TestFalse(TEXT("Previously applied result is safe after target destruction"), Apply(ShieldHit).bValidRequest);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARDotStaggerOptionTest,
+	"AR.Foundation.Combat.DotStaggerOption",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARDotStaggerOptionTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Attacker = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARBaseEnemy* Target = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	if (!TestNotNull(TEXT("Attacker spawned"), Attacker) || !TestNotNull(TEXT("Target spawned"), Target)) return false;
+	ARFoundationTests::BeginCombatActor(Attacker, 100.0f);
+	ARFoundationTests::BeginCombatActor(Target, 1000.0f);
+	Target->GetStatsComponent()->SetBaseStat(EARStatType::MaxGroggy, 100.0f);
+	UARStaggerComponent* Stagger = Target->GetStaggerComponent();
+	Stagger->bUseGroggyGauge = true;
+	Stagger->BeginPlay();
+	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
+	FARDamageOverTimeSpec Spec = ARFoundationTests::MakeDotSpec(Attacker, Target, TEXT("GroggyDot"), EARDotStackPolicy::Independent);
+	Spec.DamageRequest.DamageName = TEXT("GroggyTick");
+	Spec.StaggerTemplate.BaseGroggyDamage = 5.0f;
+	bool bSuccess = false;
+	EARRequestResult Reason;
+	UARCombatBlueprintLibrary::ApplyDamageOverTime(Attacker, Spec, bSuccess, Reason);
+	TestTrue(TEXT("DOT with checkbox off registers"), bSuccess);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Unchecked DOT does not apply groggy"), Stagger->GetCurrentGroggy(), 100.0f);
+	TestEqual(TEXT("Unchecked DOT still applies HP damage"), Target->GetHealthComponent()->GetCurrentHealth(), 960.0f);
+	Spec.bApplyStaggerAndGroggyEachTick = true;
+	UARCombatBlueprintLibrary::ApplyDamageOverTime(Attacker, Spec, bSuccess, Reason);
+	UARCombatBlueprintLibrary::ApplyDamageOverTime(Attacker, Spec, bSuccess, Reason);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Checked DOT applies groggy once per successful tick, not blocked parallel ticks"), Stagger->GetCurrentGroggy(), 80.0f);
+	TestEqual(TEXT("Parallel same-name DOT shares the hit interval"), Target->GetHealthComponent()->GetCurrentHealth(), 920.0f);
+	Spec.DamageRequest.DamageNameInterval = 0.5f;
+	UARCombatBlueprintLibrary::ApplyDamageOverTime(Attacker, Spec, bSuccess, Reason);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Long hit interval also suppresses groggy on skipped ticks"), Stagger->GetCurrentGroggy(), 70.0f);
+	TestEqual(TEXT("Long hit interval allows two HP hits"), Target->GetHealthComponent()->GetCurrentHealth(), 900.0f);
+	Spec.DamageRequest.BaseDamage = 0.0f;
+	UARCombatBlueprintLibrary::ApplyDamageOverTime(Attacker, Spec, bSuccess, Reason);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Zero-damage DOT does not create groggy hits"), Stagger->GetCurrentGroggy(), 70.0f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARAIMovementCCGateTest,
 	"AR.Foundation.AI.MovementCCGate",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -310,7 +580,6 @@ bool FARAIMovementCCGateTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("AR move wrapper rejects a rooted enemy"), Controller->ARMoveToActor(Player), EPathFollowingRequestResult::Failed);
 	TestTrue(TEXT("Root still permits action-owned movement"), Enemy->GetMovementControlComponent()->CanMoveAtAll());
 	FARActionRequest AttackAction;
-	AttackAction.ActionTag = ARGameplayTags::Action_Roll;
 	TestTrue(TEXT("Root still permits a non-roll action"), Enemy->GetActionComponent()->CanStartAction(AttackAction).IsSuccess());
 	AttackAction.bIsRollAction = true;
 	TestFalse(TEXT("Root blocks roll action"), Enemy->GetActionComponent()->CanStartAction(AttackAction).IsSuccess());
@@ -456,6 +725,146 @@ bool FARStatEffectStacksAndTenacityTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Blocked effect adds no stack"), Stats->GetModifiersBySource(EARModifierSourceCategory::Buff, Effect.Source.SourceId).StackCount, 1);
 	TestTrue(TEXT("Remaining attack stack can be removed"), Stats->RemoveStatModifier(AnotherStack));
 	TestFalse(TEXT("Grouped handle was removed with its stack"), Stats->RemoveStatModifier(Grouped));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARStatStackBatchRemovalTest,
+	"AR.Foundation.Stats.StackBatchRemoval",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARStatStackBatchRemovalTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	UARStatsComponent* Stats = nullptr;
+	UARActionComponent* Action = nullptr;
+	UARStaggerComponent* Stagger = nullptr;
+	UARStatusEffectComponent* Status = nullptr;
+	AActor* Target = ARFoundationTests::MakeActorWithComponents(TestWorld.World, Stats, Action, Stagger, Status);
+	if (!TestNotNull(TEXT("Test actor created"), Target)) return false;
+	FARStatModifierSpec Spec;
+	Spec.Source.Category = EARModifierSourceCategory::Relic;
+	Spec.Source.SourceId = TEXT("Test.Batch");
+	Spec.StatType = EARStatType::AttackPower;
+	Spec.Value = 10.0f;
+	Spec.Duration = -1.0f;
+	bool Applied = false;
+	const FARStatModifierHandle First = Stats->AddStatModifier(Spec, Applied);
+	FARStatModifierSpec Grouped = Spec;
+	Grouped.StatType = EARStatType::SpellPower;
+	Grouped.Value = 7.0f;
+	Grouped.StackGroupHandle = First;
+	const FARStatModifierHandle FirstSpell = Stats->AddStatModifier(Grouped, Applied);
+	Spec.Value = 20.0f;
+	const FARStatModifierHandle Second = Stats->AddStatModifier(Spec, Applied);
+	Spec.Value = 30.0f;
+	const FARStatModifierHandle Third = Stats->AddStatModifier(Spec, Applied);
+	int32 Removed = 99;
+	TestFalse(TEXT("Full request exceeding stack count fails"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 4, Removed));
+	TestEqual(TEXT("Failed full request reports zero"), Removed, 0);
+	TestEqual(TEXT("Failure leaves all stat changes intact"), Stats->GetFinalStat(EARStatType::AttackPower), 60.0f);
+	TestEqual(TEXT("Failure leaves grouped spell effect intact"), Stats->GetFinalStat(EARStatType::SpellPower), 7.0f);
+	TestTrue(TEXT("Remove two oldest stacks, including ties at identical application time"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 2, Removed));
+	TestEqual(TEXT("Counts two stack groups, not three modifiers"), Removed, 2);
+	TestEqual(TEXT("Newest attack bonus remains"), Stats->GetFinalStat(EARStatType::AttackPower), 30.0f);
+	TestEqual(TEXT("Grouped spell effect is removed with first stack"), Stats->GetFinalStat(EARStatType::SpellPower), 0.0f);
+	TestFalse(TEXT("Oldest first handle gone"), Stats->RemoveStatModifier(First));
+	TestFalse(TEXT("Grouped handle gone"), Stats->RemoveStatModifier(FirstSpell));
+	TestFalse(TEXT("Second oldest handle gone"), Stats->RemoveStatModifier(Second));
+	TestTrue(TEXT("Newest surviving handle removes individually"), Stats->RemoveStatModifier(Third));
+	Spec.bStackOnly = true;
+	const FARStatModifierHandle OldCounter = Stats->AddStatModifier(Spec, Applied);
+	const FARStatModifierHandle NewCounter = Stats->AddStatModifier(Spec, Applied);
+	TestTrue(TEXT("Remove newest counter by explicit policy"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 1, Removed, EARModifierStackRemovalPolicy::Newest));
+	TestFalse(TEXT("Newest counter was selected"), Stats->RemoveStatModifier(NewCounter));
+	FARStatModifierSpec Other = Spec;
+	Other.Source.Category = EARModifierSourceCategory::Buff;
+	const FARStatModifierHandle OtherCategory = Stats->AddStatModifier(Other, Applied);
+	Other.Source.SourceId = TEXT("Test.Other");
+	const FARStatModifierHandle OtherId = Stats->AddStatModifier(Other, Applied);
+	TestFalse(TEXT("Zero count rejected"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 0, Removed));
+	TestFalse(TEXT("Negative count rejected"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, -2, Removed));
+	TestFalse(TEXT("None source cannot accidentally consume all sources"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, NAME_None, 1, Removed));
+	TestTrue(TEXT("Partial mode removes available matching stacks"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 100, Removed, EARModifierStackRemovalPolicy::Oldest, false));
+	TestEqual(TEXT("Partial mode reports actual count"), Removed, 1);
+	TestFalse(TEXT("Old counter now gone"), Stats->RemoveStatModifier(OldCounter));
+	TestTrue(TEXT("Same id in different category untouched"), Stats->RemoveStatModifier(OtherCategory));
+	TestTrue(TEXT("Different id untouched"), Stats->RemoveStatModifier(OtherId));
+	TestFalse(TEXT("No matching stack fails and zeroes output"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 1, Removed));
+	TestEqual(TEXT("Empty result count zero"), Removed, 0);
+	Removed = 99;
+	TestFalse(TEXT("Null target safely fails"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(nullptr, Spec.Source.Category, Spec.Source.SourceId, 1, Removed));
+	TestEqual(TEXT("Null target resets count"), Removed, 0);
+	Spec.Duration = 0.01f;
+	Stats->AddStatModifier(Spec, Applied);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.1f);
+	TestFalse(TEXT("Expired stack is not consumed"), UARStatsBlueprintLibrary::RemoveStatModifierStacks(Target, Spec.Source.Category, Spec.Source.SourceId, 1, Removed));
+	Spec.Duration = -1.0f;
+	Stats->AddStatModifier(Spec, Applied);
+	TArray<FARStatModifierHandle> Handles;
+	TestTrue(TEXT("Component batch API also works"), Stats->RemoveModifierStacks(Spec.Source.Category, Spec.Source.SourceId, 1, Removed, Handles));
+	TestEqual(TEXT("Component returns removed handles"), Handles.Num(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAROverallTakenStatIntegrationTest,
+	"AR.Foundation.Stats.OverallTakenIntegration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FAROverallTakenStatIntegrationTest::RunTest(const FString& Parameters)
+{
+	// Stable saved IDs; the new 46 is displayed before physical vulnerability (27).
+	static_assert(static_cast<uint8>(EARStatType::PhysicalDamageTakenIncrease) == 27);
+	static_assert(static_cast<uint8>(EARStatType::FireDamageTakenIncrease) == 28);
+	static_assert(static_cast<uint8>(EARStatType::MagicDamageTakenIncrease) == 29);
+	static_assert(static_cast<uint8>(EARStatType::Tenacity) == 30);
+	static_assert(static_cast<uint8>(EARStatType::CooldownReduction) == 45);
+	static_assert(static_cast<uint8>(EARStatType::OverallDamageTakenIncrease) == 46);
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Attacker = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARBaseEnemy* Target = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	if (!TestNotNull(TEXT("Attacker"), Attacker) || !TestNotNull(TEXT("Target"), Target)) return false;
+	ARFoundationTests::BeginCombatActor(Attacker, 100);
+	ARFoundationTests::BeginCombatActor(Target, 10000);
+	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
+	if (!TestNotNull(TEXT("Combat subsystem"), Combat)) return false;
+	UARStatsComponent* Stats = Target->GetStatsComponent();
+	TestEqual(TEXT("Default overall vulnerability is zero"), Stats->GetFinalStat(EARStatType::OverallDamageTakenIncrease), 0.0f);
+	const TArray<FARFinalStatView> Views = Stats->GetAllFinalStatViews();
+	const int32 OverallIndex = Views.IndexOfByPredicate([](const FARFinalStatView& View) { return View.StatType == EARStatType::OverallDamageTakenIncrease; });
+	const int32 PhysicalIndex = Views.IndexOfByPredicate([](const FARFinalStatView& View) { return View.StatType == EARStatType::PhysicalDamageTakenIncrease; });
+	TestEqual(TEXT("Character sheet includes 47 distinct stats"), Views.Num(), 47);
+	TestTrue(TEXT("Overall vulnerability appears immediately before physical vulnerability"), OverallIndex >= 0 && PhysicalIndex == OverallIndex + 1);
+	Stats->SetBaseStat(EARStatType::OverallDamageTakenIncrease, -50);
+	TestEqual(TEXT("Overall vulnerability follows nonnegative attribute-stat rules"), Stats->GetFinalStat(EARStatType::OverallDamageTakenIncrease), 0.0f);
+	Stats->SetBaseStat(EARStatType::OverallDamageTakenIncrease, 0);
+	FARStatModifierSpec Effect;
+	Effect.StatType = EARStatType::OverallDamageTakenIncrease;
+	Effect.Operation = EARStatModifierOperation::Flat;
+	Effect.Value = 50;
+	Effect.Duration = -1;
+	bool Applied = false;
+	const FARStatModifierHandle Handle = Stats->AddStatModifier(Effect, Applied);
+	TestTrue(TEXT("New stat accepts existing modifier nodes"), Applied);
+	FARCombatDamageRequest Request;
+	Request.Attacker = Attacker;
+	Request.Target = Target;
+	Request.BaseDamage = 100;
+	Request.bCanCrit = false;
+	Request.bGuaranteedHit = true;
+	for (const auto Pair : { TPair<EARDamageAttribute, EARStatType>(EARDamageAttribute::Physical, EARStatType::PhysicalDamageTakenIncrease),
+		TPair<EARDamageAttribute, EARStatType>(EARDamageAttribute::Fire, EARStatType::FireDamageTakenIncrease),
+		TPair<EARDamageAttribute, EARStatType>(EARDamageAttribute::Magic, EARStatType::MagicDamageTakenIncrease) })
+	{
+		Stats->SetBaseStat(Pair.Value, 20);
+		Request.Attribute = Pair.Key;
+		for (EARDamageDelivery Delivery : { EARDamageDelivery::Direct, EARDamageDelivery::DamageOverTime })
+		{
+			Request.Delivery = Delivery;
+			TestEqual(TEXT("Real combat captures both incoming stats for direct/DOT"), Combat->ApplyCombatDamage(Request).FinalDamage, 170);
+		}
+	}
+	TestTrue(TEXT("New modifier removes through existing handle node"), Stats->RemoveStatModifier(Handle));
+	TestEqual(TEXT("Removing modifier restores previous damage"), Combat->ApplyCombatDamage(Request).FinalDamage, 120);
 	return true;
 }
 
@@ -802,9 +1211,265 @@ bool FARSkillPriorityTransactionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARActiveRelicSlotInputTest,
+	"AR.Foundation.Items.ActiveRelicSlotInput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARActiveRelicSlotInputTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	ARFoundationTests::BeginPlayerSkillSystems(Player);
+	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
+
+	UARItemDefinition* First = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* Second = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	FARSkillDefinition FirstSkill = ARFoundationTests::MakeSkill(TEXT("SlotSkillA"), ARGameplayTags::Input_Skill_1, 0, 10.0f);
+	FirstSkill.InputMode = EARSkillInputMode::ActiveRelicSlot;
+	FirstSkill.InputTag = FGameplayTag();
+	FirstSkill.SlotSkillIndex = 1;
+	First->SkillDefinitions.Add(FirstSkill);
+	FARSkillDefinition SecondSkill = ARFoundationTests::MakeSkill(TEXT("SlotSkillB"), ARGameplayTags::Input_Skill_1, 0, 20.0f);
+	SecondSkill.InputMode = EARSkillInputMode::ActiveRelicSlot;
+	SecondSkill.InputTag = FGameplayTag();
+	SecondSkill.SlotSkillIndex = 1;
+	Second->SkillDefinitions.Add(SecondSkill);
+
+	const FARLoadoutAcquisitionResult FirstRequest = Loadout->BeginLoadoutAcquisition(First);
+	FARRequestStatus Status;
+	UARLoadoutItemInstance* FirstInstance = Loadout->CommitLoadoutAcquisition(FirstRequest.Token, Status);
+	TestTrue(TEXT("First active relic equips"), FirstInstance && Status.IsSuccess());
+	const FARLoadoutAcquisitionResult SecondRequest = Loadout->BeginLoadoutAcquisition(Second);
+	UARLoadoutItemInstance* SecondInstance = Loadout->CommitLoadoutAcquisition(SecondRequest.Token, Status);
+	TestTrue(TEXT("Second active relic equips"), SecondInstance && Status.IsSuccess());
+
+	FARSkillGroupHandle Group;
+	TestEqual(TEXT("Slot skills are excluded from the legacy direct-tag route"),
+		Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_1, Group).Result, EARRequestResult::InvalidDefinition);
+	TestTrue(TEXT("Slot one starts its own relic skill"), Loadout->HandleActiveRelicSlotInput(1, 1, Group).IsSuccess());
+	TestEqual(TEXT("Slot one spends only its own mana"), Player->GetManaComponent()->GetCurrent(), 90.0f);
+	TestEqual(TEXT("Only one action starts"), Player->GetActionComponent()->GetActiveActionCount(), 1);
+	Player->GetActionComponent()->CancelAllActions();
+
+	TestTrue(TEXT("Slot two starts its own relic skill"), Loadout->HandleActiveRelicSlotInput(2, 1, Group).IsSuccess());
+	TestEqual(TEXT("Slot two spends only its own mana"), Player->GetManaComponent()->GetCurrent(), 70.0f);
+	Player->GetActionComponent()->CancelAllActions();
+	const TArray<FARRegisteredSkillUIData> SkillUI = Loadout->GetRegisteredSkillUIData();
+	TestEqual(TEXT("Both skills remain in UI data"), SkillUI.Num(), 2);
+	if (SkillUI.Num() == 2)
+	{
+		TestEqual(TEXT("First skill resolves slot one"), SkillUI[0].ActiveRelicSlot, 1);
+		TestEqual(TEXT("Second skill resolves slot two"), SkillUI[1].ActiveRelicSlot, 2);
+		TestEqual(TEXT("Slot mode is explicit in UI data"), SkillUI[0].InputMode, EARSkillInputMode::ActiveRelicSlot);
+		TestFalse(TEXT("Legacy tag is not exposed for slot-routed UI"), SkillUI[0].InputTag.IsValid());
+	}
+
+	FARLoadoutDropRequest Drop;
+	TestTrue(TEXT("First relic can be discarded"), Loadout->DiscardLoadoutItem(FirstInstance->GetInstanceId(), Drop, Status));
+	TestEqual(TEXT("Remaining relic follows the slot position"), Loadout->GetActiveRelics().Num(), 1);
+	TestTrue(TEXT("Second relic now occupies slot one"), Loadout->GetActiveRelics()[0] == SecondInstance);
+	TestTrue(TEXT("Its skill follows the new slot"), Loadout->HandleActiveRelicSlotInput(1, 1, Group).IsSuccess());
+	TestEqual(TEXT("Moved relic spends its own cost"), Player->GetManaComponent()->GetCurrent(), 50.0f);
+	TestEqual(TEXT("Empty slot two is rejected"), Loadout->HandleActiveRelicSlotInput(2, 1, Group).Result, EARRequestResult::InvalidHandle);
+
+	UARItemDefinition* InvalidWeapon = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_Weapon, UARLoadoutItemInstance::StaticClass());
+	InvalidWeapon->SkillDefinitions.Add(FirstSkill);
+	TestEqual(TEXT("Slot input mode is reserved for active relics"),
+		Loadout->BeginLoadoutAcquisition(InvalidWeapon).Status.Result, EARRequestResult::InvalidDefinition);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARSkillTagFreeCooldownTest,
+	"AR.Foundation.Items.TagFreeSkillCooldown",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARSkillTagFreeCooldownTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player spawned"), Player)) return false;
+	ARFoundationTests::BeginPlayerSkillSystems(Player);
+	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
+	UARItemDefinition* Definition = ARFoundationTests::MakeItem(
+		ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	FARSkillDefinition Skill = ARFoundationTests::MakeSkill(TEXT("TagFree"), ARGameplayTags::Input_Skill_Primary, 0, 10.0f);
+	Skill.BaseCooldown = 1.0f;
+	Definition->SkillDefinitions.Add(Skill);
+	const FARLoadoutAcquisitionResult Acquisition = Loadout->BeginLoadoutAcquisition(Definition);
+	TestTrue(TEXT("Tag-free skill definition is accepted"), Acquisition.Status.IsSuccess());
+	FARRequestStatus Status;
+	if (!TestNotNull(TEXT("Tag-free relic registers"),
+		Loadout->CommitLoadoutAcquisition(Acquisition.Token, Status))) return false;
+	FARSkillGroupHandle Group;
+	TestTrue(TEXT("Input tag selects the skill without an action tag"),
+		Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, Group).IsSuccess());
+	TestEqual(TEXT("Successful use spends the configured cost"), Player->GetManaComponent()->GetCurrent(), 90.0f);
+	Player->GetActionComponent()->CancelAllActions();
+	TestEqual(TEXT("Cancelling the action does not bypass its cooldown"),
+		Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, Group).Result, EARRequestResult::Cooldown);
+	TestEqual(TEXT("Cooldown rejection does not spend another cost"), Player->GetManaComponent()->GetCurrent(), 90.0f);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 1.25f);
+	TestTrue(TEXT("The same skill becomes usable after cooldown"),
+		Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, Group).IsSuccess());
+	TestEqual(TEXT("Second successful use spends its cost"), Player->GetManaComponent()->GetCurrent(), 80.0f);
+	Player->GetActionComponent()->CancelAllActions();
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARConsumableSlotReductionTest,
 	"AR.Foundation.Items.ConsumableSlotReduction",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARItemSkillCancellationEventTest,
+	"AR.Foundation.Items.SkillCancellationEvent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARItemSkillCancellationEventTest::RunTest(const FString& Parameters)
+{
+	FEditorScriptExecutionGuard ScriptGuard;
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player exists"), Player)) return false;
+	ARFoundationTests::BeginPlayerSkillSystems(Player);
+	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
+	UARActionComponent* Actions = Player->GetActionComponent();
+	UFunction* CancelEvent = UARLoadoutItemInstance::StaticClass()->FindFunctionByName(TEXT("ReceiveItemSkillCancelled"));
+	if (!TestNotNull(TEXT("Cancellation event is reflected"), CancelEvent)) return false;
+	TestTrue(TEXT("Event is available for BP implementation"), CancelEvent->HasAllFunctionFlags(FUNC_Event | FUNC_BlueprintEvent));
+	TestFalse(TEXT("Content event does not require a native override"), CancelEvent->HasAnyFunctionFlags(FUNC_Native));
+	TestEqual(TEXT("Editor event name"), CancelEvent->GetMetaData(TEXT("DisplayName")), FString(TEXT("On Item Skill Cancelled")));
+	ARFoundationTests::FScopedItemSkillEventRecorder Recorder;
+	UARItemDefinition* FirstDefinition = ARFoundationTests::MakeItem(ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* SecondDefinition = ARFoundationTests::MakeItem(ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	FirstDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(TEXT("SharedName"), ARGameplayTags::Input_Skill_Primary, 0, 3.0f));
+	FirstDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(TEXT("Extra"), ARGameplayTags::Input_Skill_Primary, 1, 2.0f));
+	SecondDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(TEXT("SharedName"), ARGameplayTags::Input_Skill_Primary, 0, 3.0f));
+	FARRequestStatus Status;
+	UARLoadoutItemInstance* First = Loadout->CommitLoadoutAcquisition(Loadout->BeginLoadoutAcquisition(FirstDefinition).Token, Status);
+	UARLoadoutItemInstance* Second = Loadout->CommitLoadoutAcquisition(Loadout->BeginLoadoutAcquisition(SecondDefinition).Token, Status);
+	if (!TestNotNull(TEXT("First acquired"), First) || !TestNotNull(TEXT("Second acquired"), Second)) return false;
+	FARSkillGroupHandle Group;
+	TestTrue(TEXT("All three candidates execute"), Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, Group).IsSuccess());
+	TestEqual(TEXT("Three execution callbacks"), Recorder.Executions.Num(), 3);
+	const ARFoundationTests::FItemSkillEventRecord* FirstRecord = Recorder.Executions.FindByPredicate([First](const auto& Entry)
+	{
+		return Entry.Instance == First && Entry.SkillId == TEXT("SharedName");
+	});
+	if (!TestNotNull(TEXT("First execution has its own handle"), FirstRecord)) return false;
+	const FARActionHandle FirstHandle = FirstRecord->Handle;
+	const float AttackBefore = Player->GetStatsComponent()->GetFinalStat(EARStatType::AttackPower);
+	FARStatModifierSpec Modifier;
+	Modifier.StatType = EARStatType::AttackPower;
+	Modifier.Value = 10.0f;
+	bool bApplied = false;
+	Actions->ApplyActionStatModifier(FirstHandle, Modifier, bApplied);
+	TestTrue(TEXT("Action-owned effect applied"), bApplied);
+	FTimerHandle OwnedTimer;
+	bool bTimerFired = false;
+	TestWorld.World->GetTimerManager().SetTimer(OwnedTimer, FTimerDelegate::CreateLambda([&bTimerFired] { bTimerFired = true; }), 0.1f, false);
+	Recorder.OnCancel = [&](const ARFoundationTests::FItemSkillEventRecord& Entry)
+	{
+		TestFalse(TEXT("Native action is already inactive inside callback"), Actions->IsActionActive(Entry.Handle));
+		TestEqual(TEXT("Native action effect is already cleaned up"), Player->GetStatsComponent()->GetFinalStat(EARStatType::AttackPower), AttackBefore);
+		TestWorld.World->GetTimerManager().ClearTimer(OwnedTimer);
+	};
+	TestTrue(TEXT("Cancel one executed skill"), Actions->CancelAction(FirstHandle, EARActionCancelReason::Stagger));
+	TestEqual(TEXT("Only one item is notified"), Recorder.Cancellations.Num(), 1);
+	if (Recorder.Cancellations.Num() != 1) return false;
+	TestTrue(TEXT("Correct owning item despite identical skill names"), Recorder.Cancellations[0].Instance == First);
+	TestEqual(TEXT("Original skill ID"), Recorder.Cancellations[0].SkillId, FName(TEXT("SharedName")));
+	TestTrue(TEXT("Exact execution handle"), Recorder.Cancellations[0].Handle == FirstHandle);
+	TestEqual(TEXT("Cancellation reason is forwarded"), Recorder.Cancellations[0].Reason, EARActionCancelReason::Stagger);
+	TestFalse(TEXT("A second cancellation is rejected"), Actions->CancelAction(FirstHandle, EARActionCancelReason::Stun));
+	Actions->OnActionCancelled.Broadcast(FirstHandle, EARActionCancelReason::Manual);
+	TestEqual(TEXT("Duplicate notification is ignored"), Recorder.Cancellations.Num(), 1);
+	for (const auto& Entry : Recorder.Executions)
+	{
+		if (Entry.Handle != FirstHandle) TestTrue(TEXT("Other executions end normally"), Actions->EndAction(Entry.Handle));
+	}
+	TestEqual(TEXT("Normal ends do not emit cancellation"), Recorder.Cancellations.Num(), 1);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.25f);
+	TestFalse(TEXT("Content cleanup can clear its custom timer"), bTimerFired);
+	TestEqual(TEXT("Cancellation does not refund committed cost"), Player->GetManaComponent()->GetCurrent(), 92.0f);
+	FARActionRequest UnrelatedRequest;
+	UnrelatedRequest.OwningItemInstanceId = First->GetInstanceId();
+	const FARActionHandle Unrelated = Actions->TryStartAction(UnrelatedRequest, Status);
+	TestTrue(TEXT("An unexecuted manual action can be cancelled"), Actions->CancelAction(Unrelated, EARActionCancelReason::Manual));
+	TestEqual(TEXT("Item ID alone does not fabricate a skill event"), Recorder.Cancellations.Num(), 1);
+	Recorder.Executions.Reset();
+	Recorder.OnCancel = nullptr;
+	TestTrue(TEXT("Group bookkeeping permits another input"), Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, Group).IsSuccess());
+	TestEqual(TEXT("Second execution has new handles"), Recorder.Executions.Num(), 3);
+	Actions->CancelAllActions(EARActionCancelReason::Death);
+	TestEqual(TEXT("Each remaining skill cancelled exactly once"), Recorder.Cancellations.Num(), 4);
+	for (int32 Index = 1; Index < Recorder.Cancellations.Num(); ++Index)
+	{
+		TestEqual(TEXT("Death reason preserved"), Recorder.Cancellations[Index].Reason, EARActionCancelReason::Death);
+	}
+	TestEqual(TEXT("Unknown input has no skill to execute"), Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_2, Group).Result, EARRequestResult::InvalidDefinition);
+	TestEqual(TEXT("Pre-execution rejection emits no cancellation event"), Recorder.Cancellations.Num(), 4);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARItemSkillCancellationReentrancyTest,
+	"AR.Foundation.Items.SkillCancellationReentrancy",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARItemSkillCancellationReentrancyTest::RunTest(const FString& Parameters)
+{
+	FEditorScriptExecutionGuard ScriptGuard;
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!TestNotNull(TEXT("Player exists"), Player)) return false;
+	ARFoundationTests::BeginPlayerSkillSystems(Player);
+	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
+	UARActionComponent* Actions = Player->GetActionComponent();
+	ARFoundationTests::FScopedItemSkillEventRecorder Recorder;
+	UARItemDefinition* FirstDefinition = ARFoundationTests::MakeItem(ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	UARItemDefinition* SecondDefinition = ARFoundationTests::MakeItem(ARGameplayTags::Item_Type_ActiveRelic, UARLoadoutItemInstance::StaticClass());
+	FirstDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(TEXT("RemoveSelf"), ARGameplayTags::Input_Skill_Primary, 0, 0.0f));
+	FirstDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(TEXT("NotDispatched"), ARGameplayTags::Input_Skill_Primary, 1, 0.0f));
+	SecondDefinition->SkillDefinitions.Add(ARFoundationTests::MakeSkill(TEXT("Survivor"), ARGameplayTags::Input_Skill_Primary, 2, 0.0f));
+	FARRequestStatus Status;
+	UARLoadoutItemInstance* First = Loadout->CommitLoadoutAcquisition(Loadout->BeginLoadoutAcquisition(FirstDefinition).Token, Status);
+	UARLoadoutItemInstance* Second = Loadout->CommitLoadoutAcquisition(Loadout->BeginLoadoutAcquisition(SecondDefinition).Token, Status);
+	if (!TestNotNull(TEXT("First exists"), First) || !TestNotNull(TEXT("Second exists"), Second)) return false;
+	Recorder.OnExecute = [&](const ARFoundationTests::FItemSkillEventRecord& Entry)
+	{
+		if (Entry.Instance == First)
+		{
+			FARLoadoutDropRequest Drop;
+			TestTrue(TEXT("Item can remove itself inside execution"), Loadout->DiscardLoadoutItem(First->GetInstanceId(), Drop, Status));
+		}
+	};
+	Recorder.OnCancel = [&](const ARFoundationTests::FItemSkillEventRecord& Entry)
+	{
+		FARSkillGroupHandle NestedGroup;
+		TestEqual(TEXT("Removal/teardown callback cannot restart skill dispatch"), Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, NestedGroup).Result, EARRequestResult::Blocked);
+		Actions->OnActionCancelled.Broadcast(Entry.Handle, Entry.Reason);
+	};
+	FARSkillGroupHandle Group;
+	TestTrue(TEXT("Initial transaction executes safely"), Loadout->HandleSkillInput(ARGameplayTags::Input_Skill_Primary, Group).IsSuccess());
+	TestEqual(TEXT("Only dispatched first skill plus survivor execute"), Recorder.Executions.Num(), 2);
+	TestEqual(TEXT("Only dispatched skill receives removal cancellation"), Recorder.Cancellations.Num(), 1);
+	if (Recorder.Cancellations.Num() != 1 || Recorder.Executions.Num() != 2) return false;
+	TestEqual(TEXT("Correct removal skill"), Recorder.Cancellations[0].SkillId, FName(TEXT("RemoveSelf")));
+	TestEqual(TEXT("Removal reason"), Recorder.Cancellations[0].Reason, EARActionCancelReason::ItemRemoved);
+	TestFalse(TEXT("First runtime unregistered after callback"), First->IsRegistered());
+	TestTrue(TEXT("Other item still executed after registered array mutation"), Recorder.Executions[1].Instance == Second);
+	TestTrue(TEXT("Surviving action remains active"), Actions->IsActionActive(Recorder.Executions[1].Handle));
+	Loadout->EndPlay(EEndPlayReason::Destroyed);
+	TestEqual(TEXT("Owner teardown forwards cancellation before unbinding"), Recorder.Cancellations.Num(), 2);
+	TestTrue(TEXT("Teardown notifies surviving item"), Recorder.Cancellations.Last().Instance == Second);
+	TestEqual(TEXT("Teardown uses existing item-removal action reason"), Recorder.Cancellations.Last().Reason, EARActionCancelReason::ItemRemoved);
+	TestEqual(TEXT("No active actions remain"), Actions->GetActiveActionCount(), 0);
+	TestFalse(TEXT("Survivor is unregistered"), Second->IsRegistered());
+	return true;
+}
 
 bool FARConsumableSlotReductionTest::RunTest(const FString& Parameters)
 {
@@ -838,6 +1503,194 @@ bool FARConsumableSlotReductionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Retained consumable can be used"), UseStatus.IsSuccess());
 	TestTrue(TEXT("Use returns the consumed definition"), UsedDefinition == Definition);
 	TestFalse(TEXT("Used slot becomes empty"), Consumables->GetConsumableSlots()[0].bOccupied);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARDamageNameIntervalTest,
+	"AR.Foundation.Combat.DamageNameInterval",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARDamageNameIntervalTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Attacker = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARPlayerCharacter* OtherAttacker = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARBaseEnemy* Target = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	AARBaseEnemy* OtherTarget = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	ARFoundationTests::BeginCombatActor(Attacker, 100.0f);
+	ARFoundationTests::BeginCombatActor(OtherAttacker, 100.0f);
+	ARFoundationTests::BeginCombatActor(Target, 1000.0f);
+	ARFoundationTests::BeginCombatActor(OtherTarget, 1000.0f);
+	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
+	FARCombatDamageRequest Request = ARFoundationTests::MakeDotSpec(Attacker, Target, NAME_None, EARDotStackPolicy::Independent).DamageRequest;
+	Request.DamageName = TEXT("Spike");
+	Request.bGuaranteedHit = true;
+	TestEqual(TEXT("Named interval defaults to 0.2 seconds"), Request.DamageNameInterval, 0.2f);
+	TestFalse(TEXT("Bypass defaults off"), Request.bIgnoreDamageNameInterval);
+	TestTrue(TEXT("Library first named hit applies"), UARCombatBlueprintLibrary::ApplyCombatDamage(Attacker, Request).WasApplied());
+	const FARCombatDamageResult Blocked = Combat->ApplyCombatDamage(Request);
+	TestEqual(TEXT("Repeated hit is blocked"), Blocked.Outcome, EARDamageOutcome::Blocked);
+	TestEqual(TEXT("Interval reports cooldown distinctly"), Blocked.FailureReason, EARRequestResult::Cooldown);
+	TestEqual(TEXT("Blocked hit has zero damage"), Blocked.FinalDamage, 0);
+	TestFalse(TEXT("Blocked hit cannot trigger stagger"), Blocked.HitContext.IsUsable());
+	TestEqual(TEXT("Blocked hit preserves health"), Target->GetHealthComponent()->GetCurrentHealth(), 990.0f);
+	EARRequestResult Reason;
+	TestTrue(TEXT("Target-only preflight does not test the interval"), Combat->CanDamageTarget(Attacker, Target, Reason));
+	FARCombatDamageRequest Changed = Request;
+	Changed.Attacker = OtherAttacker;
+	Changed.Attribute = EARDamageAttribute::Void;
+	Changed.Delivery = EARDamageDelivery::DamageOverTime;
+	Changed.Source.SourceId = TEXT("OtherSpike");
+	TestEqual(TEXT("Attacker, attribute, source and delivery share a named window"), Combat->ApplyCombatDamage(Changed).FailureReason, EARRequestResult::Cooldown);
+	Changed = Request;
+	Changed.Target = OtherTarget;
+	TestTrue(TEXT("Different target has independent window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed = Request;
+	Changed.DamageName = TEXT("OtherDamage");
+	TestTrue(TEXT("Different name has independent window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.1f);
+	TestEqual(TEXT("Inside default interval is still blocked"), Combat->ApplyCombatDamage(Request).FailureReason, EARRequestResult::Cooldown);
+	Changed = Request;
+	Changed.DamageNameInterval = 0.01f;
+	TestEqual(TEXT("A shorter new interval cannot shorten the existing window"), Combat->ApplyCombatDamage(Changed).FailureReason, EARRequestResult::Cooldown);
+	Changed = Request;
+	Changed.bIgnoreDamageNameInterval = true;
+	TestTrue(TEXT("Bypass passes an active window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	TestTrue(TEXT("Bypass also permits repeated requests"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed = Request;
+	Changed.DamageNameInterval = 0.0f;
+	TestTrue(TEXT("Zero disables restriction for this request"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	TestEqual(TEXT("Bypass and zero do not clear the stored window"), Combat->ApplyCombatDamage(Request).FailureReason, EARRequestResult::Cooldown);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.1001f);
+	TestTrue(TEXT("Default window expires despite bypass hits"), Combat->ApplyCombatDamage(Request).WasApplied());
+	Changed = Request;
+	Changed.DamageName = TEXT("LongWindow");
+	Changed.DamageNameInterval = 0.5f;
+	TestTrue(TEXT("Custom interval first hit applies"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.25f);
+	TestEqual(TEXT("Custom half-second interval stays blocked at quarter-second"), Combat->ApplyCombatDamage(Changed).FailureReason, EARRequestResult::Cooldown);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 0.251f);
+	TestTrue(TEXT("Custom half-second interval expires"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed = Request;
+	Changed.DamageName = NAME_None;
+	TestTrue(TEXT("Unnamed legacy hit is unrestricted"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	TestTrue(TEXT("Unnamed hits do not share an accidental None window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed.DamageName = TEXT("InvalidWindow");
+	for (float Invalid : { -1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity() })
+	{
+		Changed.DamageNameInterval = Invalid;
+		TestEqual(TEXT("Invalid active interval is rejected"), Combat->ApplyCombatDamage(Changed).FailureReason, EARRequestResult::InvalidDefinition);
+	}
+	Changed.bIgnoreDamageNameInterval = true;
+	TestTrue(TEXT("Bypass does not read inactive interval"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed = Request;
+	Changed.DamageName = TEXT("FailedHit");
+	Changed.BaseDamage = 0.0f;
+	TestFalse(TEXT("Zero damage is not applied"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed.BaseDamage = 10.0f;
+	TestTrue(TEXT("Zero damage did not consume named window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Changed.DamageName = TEXT("EvadedHit");
+	Changed.bGuaranteedHit = false;
+	FARStatModifierSpec Guarantee;
+	Guarantee.StatType = EARStatType::Evasion;
+	Guarantee.bGuaranteeEvasion = true;
+	bool bEffectAdded = false;
+	const FARStatModifierHandle EvasionHandle = Target->GetStatsComponent()->AddStatModifier(Guarantee, bEffectAdded);
+	TestTrue(TEXT("Managed evasion guarantee applies"), bEffectAdded);
+	TestEqual(TEXT("Guaranteed evasion prevents this hit"), Combat->ApplyCombatDamage(Changed).Outcome, EARDamageOutcome::Evaded);
+	Changed.bGuaranteedHit = true;
+	TestTrue(TEXT("Evaded hit did not consume named window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Target->GetStatsComponent()->RemoveStatModifier(EvasionHandle);
+	Guarantee.StatType = EARStatType::OverallDamageReduction;
+	Guarantee.bGuaranteeEvasion = false;
+	Guarantee.bGuaranteeInvulnerability = true;
+	const FARStatModifierHandle Invulnerability = Target->GetStatsComponent()->AddStatModifier(Guarantee, bEffectAdded);
+	Changed.DamageName = TEXT("InvulnerableHit");
+	TestEqual(TEXT("Invulnerability blocks a fresh name"), Combat->ApplyCombatDamage(Changed).Outcome, EARDamageOutcome::Blocked);
+	Target->GetStatsComponent()->RemoveStatModifier(Invulnerability);
+	TestTrue(TEXT("Invulnerability did not consume a named window"), Combat->ApplyCombatDamage(Changed).WasApplied());
+	Request.DamageName = TEXT("ReentrantHit");
+	bool bNested = false;
+	FARCombatDamageResult NestedResult;
+	const FDelegateHandle Delegate = Target->GetHealthComponent()->OnDamageAppliedNative.AddLambda(
+		[&](AActor*, const FARCombatDamageResult&)
+		{
+			if (!bNested) { bNested = true; NestedResult = Combat->ApplyCombatDamage(Request); }
+		});
+	const float BeforeNested = Target->GetHealthComponent()->GetCurrentHealth();
+	TestTrue(TEXT("Outer reentrant hit applies"), Combat->ApplyCombatDamage(Request).WasApplied());
+	Target->GetHealthComponent()->OnDamageAppliedNative.Remove(Delegate);
+	TestEqual(TEXT("Nested direct request uses existing queue"), NestedResult.Outcome, EARDamageOutcome::Queued);
+	TestEqual(TEXT("Queued repeat cannot bypass callback-time window"), Target->GetHealthComponent()->GetCurrentHealth(), BeforeNested - 10.0f);
+	Target->Destroy();
+	Combat->Tick(0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARDotDamageNameIntervalTest,
+	"AR.Foundation.Combat.DotDamageNameInterval",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARDotDamageNameIntervalTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARPlayerCharacter* Attacker = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	AARBaseEnemy* Target = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	ARFoundationTests::BeginCombatActor(Attacker, 100.0f);
+	ARFoundationTests::BeginCombatActor(Target, 1000.0f);
+	UARCombatSubsystem* Combat = TestWorld.World->GetSubsystem<UARCombatSubsystem>();
+	FARDamageOverTimeSpec Spec = ARFoundationTests::MakeDotSpec(Attacker, Target, TEXT("IntervalBurn"), EARDotStackPolicy::Independent);
+	Spec.DamageRequest.DamageName = TEXT("BurnDamage");
+	bool bApplied;
+	EARRequestResult Reason;
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	TestTrue(TEXT("First named DOT registers"), bApplied);
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	TestEqual(TEXT("Independent DOT still registers two instances"), Combat->GetActiveDamageOverTimeCount(Target), 2);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Same-name parallel DOTs share interval but preserve four scheduled catch-up ticks"), Target->GetHealthComponent()->GetCurrentHealth(), 960.0f);
+	Spec.DamageRequest.bIgnoreDamageNameInterval = true;
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("DOT bypass restores independent ticks from both instances"), Target->GetHealthComponent()->GetCurrentHealth(), 880.0f);
+	Spec.DamageRequest.bIgnoreDamageNameInterval = false;
+	Spec.DamageRequest.DamageName = TEXT("LongBurn");
+	Spec.DamageRequest.DamageNameInterval = 0.5f;
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Custom DOT interval intentionally suppresses alternate quarter-second ticks"), Target->GetHealthComponent()->GetCurrentHealth(), 860.0f);
+	Spec.StackPolicy = EARDotStackPolicy::RefreshSameName;
+	Spec.DamageRequest.DamageNameInterval = 0.2f;
+	const FARDotHandle Handle = Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	TestTrue(TEXT("Refreshable interval DOT registers"), bApplied);
+	FARDamageOverTimeSpec Changed = Spec;
+	Changed.DamageRequest.DamageNameInterval = 0.5f;
+	AddExpectedError(TEXT("Refresh DOT IntervalBurn has mismatched"), EAutomationExpectedErrorFlags::Contains, 3);
+	TestFalse(TEXT("Refresh cannot silently change interval"), Combat->ApplyDamageOverTime(Changed, bApplied, Reason).IsValid());
+	Changed = Spec; Changed.DamageRequest.bIgnoreDamageNameInterval = true;
+	TestFalse(TEXT("Refresh cannot silently change bypass"), Combat->ApplyDamageOverTime(Changed, bApplied, Reason).IsValid());
+	Changed = Spec; Changed.DamageRequest.DamageName = TEXT("OtherBurn");
+	TestFalse(TEXT("Refresh cannot silently change throttle identity"), Combat->ApplyDamageOverTime(Changed, bApplied, Reason).IsValid());
+	Changed = Spec; Changed.DamageRequest.DamageNameInterval = -1.0f;
+	TestFalse(TEXT("DOT registration rejects invalid interval"), Combat->ApplyDamageOverTime(Changed, bApplied, Reason).IsValid());
+	TestEqual(TEXT("Invalid interval fails before registration"), Reason, EARRequestResult::InvalidDefinition);
+	Combat->RemoveDamageOverTime(Handle);
+	Spec.StackPolicy = EARDotStackPolicy::Independent;
+	Spec.DamageRequest.DamageName = TEXT("SharedDirectDot");
+	FARCombatDamageRequest Direct = Spec.DamageRequest;
+	Direct.DamageNameInterval = 0.5f;
+	TestTrue(TEXT("Direct hit starts shared window"), Combat->ApplyCombatDamage(Direct).WasApplied());
+	Spec.Duration = 0.25f;
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 0.25f);
+	TestEqual(TEXT("Scheduled DOT inside direct window is suppressed"), Target->GetHealthComponent()->GetCurrentHealth(), 850.0f);
+	Spec.DamageRequest.DamageName = TEXT("DetachedAttackerBurn");
+	Spec.Duration = 1.0f;
+	Combat->ApplyDamageOverTime(Spec, bApplied, Reason);
+	Attacker->Destroy();
+	ARFoundationTests::AdvanceDotTime(TestWorld.World, Combat, 1.0f);
+	TestEqual(TEXT("Named DOT remains valid after attacker destruction"), Target->GetHealthComponent()->GetCurrentHealth(), 810.0f);
 	return true;
 }
 
@@ -1049,7 +1902,6 @@ bool FARActionFullCleanupTest::RunTest(const FString& Parameters)
 	Action->BeginPlay();
 
 	FARActionRequest Request;
-	Request.ActionTag = ARGameplayTags::Action_Roll;
 	Request.bBlockBasicMovementWhileActive = true;
 	Request.CancelRules.bCancelOnStagger = true;
 	FARRequestStatus StartStatus;
@@ -1371,9 +2223,7 @@ bool FARActionStartStateGuardsTest::RunTest(const FString& Parameters)
 	Player->DispatchBeginPlay();
 	UARActionComponent* Action = Player->GetActionComponent();
 	FARActionRequest Skill;
-	Skill.ActionTag = ARGameplayTags::Input_Skill_Primary;
 	FARActionRequest Roll;
-	Roll.ActionTag = ARGameplayTags::Action_Roll;
 	Roll.bIsRollAction = true;
 	FARRequestStatus Status;
 	const FARActionHandle SkillHandle = Action->TryStartAction(Skill, Status);
@@ -1619,10 +2469,19 @@ bool FARResourceHUDLiveUpdateTest::RunTest(const FString& Parameters)
 	UProgressBar* ManaBar = Cast<UProgressBar>(HUD->GetWidgetFromName(TEXT("ManaBar")));
 	UProgressBar* StaminaBar = Cast<UProgressBar>(HUD->GetWidgetFromName(TEXT("StaminaBar")));
 	UTextBlock* ManaText = Cast<UTextBlock>(HUD->GetWidgetFromName(TEXT("ManaValue")));
+	UProgressBar* ShieldBar = Cast<UProgressBar>(HUD->GetWidgetFromName(TEXT("ShieldBar")));
+	UTextBlock* HealthText = Cast<UTextBlock>(HUD->GetWidgetFromName(TEXT("HealthValue")));
 	if (!TestNotNull(TEXT("Health bar bound"), HealthBar)
 		|| !TestNotNull(TEXT("Mana bar bound"), ManaBar)
 		|| !TestNotNull(TEXT("Stamina bar bound"), StaminaBar)
-		|| !TestNotNull(TEXT("Mana text bound"), ManaText)) return false;
+		|| !TestNotNull(TEXT("Mana text bound"), ManaText)
+		|| !TestNotNull(TEXT("Shield layer added to existing Designer HUD"), ShieldBar)
+		|| !TestNotNull(TEXT("Health text bound"), HealthText)) return false;
+	TestTrue(TEXT("Shield layer uses gray fill"), ShieldBar->GetFillColorAndOpacity().Equals(FLinearColor(0.55f, 0.55f, 0.55f)));
+	TestTrue(TEXT("Shield and HP share the same overlay"), ShieldBar->GetParent() == HealthBar->GetParent());
+	TestTrue(TEXT("Shield fill renders behind red HP"), ShieldBar->GetParent()->GetChildIndex(ShieldBar)
+		< HealthBar->GetParent()->GetChildIndex(HealthBar));
+	TestFalse(TEXT("No shield omits the extra number"), HealthText->GetText().ToString().Contains(TEXT("+")));
 	TestEqual(TEXT("Initial health is full"), HealthBar->GetPercent(), 1.0f);
 	TestEqual(TEXT("Initial mana is full"), ManaBar->GetPercent(), 1.0f);
 	TestEqual(TEXT("Initial stamina is full"), StaminaBar->GetPercent(), 1.0f);
@@ -1642,6 +2501,43 @@ bool FARResourceHUDLiveUpdateTest::RunTest(const FString& Parameters)
 	const FARCombatDamageResult Result = TestWorld.World->GetSubsystem<UARCombatSubsystem>()->ApplyCombatDamage(Damage);
 	TestEqual(TEXT("Real combat request damages health"), Result.HealthDamage, 30);
 	TestEqual(TEXT("Damage updates health without polling"), HealthBar->GetPercent(), 0.7f);
+	FARShieldSpec ShieldSpec;
+	ShieldSpec.Amount = 20.0f;
+	bool bShieldApplied = false;
+	const FARShieldHandle ShieldHandle = Player->GetHealthComponent()->ApplyShield(ShieldSpec, bShieldApplied);
+	TestTrue(TEXT("HUD test shield applies"), bShieldApplied);
+	TestEqual(TEXT("Shield snapshot updates"), Player->GetUIManagerComponent()->GetHUDSnapshot().Shield, 20.0f);
+	TestEqual(TEXT("Gray combined fill extends past current HP"), ShieldBar->GetPercent(), 0.9f);
+	TestEqual(TEXT("Red fill retains HP ratio below the cap"), HealthBar->GetPercent(), 0.7f);
+	TestTrue(TEXT("Health label includes shield"), HealthText->GetText().ToString().Contains(TEXT("+ 20")));
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::MaxHealth, 200.0f);
+	TestEqual(TEXT("Max HP change rescales HP"), HealthBar->GetPercent(), 0.35f);
+	TestEqual(TEXT("Max HP change rescales shield"), ShieldBar->GetPercent(), 0.45f);
+	Player->GetStatsComponent()->SetBaseStat(EARStatType::MaxHealth, 100.0f);
+	Damage.BaseDamage = 5.0f;
+	const FARCombatDamageResult ShieldHit = TestWorld.World->GetSubsystem<UARCombatSubsystem>()->ApplyCombatDamage(Damage);
+	TestEqual(TEXT("Shield absorbs real damage"), ShieldHit.ShieldDamage, 5);
+	TestEqual(TEXT("Shield hit leaves HP unchanged"), HealthBar->GetPercent(), 0.7f);
+	TestEqual(TEXT("Shield consumption shrinks gray fill"), ShieldBar->GetPercent(), 0.85f);
+	float RemovedShield = 0.0f;
+	TestTrue(TEXT("Remaining shield removes"), Player->GetHealthComponent()->RemoveShield(ShieldHandle, RemovedShield));
+	TestEqual(TEXT("No gray extension after removal"), ShieldBar->GetPercent(), HealthBar->GetPercent());
+	TestFalse(TEXT("Removed shield clears the extra number"), HealthText->GetText().ToString().Contains(TEXT("+")));
+	ShieldSpec.Amount = 200.0f;
+	const FARShieldHandle LargeShield = Player->GetHealthComponent()->ApplyShield(ShieldSpec, bShieldApplied);
+	TestEqual(TEXT("Large shield remains visible within the health row"), ShieldBar->GetPercent(), 1.0f);
+	TestEqual(TEXT("HP and overflowing shield share an expanded scale"), HealthBar->GetPercent(), 70.0f / 270.0f);
+	TestTrue(TEXT("Large shield amount is not truncated"), HealthText->GetText().ToString().Contains(TEXT("+ 200")));
+	Player->GetHealthComponent()->RemoveShield(LargeShield, RemovedShield);
+	ShieldSpec.Amount = 10.0f;
+	ShieldSpec.Duration = 0.1f;
+	Player->GetHealthComponent()->ApplyShield(ShieldSpec, bShieldApplied);
+	TestEqual(TEXT("Timed shield appears"), ShieldBar->GetPercent(), 0.8f);
+	TestWorld.World->Tick(LEVELTICK_All, 0.2f);
+	Player->GetHealthComponent()->TickComponent(0.2f, LEVELTICK_All, nullptr);
+	TestEqual(TEXT("Expiry clears shield snapshot"), Player->GetUIManagerComponent()->GetHUDSnapshot().Shield, 0.0f);
+	TestEqual(TEXT("Expiry clears the gray extension"), ShieldBar->GetPercent(), HealthBar->GetPercent());
+	TestFalse(TEXT("Expiry clears shield label"), HealthText->GetText().ToString().Contains(TEXT("+")));
 	TestEqual(TEXT("Consumption updates mana without polling"), ManaBar->GetPercent(), 0.75f);
 	TestEqual(TEXT("Consumption updates stamina without polling"), StaminaBar->GetPercent(), 0.6f);
 	TestTrue(TEXT("Mana label shows consumed resource"), ManaText->GetText().ToString().Contains(TEXT("75")));
@@ -1675,10 +2571,15 @@ bool FARResourceHUDLiveUpdateTest::RunTest(const FString& Parameters)
 	Replacement->DispatchBeginPlay();
 	HUD->ObservePawn(Replacement);
 	TestEqual(TEXT("Possession change refreshes health"), HealthBar->GetPercent(), 1.0f);
+	TestFalse(TEXT("Possession change clears shield label"), HealthText->GetText().ToString().Contains(TEXT("+")));
+	ShieldSpec.Duration = -1.0f;
+	Player->GetHealthComponent()->ApplyShield(ShieldSpec, bShieldApplied);
+	TestFalse(TEXT("Old pawn shields no longer drive HUD"), HealthText->GetText().ToString().Contains(TEXT("+")));
 	Player->GetStaminaComponent()->TryConsume(10.0f, Source, Remaining);
 	TestEqual(TEXT("Old pawn no longer drives HUD"), StaminaBar->GetPercent(), 1.0f);
 	HUD->ObservePawn(nullptr);
 	TestEqual(TEXT("No player hides HUD"), HUD->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Disconnect resets shield fill"), ShieldBar->GetPercent(), 0.0f);
 	Replacement->GetManaComponent()->TryConsume(20.0f, Source, Remaining);
 	TestEqual(TEXT("Disconnected HUD ignores subsequent resource events"), ManaBar->GetPercent(), 0.0f);
 	return true;
