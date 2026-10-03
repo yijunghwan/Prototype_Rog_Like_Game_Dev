@@ -1,5 +1,22 @@
 # 다음 에이전트용 작업 인계 — 현재 상태
 
+## 2026-10-03 BP_TestEnemy 이동 예제 네 종류 — 완료
+
+- 사용자가 BP_TestEnemy1이 아닌 BP_TestEnemy를 지목. 방향 이동, 좌표 직선 이동, Actor NavMesh 이동, 좌표 NavMesh 이동을 설명용으로 보여주되 Actor NavMesh만 실제 실행선 연결하도록 요청했다. 기존 사용자 Enemy_Attack/Enemy_Event 유지. 사용자 삭제 BP1/2/_/NewBlueprint 복구하지 않음.
+- 실제 원인: Enemy_Move의 ARMoveToActor Target에 연결된 impure Cast To ARAIController의 execute가 미연결되어 컴파일 시 정리됨. 범위 Branch False → 재요청 0.25초 게이트 → Get Controller/Cast 실행 → AR AI Move To Actor → LastPathRequestResult 저장으로 수정. AcceptanceRadius=0. 기본 방향/직선 위치/AI 위치 예제는 진입 실행선 미연결이며 내부 참고용 흐름만 연결. 네 설명 박스/변수 추가. Tick 도달성 검사에서 Basic 2/Actor 1/Location 1, Actor만 실행됨.
+- 이 BP만 CharacterMovement 평면 고정과 시작 평면 스냅을 해제해 캡슐 중심을 Z=0에 묻지 않도록 함. AIControllerClass=ARAIController, AutoPossessAI=PlacedInWorldOrSpawned 확인. 공격 XY 300cm/1초 액션 준비/현재 공격력 비례/취소/그로기·사망 기존 흐름 유지. 현재 Enemy_Event는 직접 이벤트 + ApplyCrowdControl + Delay + ResetGroggyGauge, 예전 Bind/DA 흐름이 아님. 해당 설명을 TEST_ENEMY_BLUEPRINT_KO.md에 갱신.
+- 수정 직후·저장 재로드 각각 **12/12 실행 검사**, 저장 후 재컴파일 오류0/경고0. 첫 수정 commandlet 프로세스는 수정 전 BP의 기존 Cast 오류를 로드할 때 기록해 exit1이지만 수정 컴파일/검사/저장은 성공. 새 프로세스 VerifyMovement는 exit0/오류0/경고0으로 검증. 테스트 월드에는 NavMesh 없음: 경로 요청 Failed 기록/설명용 입력 미실행/재요청간격/3m공격/중복방지/1초선딜/공격력/취소/그로기/CC해제/사망 검사. 실제 장애물 우회 주행·PIE 시각 QA 미실행.
+- 저장된 Test_Level에는 NavMeshBoundsVolume/RecastNavMesh와 적 인스턴스가 없음. 맵 수정은 하지 않음. 사용자가 Nav Mesh Bounds Volume과 적을 배치해야 실제 추적 가능. 전체 Content 작업 전후 SHA256 비교: BP_TestEnemy만 변경, 모든 다른 파일 동일. uproject 임시 AdditionalPluginDirectories 원복(diff0), 정식 Editor 빌드 성공. 도구 없는 Python 검사 exit0/오류0/경고0, BP 독립 컴파일/AI 설정/평면 설정 확인.
+- 생성·검사 도구는 repo 밖 LocalTools/EnemyBlueprintAuthoring, EnemyMovementShowcase.inl과 verify_movement_detached.py. 게임 C++ 추가·수정 없음, 외부 플러그인 의존 없음. 백업 Saved/EnemyMovementBackup/20261003_190524/BP_TestEnemy.uasset. 로그 EnemyMovementPatch/EnemyMovementReload/EnemyMovementDetached 및 BuildEditor.log. BP 변경은 커밋·푸시하지 않음.
+- export 비교에서 Enemy_Event 블록은 바이트 동일. Enemy_Attack 실행 노드/연결은 동일하며, 재컴파일 과정에서 기존 미연결 MakeStruct 잔여 블록만 제거됨(88줄 삭제만, 신규·변경 줄 없음). 실행 흐름은 작성 도구에서 수정하지 않았다.
+
+## 2026-10-03 공통 가이드 전체 노드 검색 — 완료
+
+- `Docs/Guides/common/BLUEPRINT_NODE_SEARCH_KO.html` 추가, 메인 및 공통 분야 버튼 연결. 현재 Source/Action_RogueLike 헤더의 Blueprint 노출 선언에서 직접 추출한 **383항목: 호출139/비동기1/조회111/구현 이벤트35/디스패처43/구조체54**. 엔진·플러그인 전체 기본 노드나 에셋별 Custom Event/Get/Set 전수 사전은 아님을 페이지에 명시. 함수/이벤트의 표시명·종류·Target·용도·핀 방향·기본값·고급/자동 문맥·구조체 내부 필드·열거형26개 선택값과 원본 연결 제공. 동일 이름은 대상 클래스별로 분리. 호환/숨김 선언은 기본 제외하고 체크 시 표시.
+- 오프라인 node-search.js/css: 이름만/용도·핀 포함 검색, 띄어쓰기·대소문자 무시, 종류/분야 필터, 40개씩 추가 표시, 노드 펼침·접기, 깊은 링크와 인쇄 상태 복원. 이름 정확 일치 또는 유일 결과는 자동 펼침. 반환값 있는 BP 오버라이드와 void 이벤트의 핀 방향 구분. 액션 취소 알림의 별도 Timer 정리 책임 유지. Make/Break 항목은 자동 파생 데이터 사전이며 읽기 전용 핸들 임의 조립 금지 안내.
+- `Scripts/generate_node_search_guide.py`와 `test_node_search_guide.js` 추가. organizer에 생성 연결해 재실행 시 새 검색 페이지/내비게이션이 유지됨. 현재 소스에서 노드/구조체/enum을 추출하며 미해석 노출 선언은 실패 처리. Saved/GuideQA/node-reference.json은 검사 산출물. 함수 핀 설명/용도 보강에는 기존 한영 생성기의 한글 설명 사전을 재사용하되 오래된 카탈로그 핀 목록은 사용하지 않음.
+- 정적 QA **20 HTML, 로컬 링크/에셋1492개 오류0**, 검색·필터·호환 선택·페이지 추가·hash·인쇄 복원은 비렌더링 DOM 모형 검사 통과. 기존 가이드 JS 검사도 통과. 실제 브라우저 화면/레이아웃 QA는 미실행. 게임 코드·BP·DA·레벨 변경 없음, 빌드 불필요. 이번 작업은 커밋·푸시하지 않음.
+
 ## 2026-10-03 전체 개발 변경 Git 반영 — 푸시 전 검증
 
 - 사용자가 가이드뿐 아니라 기존 게임 개발 변경까지 모두 커밋·푸시하도록 명시 승인했다. 기존 C++/에디터 편집 모듈/게임 에셋/입력 에셋 이동·삭제/가이드와 개발 스크립트를 함께 반영한다. 프로젝트 밖 `LocalTools/GunBlueprintAuthoring`의 GUN 생성 도구는 포함하지 않으며, Python 캐시는 `.gitignore`로 제외한다.

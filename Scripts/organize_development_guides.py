@@ -13,6 +13,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 GUIDES = ROOT / 'Docs/Guides'
 PAGES = [
+    ('common', 'common/BLUEPRINT_NODE_SEARCH_KO.html', '전체 노드 검색', '프로젝트 노드·이벤트 이름 검색과 입력·출력·구조체 설명'),
     ('common', 'common/OBJECT_STAT_GUIDE_KO.html', '스탯', '객체별 스탯·공식·기본값과 현재 자원'),
     ('common', 'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html', '피해·회복', '직접 피해·DOT·실드·회복·계산 공식'),
     ('common', 'common/CC_STAGGER_GUIDE_KO.html', 'CC·경직', '기절·속박·경직·강인함·면역'),
@@ -360,7 +361,7 @@ def portal_index():
     return f'''<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>개발 가이드 · Action RogueLike</title><link rel="stylesheet" href="assets/guide.css"></head><body>
 {navigation(path,'')}
-<header><div class="wrap"><div class="eyebrow">Action RogueLike · Blueprint 제작 참고서</div><h1>개발 가이드</h1><p class="lead">구현할 분야를 선택하고, 필요한 노드와 핀만 펼쳐보세요.</p><p class="muted">16개 참고서 · 로컬 HTML · 인터넷/서버 없이 탐색 가능 · 2026-10-03</p></div></header>
+<header><div class="wrap"><div class="eyebrow">Action RogueLike · Blueprint 제작 참고서</div><h1>개발 가이드</h1><p class="lead">구현할 분야를 선택하고, 필요한 노드와 핀만 펼쳐보세요.</p><p class="muted">{len(PAGES)}개 참고서 · 로컬 HTML · 인터넷/서버 없이 탐색 가능 · 2026-10-03</p></div></header>
 <main class="wrap"><p class="guide-portal-hint">모든 문서 상단에서 다른 분야와 같은 분야의 문서로 바로 이동할 수 있습니다. 노드 설명은 접이식이며 문서 안 검색·전체 펼치기·인쇄를 지원합니다.</p>
 <div class="note good">처음 제작한다면 <a href="nsh/ITEM_ASSET_CREATION_GUIDE_KO.html">아이템 데이터 에셋</a> 또는 <a href="hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html">적 전체 가이드</a>에서 시작하세요. 진행 중 막히면 <a href="#precautions">주의점 참고서</a>로 이동하세요.</div>
 {''.join(bodies)}
@@ -432,6 +433,8 @@ def main():
     extract_enemy()
     enhance_item()
     simplify_damage()
+    from generate_node_search_guide import generate
+    generate()
     save('index.html',portal_index())
     # Rewrite moved common references and split enemy anchors across every canonical page.
     for category,url,_,_ in PAGES:
