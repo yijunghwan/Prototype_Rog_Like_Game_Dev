@@ -82,13 +82,13 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <body>
 <!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common">공통</a><a href="../index.html#item" aria-current="true">아이템</a><a href="../index.html#enemy">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="ITEM_ASSET_CREATION_GUIDE_KO.html">데이터 에셋</a><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">런타임 기본</a><a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html" aria-current="page">아이템 스킬</a></div></div></nav><!-- GUIDE PORTAL END -->
 <header><div class="wrap">
-<div class="eyebrow">Action RogueLike · 아이템 내부 스킬 제작 · 2026-10-03 코드 기준</div>
+<div class="eyebrow">Action RogueLike · 아이템 내부 스킬 제작 · 2026-10-04 코드 기준</div>
 <h1>아이템 스킬 런타임 참고서</h1>
 <p class="lead"><code>ARLoadoutItemInstance</code> 자식 블루프린트에서 아이템의 스킬 조건·실행·대기·효과·종료를 구현할 때 옆에 두고 찾는 문서입니다. 노드의 호출 시점과 연결 대상, 액션 핸들의 수명 기준을 정리합니다.</p>
 <p><a href="ITEM_ASSET_CREATION_GUIDE_KO.html">아이템 에셋 제작 가이드</a> · <a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">아이템 런타임 노드 가이드</a> · <a href="../common/OBJECT_STAT_GUIDE_KO.html">객체별 스탯 가이드</a> · <a href="../common/DAMAGE_NODES_FORMULA_GUIDE_KO.html">데미지 노드·공식 참고서</a> · <a href="../hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html">적 제작 참고서</a></p>
 <p class="muted">범위: 플레이어가 소유한 무기·유물의 아이템 스킬. 소비형 아이템의 별도 사용 경로와 적 AI의 직접 액션 시작·관리는 다루지 않습니다.</p>
 </div></header>
-<nav aria-label="목차"><div class="wrap">
+<nav aria-label="목차"><div class="wrap"><a href="#timer-checklist">타이머 제작 점검</a><a href="#managed-timers">권장 타이머</a>
 <a href="#structure">실행 계약</a><a href="#preflight">사전 검사</a><a href="#handle">실행·핸들</a><a href="#nodes">종료·조회</a><a href="#cancel">액션 설정</a><a href="#delay">대기·알림</a><a href="#ownership">효과·스택</a><a href="#spatial">조준·생성·판정</a><a href="#cleanup">등록·해제</a><a href="#trouble">문제 찾기</a><a href="#check">점검표</a>
 </div></nav>
 <main class="wrap">
@@ -96,7 +96,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <div class="actions"><p>항목과 노드를 눌러 자세히 볼 수 있습니다.</p><button id="expand-all" type="button">모두 펼치기</button><button id="collapse-all" type="button">모두 접기</button></div>
 <p class="search-result" id="search-result" role="status" aria-live="polite"></p>
 
-<details class="chapter" id="structure" open><summary><span class="chapter-number">00</span> 적용 범위와 실행 계약</summary><div class="chapter-body">
+<details class="chapter" id="managed-timers"><summary>권장 타이머 · 수명 선택과 연결</summary><div class="chapter-body"><p>먼저 <strong>어느 수명이 끝날 때 예약도 없어져야 하는지</strong> 선택합니다. 새 아이템·공격 그래프에서 일반 Set Timer by Event를 기본으로 쓰지 말고, 아래 귀속 노드를 사용하세요.</p><dl class="pins"><dt>스킬/적 공격이 끝나면 중단</dt><dd>Set Action Timer by Event. 보유 중 효과와 구분합니다.</dd><dt>무기/유물을 버리면 중단</dt><dd>Set Item Timer by Event. 스킬 취소 중에도 보유 효과를 계속할 때 사용합니다.</dd><dt>스포너·상시 AI·독립 Actor</dt><dd>일반 엔진 Timer를 사용하고 Actor EndPlay 등에서 직접 Clear합니다. 수명 관리를 위해 가짜 공격 액션을 만들지 않습니다.</dd></dl><details class="node" id="set-action-timer"><summary><span class="tag">노드</span>Set Action Timer by Event</summary><div class="node-body"><p>스킬·적 공격의 선딜, 후딜, 반복 실행은 이 노드를 우선 사용하세요. 한 액션 실행에 예약을 귀속하여 정상 End Action·실제 Cancel·소유 Actor EndPlay 때 자동 Clear합니다.</p><dl class="pins"><dt>Target</dt><dd>Get Action Component에서 받은 AR Action Component. 아이템에서는 Get Item Owner → Get Action Component.</dd><dt>Action Handle</dt><dd>Execute Item Skill 또는 Try Start Action에서 받은 이번 실행의 핸들. 무효/다른 관리자 핸들은 실패.</dd></dl><dl class="pins"><dt>Event</dt><dd>매개변수 없는 Custom Event 또는 Create Event를 연결합니다. 콜백 안에서 자기 액션 종료/아이템 해제도 가능합니다.</dd><dt>Time</dt><dd>양수인 실행 간격(초). 0·음수·비유한 값은 실패. Looping=false면 이 시간 뒤 한 번 실행합니다.</dd><dt>Looping</dt><dd>반복 여부. false는 1회 예약, true는 정리될 때까지 반복합니다.</dd><dt>Success / Return Value</dt><dd>예약 성공 Bool / 실제 Timer Handle. Pause Timer by Handle·Unpause Timer by Handle·Clear and Invalidate Timer by Handle 등 기존 엔진 노드에 연결합니다.</dd><dt>Initial Start Delay · 고급</dt><dd>기본 -1은 첫 실행도 Time 뒤. 0은 다음 Timer Manager 처리 때, 양수는 지정 초 뒤 첫 실행합니다. -1 외 음수는 실패.</dd><dt>Max Once Per Frame · 고급</dt><dd>기본 true. 프레임 지연 시 밀린 반복을 같은 프레임에 여러 번 호출하지 않습니다. false면 엔진의 따라잡기 실행을 허용합니다.</dd></dl></div></details><details class="node" id="set-item-timer"><summary><span class="tag">노드</span>Set Item Timer by Event</summary><div class="node-body"><p>무기·유물 보유 중 주기 효과 또는 1회 지연 호출은 이 노드를 우선 사용하세요. 버림·교체·소유자 EndPlay로 아이템이 해제되면 자동 Clear합니다.</p><dl class="pins"><dt>Target</dt><dd>등록된 ARLoadoutItemInstance 런타임 Self. 적 Actor·픽업 Actor·소모품 런타임에 놓는 노드가 아닙니다.</dd><dt>액션과 차이</dt><dd>스킬 취소만으로는 멈추지 않습니다. 스킬 선딜/반복 공격에는 액션 타이머를 사용하세요.</dd><dt>해제 이벤트 순서</dt><dd>아이템 타이머는 On Item Unregistered 호출 전에 제거됩니다. 해제 이벤트에서 새 아이템 타이머를 시작할 수 없습니다.</dd></dl><dl class="pins"><dt>Event</dt><dd>매개변수 없는 Custom Event 또는 Create Event를 연결합니다. 콜백 안에서 자기 액션 종료/아이템 해제도 가능합니다.</dd><dt>Time</dt><dd>양수인 실행 간격(초). 0·음수·비유한 값은 실패. Looping=false면 이 시간 뒤 한 번 실행합니다.</dd><dt>Looping</dt><dd>반복 여부. false는 1회 예약, true는 정리될 때까지 반복합니다.</dd><dt>Success / Return Value</dt><dd>예약 성공 Bool / 실제 Timer Handle. Pause Timer by Handle·Unpause Timer by Handle·Clear and Invalidate Timer by Handle 등 기존 엔진 노드에 연결합니다.</dd><dt>Initial Start Delay · 고급</dt><dd>기본 -1은 첫 실행도 Time 뒤. 0은 다음 Timer Manager 처리 때, 양수는 지정 초 뒤 첫 실행합니다. -1 외 음수는 실패.</dd><dt>Max Once Per Frame · 고급</dt><dd>기본 true. 프레임 지연 시 밀린 반복을 같은 프레임에 여러 번 호출하지 않습니다. false면 엔진의 따라잡기 실행을 허용합니다.</dd></dl></div></details><div class="flow">보유 효과: On Item Registered → Set Item Timer by Event(Target=Self) → Success 확인<br>스킬: Execute Item Skill → 받은 Action Handle 저장 → Set Action Timer by Event → Success 확인<br>Event 콜백 → 대상/콘텐츠 조건 확인 → 효과 처리 → 스킬 완료라면 End Action</div><details class="node" id="timer-callback"><summary><span class="tag">연결 규칙</span>Event 콜백 · 완료와 취소의 차이</summary><div class="node-body"><p>흰 실행 출력은 예약 직후이지 시간이 지난 출력이 아닙니다. 실제 효과는 Event에 연결한 Custom Event 안에서 실행합니다.</p><dl class="pins"><dt>매개변수</dt><dd>Event는 입력 핀이 없는 Custom Event / Create Event입니다. 액션 핸들·대상은 실행별 상태에 저장해 콜백에서 읽습니다.</dd><dt>정상 완료</dt><dd>1회 호출이 끝나도 액션이 자동 종료되지는 않습니다. 마지막 효과 뒤 같은 관리자·핸들로 End Action. 실패 출구도 종료합니다.</dd><dt>자동 취소/해제</dt><dd>타이머에는 Cancelled 출력이 없습니다. On Item Skill Cancelled / On Action Cancelled / On Item Unregistered에서 자체 변수·연출·구독을 정리합니다.</dd><dt>콜백의 대상</dt><dd>귀속 수명과 별개로 대상 Actor가 삭제되거나 사망할 수 있습니다. Is Valid·사망·거리 등 콘텐츠 조건을 다시 확인합니다.</dd><dt>동시 실행</dt><dd>하나의 저장 변수로 이전 실행 핸들을 덮어쓰지 마세요. 중복 실행을 막거나 실행별 상태를 구분해야 합니다.</dd></dl></div></details><details class="node" id="timer-pitfalls"><summary><span class="tag">주의점</span>중복 예약·Pause·이미 적용한 효과</summary><div class="node-body"><p>전용 타이머는 예약의 수명만 관리합니다. 콘텐츠의 모든 상태를 자동 되돌리는 기능은 아닙니다.</p><dl class="pins"><dt>중복 예약</dt><dd>호출마다 독립된 Timer가 생깁니다. 같은 Event를 넣어도 덮어쓰지 않습니다. Tick마다 시작하지 말고 등록/실행 시 한 번 시작하거나 Does Timer Exist by Handle 등으로 중복을 막습니다.</dd><dt>Pause / Unpause / Clear</dt><dd>Return Value를 Timer Handle 변수에 저장해 엔진 노드에 연결합니다. Pause는 남은 시간을 보존하며, 수명이 끝나면 일시정지 중이어도 제거됩니다. Clear한 타이머는 Unpause로 되살릴 수 없습니다.</dd><dt>CC와 취소 규칙</dt><dd>경직/기절 자체가 모든 타이머를 중단시키지는 않습니다. 해당 Action이 실제 취소되어야 액션 타이머가 제거됩니다. 아이템 보유 타이머는 별개입니다.</dd><dt>기존 일반 Timer</dt><dd>새 노드로 자동 전환되지 않습니다. 일반 Timer는 직접 Clear하거나 원하는 귀속 노드로 교체해야 합니다.</dd><dt>이미 적용한 효과</dt><dd>일반 스탯 보정·독립 투사체·등록한 DOT·Bool·구독은 타이머 Clear만으로 사라지지 않습니다. 각각의 귀속/제거 정책을 따릅니다.</dd><dt>단순 1회 대기</dt><dd>Looping=false로 한 번 예약할 수 있습니다. 순차 실행과 Completed/Cancelled 분기가 필요한 액션 대기는 Action Delay도 사용할 수 있습니다. 일반 Delay에는 귀속 수명이 없습니다.</dd></dl></div></details></div></details><details class="chapter" id="structure" open><summary><span class="chapter-number">00</span> 적용 범위와 실행 계약</summary><div class="chapter-body">
 <p>아이템 런타임은 월드에 배치하는 Actor가 아닌 <strong>UObject 인스턴스</strong>입니다. DA의 <code>Runtime Behavior Class</code>에 BP 클래스를 지정하고, <code>Skill Definitions</code>의 스킬을 해당 런타임에서 구현합니다.</p>
 <div class="scroll"><table><thead><tr><th>담당</th><th>정하는 것 / 하는 일</th><th>이 문서에서의 위치</th></tr></thead><tbody>
 <tr><td>플레이어 입력</td><td>Input Action·실제 키·Input Tag 요청, 장착 슬롯 요청</td><td>아이템 런타임에서 키를 하드코딩하지 않음</td></tr>
@@ -164,7 +164,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <tr><td>이벤트 Skill Id → Switch Selection</td><td>어떤 스킬을 실행할지</td></tr>
 <tr><td>스킬 분기 실행 → 해당 핸들 변수 Set 실행</td><td>그 스킬의 핸들을 저장하는 시점</td></tr>
 <tr><td>이벤트 Action Handle → Set의 값 입력</td><td>저장할 실제 핸들. 흰 실행선만 연결해서는 저장되지 않음</td></tr>
-<tr><td>저장한 핸들 Get → Action Delay·Apply Action·End Action의 Handle</td><td>처음 시작된 행동을 계속 사용</td></tr>
+<tr><td>저장한 핸들 Get → Set Action Timer by Event·Action Delay·Apply Action·End Action의 Handle</td><td>처음 시작된 행동을 계속 사용</td></tr>
 </tbody></table></div>
 <p>핸들 변수 타입은 <code>ARAction Handle</code>입니다. 동일 인스턴스의 여러 스킬이 한 입력 그룹에서 실행될 수 있으므로 한 변수에 무조건 덮어쓰지 않습니다. 스킬별 변수 또는 실행별 문맥으로 보관합니다. 재진입을 허용하는 별도 콘텐츠라면 스킬별 변수 하나로도 충분하지 않을 수 있습니다.</p>
 <p class="note bad">빈 핸들, 다른 실행으로 덮어쓴 핸들, 다른 소유자의 관리자에 전달한 핸들은 동일 액션을 가리키지 않습니다. Action Delay가 즉시 Cancelled로 빠지거나 효과·종료 요청이 실패할 수 있습니다.</p>
@@ -244,17 +244,17 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 </tbody></table></div>
 <p class="note good">Action Delay는 대기만 관리하며 <strong>Completed에서 액션을 자동 종료하지 않습니다.</strong> 정상 완료 후 End Action은 콘텐츠가 호출합니다. 반대로 시스템이 이미 취소한 액션의 Cancelled에서는 End Action을 중복 호출하지 않습니다.</p>
 <p>시작 시 관리자가 없거나 해당 핸들이 활성 상태가 아니면 즉시 Cancelled입니다. 월드 참조가 무효여도 취소 경로로 갑니다. 취소 출력의 원인을 구분해야 한다면 관리자·핸들·Is Action Active를 확인하고 디버그 로그를 남깁니다.</p>
-<p>일반 Delay·Set Timer는 Action Handle을 모릅니다. 액션이 중단되어도 자동으로 완료 동작이 차단되지 않으므로, 별도 종료 구독·타이머 해제·활성 확인이 필요합니다. Action Delay가 자신의 대기를 정리해도 다른 타이머·연출은 자동으로 정리하지 않습니다.</p>
+<p>일반 Delay·Set Timer는 Action Handle을 모릅니다. 액션이 중단되어도 자동으로 완료 동작이 차단되지 않으므로, 별도 종료 구독·타이머 해제·활성 확인이 필요합니다. Action Delay의 정리는 자신의 대기에 한정됩니다. 액션/아이템 전용 타이머는 각 귀속 수명에 따라 별도로 자동 정리되며, 일반 타이머·연출은 직접 정리합니다.</p>
 <p>입력 유지·해제에 반응하는 콘텐츠는 입력 해제 전달, 경과 시간, 상태 전환을 별도로 설계합니다. Execute Item Skill의 현재 입력은 Skill Id와 Action Handle이며, 키 해제 이벤트가 자동 추가되는 것은 아닙니다.</p>
 </div></details>
 <details class="node" id="item-skill-cancelled"><summary><span class="tag event">아이템 이벤트</span> On Item Skill Cancelled</summary><div class="node-body">
-<p>아이템 런타임 BP의 이벤트 그래프에서 <code>Event On Item Skill Cancelled</code>를 추가합니다. <strong>별도 Bind 없이</strong> 시스템이 취소된 스킬을 실행한 아이템 인스턴스에만 전달합니다.</p><p class="note "><strong>취소 후 직접 정리할 것:</strong> 경직·기절 등으로 실제 액션이 취소되면 시스템이 액션 생명주기와 액션 귀속 자원을 처리합니다. 하지만 <code>Set Timer by Event</code>로 만든 별도 타이머·독립 Actor·공격 Bool·연출까지 자동 회수하지는 않습니다. <code>On Item Skill Cancelled</code>에서 해당 실행의 핸들을 확인한 뒤, 저장한 Timer Handle을 <code>Clear and Invalidate Timer by Handle</code>에 연결하고 자체 상태를 정리하세요. 모든 경직이 무조건 취소를 일으키지는 않습니다. <code>Action Delay</code> 내부 대기는 자동 정리되며, 정상 완료의 자체 정리는 별도 완료 경로에서 처리합니다.</p>
+<p>아이템 런타임 BP의 이벤트 그래프에서 <code>Event On Item Skill Cancelled</code>를 추가합니다. <strong>별도 Bind 없이</strong> 시스템이 취소된 스킬을 실행한 아이템 인스턴스에만 전달합니다.</p><p class="note "><strong>취소 후 직접 정리할 것:</strong> 경직·기절 등으로 실제 액션이 취소되면 시스템이 액션 생명주기와 액션 귀속 자원을 처리합니다. <code>Set Action Timer by Event</code>와 <code>Action Delay</code>는 자동 정리됩니다. 일반 <code>Set Timer by Event</code>·독립 Actor·공격 Bool·연출은 별도 정리가 필요합니다. <code>On Item Skill Cancelled</code>에서 해당 실행 핸들을 확인한 뒤 일반 Timer Handle을 <code>Clear and Invalidate Timer by Handle</code>에 연결하고 자체 상태를 정리하세요. 아이템 타이머는 스킬 취소만으로 멈추지 않고 아이템 해제 때 정리됩니다. 모든 경직이 무조건 취소를 일으키지는 않습니다.</p>
 <div class="scroll"><table class="fields"><thead><tr><th>출력 핀</th><th>의미</th></tr></thead><tbody>
 <tr><td>Skill Id · Name</td><td>Execute Item Skill에 전달됐던 해당 아이템 내부 스킬 이름. Switch on Name으로 스킬별 정리 분기</td></tr>
 <tr><td>Action Handle</td><td>취소된 정확한 실행의 핸들. 같은 이름의 재실행과 다른 지연 콜백을 구분할 때 사용</td></tr>
 <tr><td>Reason</td><td>Stagger·Stun·ItemRemoved·Death·Manual 등 실제 액션 취소 사유</td></tr>
 </tbody></table></div>
-<div class="flow">Event On Item Skill Cancelled → Switch on Name(Skill Id) → 해당 스킬의 Timer Handle Clear → 자체 상태·연출 정리</div>
+<div class="flow">Event On Item Skill Cancelled → Switch on Name(Skill Id) + 실행 핸들 비교 → 자체 상태·연출 정리<br>Set Action Timer by Event는 이미 자동 Clear / 기존 일반 Timer만 수동 Clear</div>
 <p class="note good">알림은 <strong>해당 액션의 자동 정리 이후</strong>에 호출됩니다. 이미 종료된 액션에 End Action/Cancel Action을 다시 호출하지 않습니다. 일반 타이머·독립 Actor·연출을 대신 전부 정리해 주는 이벤트는 아닙니다.</p>
 <p>실제로 Execute Item Skill을 시작한 실행만 알립니다. 사전 조건/비용/쿨다운 거절, 실행 전 거래 롤백, 정상 End Action에는 오지 않습니다. 다른 아이템의 같은 Skill Id도 이 아이템으로 전달되지 않습니다. Loadout을 통하지 않고 직접 시작한 일반 액션에는 이 스킬 이벤트가 없으므로 기존 Action Component 알림을 사용합니다.</p>
 <p>아이템 제거 경로는 실행 중인 자기 스킬 취소 알림 → On Item Unregistered 순서입니다. 비용·쿨다운 자동 환불은 없으며, 정상 완료의 자체 정리는 콘텐츠의 완료 경로에서 처리합니다. Action Delay.Cancelled와 이 이벤트에 같은 정리를 연결했다면 중복 실행에도 안전하게 구성하거나 책임을 한 곳으로 모읍니다.</p>
@@ -345,20 +345,20 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <details class="chapter" id="cleanup"><summary><span class="chapter-number">08</span> 등록·해제 이벤트와 정리 책임</summary><div class="chapter-body">
 <details class="node"><summary><span class="tag event">아이템 이벤트</span> On Item Registered / On Item Unregistered</summary><div class="node-body">
 <p><code>On Item Registered</code>: DA 기본 스탯 보정 적용 후 호출됩니다. 소유자·컴포넌트 캐시, 자체 상태 초기화, 필요한 이벤트 구독을 처리합니다. 같은 기본 효과를 다시 적용하면 중복됩니다.</p>
-<p><code>On Item Unregistered</code>: 해제 사유를 받습니다. 정상 Loadout 경로는 이 이벤트 전에 해당 인스턴스 액션을 취소하고, 이벤트 후 아이템 소유 효과·UI 상태를 정리합니다. 런타임은 자체 타이머·구독·외부 작업·참조를 정리합니다.</p>
+<p><code>On Item Unregistered</code>: 해제 사유를 받습니다. 정상 Loadout 경로는 이 이벤트 전에 해당 인스턴스 액션을 취소하고, 이벤트 후 아이템 소유 효과·UI 상태를 정리합니다. Set Item Timer by Event는 이 이벤트 전에 자동 Clear됩니다. 런타임은 기존 일반 타이머·구독·외부 작업·참조를 정리합니다. 해제 이벤트에서는 새 아이템 예약이 거절됩니다.</p>
 <p>아이템 등록은 Actor BeginPlay가 아닙니다. 여러 보유본은 각기 다른 인스턴스이므로 공유 Source Id·외부 이벤트 구독의 범위를 확인하세요.</p>
 </div></details>
 <details class="node"><summary><span class="tag">타이머 · 엔진 기본</span> Clear and Invalidate Timer by Handle / Pause·Unpause Timer by Handle</summary><div class="node-body">
 <p>Clear and Invalidate는 저장한 Timer Handle의 타이머를 종료하고 핸들을 무효화합니다. 아이템 해제나 더 이상 필요 없는 타이머의 최종 정리에 사용합니다.</p>
 <p>Pause는 타이머를 보존하며 일시 정지하고, Unpause는 존재하는 정지 타이머를 재개합니다. 이미 Clear된 타이머를 복구하지 않습니다. Timer Handle은 Action Handle이나 Stat Modifier Handle과 다른 타입입니다.</p>
-<p>자체 타이머를 썼다면 종료·취소·아이템 해제 시점의 책임을 정합니다. 런타임 해제는 임의의 BP 타이머·외부 Actor를 모두 자동 삭제하는 기능이 아닙니다.</p>
+<p>스킬은 Set Action Timer by Event, 보유 효과는 Set Item Timer by Event를 사용하세요. 귀속 수명이 끝날 때 예약은 자동 정리됩니다. 기존 일반 BP 타이머·외부 Actor·변수·연출은 별도 책임이며, 조기 중단할 때는 저장한 Timer Handle로 Clear할 수 있습니다.</p>
 </div></details>
 <div class="scroll"><table><thead><tr><th>자원/상태</th><th>자동 정리</th><th>런타임이 관리할 부분</th></tr></thead><tbody>
 <tr><td>액션 소유 보정·보장·관리형 잠금·등록 Actor</td><td>End Action / Cancel Action 때 회수</td><td>정상 완료 출구의 종료 호출</td></tr>
 <tr><td>Action Delay 자신의 대기</td><td>해당 행동 종료·취소 시 Cancelled</td><td>완료 효과와 취소 상태 정리 분리</td></tr>
 <tr><td>아이템 소유 효과</td><td>아이템 해제 때 회수</td><td>조기 제거가 필요하면 정확한 Own 핸들 사용</td></tr>
 <tr><td>일반 효과·독립 Actor·자체 변수·연출</td><td>각 기능의 자체 수명 외에는 보장하지 않음</td><td>보존/회수 정책과 수동 종료</td></tr>
-<tr><td>외부 타이머·이벤트 구독</td><td>아이템 관리 목록에 자동 등록되지 않음</td><td>타이머 Clear, 자신이 Bind한 연결 해제, 늦은 콜백 방어</td></tr>
+<tr><td>Set Action Timer by Event</td><td>해당 액션 End/Cancel/Owner EndPlay</td><td>콜백에서 정상 완료 End Action, 자체 변수·연출 정리</td></tr><tr><td>Set Item Timer by Event</td><td>아이템 해제/교체/정상 소유자 EndPlay</td><td>보유 중 효과용. 스킬 취소만으로 중단되지 않음</td></tr><tr><td>일반 엔진 Timer·이벤트 구독</td><td>액션/아이템 자동 귀속 없음</td><td>일반 Timer Clear, 자신이 Bind한 연결 해제, 늦은 콜백 방어</td></tr>
 </tbody></table></div>
 </div></details>
 
@@ -375,7 +375,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <tr><td>다른 행동 종료에 내 상태가 바뀜</td><td>On Action Ended/Cancelled에서 자기 핸들을 비교하는가?</td><td><a href="#delay">종료 알림</a></td></tr>
 <tr><td>효과 조회·제거 결과가 다름</td><td>실제 보유 Target, 적용 Category·Source Id, 그룹 구조, 아이템 적용 시 출처 정책</td><td><a href="#ownership">스택·제거</a></td></tr>
 <tr><td>실제 동작은 실패했는데 비용·쿨다운은 남음</td><td>실행 이벤트 전에 거래가 완료됐다는 점을 고려했는가? 사전 조건이 가능한가?</td><td><a href="#structure">실행 계약</a></td></tr>
-<tr><td>아이템 제거 후에도 작업이 실행</td><td>외부 타이머·구독·독립 Actor의 수동 정리 책임</td><td><a href="#cleanup">해제·정리</a></td></tr>
+<tr><td>아이템 제거 후에도 작업이 실행</td><td>전용 타이머의 귀속 수명·정상 해제 확인. 기존 일반 Timer·구독·독립 Actor는 수동 정리</td><td><a href="#cleanup">해제·정리</a></td></tr>
 </tbody></table></div>
 </div></details>
 
@@ -396,6 +396,8 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 </ul>
 </div></details>
 <div id="no-results" class="note" hidden>일치하는 항목이 없습니다. 노드의 영문 이름이나 더 짧은 검색어로 찾아보세요.</div>
+
+<details class="chapter" id="timer-checklist"><summary>타이머 제작 점검</summary><div class="chapter-body"><ul><li>스킬에는 Set Action Timer by Event, 보유 중 효과에는 Set Item Timer by Event를 골랐는가?</li><li>Time&gt;0, Event 연결, Success 확인과 예약 실패 출구를 만들었는가?</li><li>일반 흰 실행 출력이 아니라 Event 콜백에서 후속 효과를 실행하는가?</li><li>정상 스킬 완료의 End Action과 취소 이벤트의 변수·연출 정리를 분리했는가?</li><li>중복 예약·실행 핸들 덮어쓰기·삭제된 대상 참조를 막았는가?</li><li>기존 일반 Timer는 해제/EndPlay에서 Clear하는가?</li></ul></div></details>
 </main>
 <footer><div class="wrap"><p>현재 프로젝트의 아이템 스킬 입력 경로 기준입니다. 특정 콘텐츠의 고정 수치·제작 진행 기록·적 액션 저작 절차는 포함하지 않습니다.</p>
 <p>소스 확인: <a href="../../../Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h">아이템 이벤트·함수</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Items/ARLoadoutItemInstance.cpp">런타임 기본 구현</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARLoadoutComponent.cpp">스킬 검사·거래·실행</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Actions/ARActionTypes.h">Action Request</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Components/ARActionComponent.h">액션 노드</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Components/ARActionComponent.cpp">액션 정리</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Actions/ARAsyncActionDelay.cpp">Action Delay</a> · <a href="../../../Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h">Actor 대상 스탯 노드</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Combat/ARActionHitboxActor.cpp">히트박스</a> · <a href="../../../Source/Action_RogueLike/Private/Foundation/Characters/ARBaseCharacter.cpp">조준</a></p>

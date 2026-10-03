@@ -4,6 +4,69 @@
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
 
+UARStatsComponent::FScopedNotifications::FScopedNotifications(UARStatsComponent* InStats) : Stats(InStats)
+{
+	if (Stats) ++Stats->NotificationScopeDepth;
+}
+
+UARStatsComponent::FScopedNotifications::~FScopedNotifications()
+{
+	if (Stats && --Stats->NotificationScopeDepth == 0)
+	{
+		Stats->RefreshTickState();
+		Stats->FlushNotifications();
+	}
+}
+
+bool UARStatsComponent::CanMutate() const
+{
+	// Standalone, unregistered components are also used for stat calculations.
+	const AActor* Owner = GetOwner();
+	return !bEndingPlay && IsValid(this) && (!Owner || (IsValid(Owner) && !Owner->IsActorBeingDestroyed()));
+}
+
+void UARStatsComponent::RefreshTickState()
+{
+	SetComponentTickEnabled(!bEndingPlay && (!PendingNotifications.IsEmpty() || ActiveModifiers.ContainsByPredicate(
+		[](const FARActiveStatModifier& Modifier) { return Modifier.ExpireAt >= 0.0; })));
+}
+
+void UARStatsComponent::FlushNotifications()
+{
+	if (NotificationScopeDepth != 0 || bDispatchingNotifications) return;
+	TGuardValue<bool> DispatchGuard(bDispatchingNotifications, true);
+	// A content callback that endlessly changes a stat must not recurse or hang a frame.
+	constexpr int32 MaxNotificationsPerFlush = 1024;
+	int32 Delivered = 0;
+	while (!PendingNotifications.IsEmpty() && CanMutate() && Delivered < MaxNotificationsPerFlush)
+	{
+		// Never retain an array/map reference across a Blueprint callback.
+		const FPendingNotification Notification = MoveTemp(PendingNotifications[0]);
+		PendingNotifications.RemoveAt(0);
+		++Delivered;
+		if (Notification.bSource)
+		{
+			const FARStatModifierQueryResult Query = GetModifiersBySource(Notification.Source.Category, Notification.Source.SourceId);
+			OnStatModifiersChanged.Broadcast(GetOwner(), Notification.Source.SourceId, Notification.Source.DisplayName,
+				Query.StackCount, Query.LongestRemainingTime);
+		}
+		else
+		{
+			const float NewValue = GetFinalStat(Notification.StatType);
+			if (!FMath::IsNearlyEqual(Notification.OldValue, NewValue))
+				OnFinalStatChanged.Broadcast(GetOwner(), Notification.StatType, Notification.OldValue, NewValue);
+		}
+	}
+	if (!CanMutate()) PendingNotifications.Reset();
+	if (!PendingNotifications.IsEmpty() && !bReportedNotificationLoop)
+	{
+		bReportedNotificationLoop = true;
+		UE_LOG(LogARFoundation, Warning, TEXT("Stat notification budget reached on %s. Check self-triggering stat callbacks; remaining notifications are deferred."), *GetNameSafe(GetOwner()));
+	}
+	if (PendingNotifications.IsEmpty()) bReportedNotificationLoop = false;
+	RefreshTickState();
+}
+
 UARStatsComponent::UARStatsComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -26,6 +89,7 @@ UARStatsComponent::UARStatsComponent()
 void UARStatsComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	const FScopedNotifications Notifications(this);
 	if (IsStatSupported(EARStatType::Money))
 	{
 		float& InitialMoney = BaseStats.FindOrAdd(EARStatType::Money);
@@ -35,9 +99,20 @@ void UARStatsComponent::BeginPlay()
 	RecalculateAll();
 }
 
+void UARStatsComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	bEndingPlay = true;
+	PendingNotifications.Reset();
+	ActiveModifiers.Reset();
+	SetComponentTickEnabled(false);
+	Super::EndPlay(EndPlayReason);
+}
+
 void UARStatsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!CanMutate()) return;
+	const FScopedNotifications Notifications(this);
 
 	const double Now = GetNow();
 	TArray<FARActiveStatModifier> Expired;
@@ -50,23 +125,23 @@ void UARStatsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 		}
 	}
 
+	TSet<EARStatType> DirtyStats;
 	for (const FARActiveStatModifier& Modifier : Expired)
 	{
-		if (!Modifier.Spec.bStackOnly) RecalculateStat(Modifier.Spec.StatType);
+		if (!Modifier.Spec.bStackOnly) DirtyStats.Add(Modifier.Spec.StatType);
 		BroadcastSourceChange(Modifier.Spec.Source);
 	}
-
-	const bool bHasTimedModifier = ActiveModifiers.ContainsByPredicate([](const FARActiveStatModifier& Modifier)
-	{
-		return Modifier.ExpireAt >= 0.0;
-	});
-	SetComponentTickEnabled(bHasTimedModifier);
+	for (const EARStatType StatType : DirtyStats) RecalculateStat(StatType);
 }
 
 FARStatModifierHandle UARStatsComponent::AddStatModifier(const FARStatModifierSpec& Spec, bool& bSuccess)
 {
 	bSuccess = false;
 	FARStatModifierHandle Handle;
+	if (!CanMutate()) return Handle;
+	const FScopedNotifications Notifications(this);
+	// Input can itself alias an active modifier; take a copy before array growth/removal.
+	const FARStatModifierSpec SafeSpec = Spec;
 
 	// Owned item/action paths use this method. Permanent edits must never enter
 	// their reversible handle lists (including data-asset default modifiers).
@@ -134,24 +209,22 @@ FARStatModifierHandle UARStatsComponent::AddStatModifier(const FARStatModifierSp
 	Handle.Id = FGuid::NewGuid();
 	FARActiveStatModifier& NewModifier = ActiveModifiers.AddDefaulted_GetRef();
 	NewModifier.Handle = Handle;
-	NewModifier.Spec = Spec;
+	NewModifier.Spec = SafeSpec;
 	NewModifier.AppliedAt = GetNow();
 	NewModifier.StackGroupId = GroupMember ? ExistingGroupId : Handle.Id;
 	NewModifier.ExpireAt = GroupMember ? ExistingGroupExpiry
 		: (EffectiveDuration < 0.0f ? -1.0 : NewModifier.AppliedAt + EffectiveDuration);
 
-	if (!Spec.bStackOnly) RecalculateStat(Spec.StatType);
-	BroadcastSourceChange(Spec.Source);
-	if (NewModifier.ExpireAt >= 0.0)
-	{
-		SetComponentTickEnabled(true);
-	}
+	if (!SafeSpec.bStackOnly) RecalculateStat(SafeSpec.StatType);
+	BroadcastSourceChange(SafeSpec.Source);
 	bSuccess = true;
 	return Handle;
 }
 
 bool UARStatsComponent::RemoveStatModifier(FARStatModifierHandle Handle)
 {
+	if (!CanMutate()) return false;
+	const FScopedNotifications Notifications(this);
 	const int32 Index = ActiveModifiers.IndexOfByPredicate([&Handle](const FARActiveStatModifier& Modifier)
 	{
 		return Modifier.Handle == Handle;
@@ -170,6 +243,8 @@ bool UARStatsComponent::RemoveStatModifier(FARStatModifierHandle Handle)
 
 int32 UARStatsComponent::RemoveModifiers(EARModifierSourceCategory Category, FName SourceId)
 {
+	if (!CanMutate()) return 0;
+	const FScopedNotifications Notifications(this);
 	TSet<EARStatType> DirtyStats;
 	TArray<FARSourceInfo> ChangedSources;
 	int32 RemovedCount = 0;
@@ -216,6 +291,8 @@ bool UARStatsComponent::RemoveModifierStacks(EARModifierSourceCategory Category,
 {
 	RemovedCount = 0;
 	RemovedHandles.Reset();
+	if (!CanMutate()) return false;
+	const FScopedNotifications Notifications(this);
 	if (Count <= 0 || SourceId.IsNone()
 		|| (Policy != EARModifierStackRemovalPolicy::Newest && Policy != EARModifierStackRemovalPolicy::Oldest)) return false;
 
@@ -449,7 +526,8 @@ bool UARStatsComponent::HasGuaranteedEvasion() const
 
 void UARStatsComponent::SetBaseStat(EARStatType StatType, float Value)
 {
-	if (!IsStatSupported(StatType)) return;
+	if (!CanMutate() || !IsStatSupported(StatType) || !FMath::IsFinite(Value)) return;
+	const FScopedNotifications Notifications(this);
 	if (StatType == EARStatType::Money && (!FMath::IsFinite(Value) || Value < 0.0f)) return;
 	BaseStats.FindOrAdd(StatType) = Value;
 	RecalculateStat(StatType);
@@ -457,7 +535,8 @@ void UARStatsComponent::SetBaseStat(EARStatType StatType, float Value)
 
 bool UARStatsComponent::ApplyPermanentFlat(EARStatType StatType, float Delta)
 {
-	if (!IsStatSupported(StatType) || !FMath::IsFinite(Delta)) return false;
+	if (!CanMutate() || !IsStatSupported(StatType) || !FMath::IsFinite(Delta)) return false;
+	const FScopedNotifications Notifications(this);
 	const float NewBase = GetBaseStat(StatType) + Delta;
 	if (!FMath::IsFinite(NewBase) || (StatType == EARStatType::Money && NewBase < 0.0f)) return false;
 	// Keep raw base semantics consistent with Flat. Existing final-value safety
@@ -490,7 +569,12 @@ void UARStatsComponent::RecalculateStat(EARStatType StatType)
 	CachedFinalStats.FindOrAdd(StatType) = NewValue;
 	if (!FMath::IsNearlyEqual(OldValue, NewValue))
 	{
-		OnFinalStatChanged.Broadcast(GetOwner(), StatType, OldValue, NewValue);
+		if (!PendingNotifications.ContainsByPredicate([StatType](const FPendingNotification& N) { return !N.bSource && N.StatType == StatType; }))
+		{
+			FPendingNotification& Notification = PendingNotifications.AddDefaulted_GetRef();
+			Notification.StatType = StatType;
+			Notification.OldValue = OldValue;
+		}
 	}
 }
 
@@ -562,8 +646,13 @@ float UARStatsComponent::ApplySafetyRules(EARStatType StatType, float Value) con
 
 void UARStatsComponent::BroadcastSourceChange(const FARSourceInfo& Source)
 {
-	const FARStatModifierQueryResult Query = GetModifiersBySource(Source.Category, Source.SourceId);
-	OnStatModifiersChanged.Broadcast(GetOwner(), Source.SourceId, Source.DisplayName, Query.StackCount, Query.LongestRemainingTime);
+	if (!PendingNotifications.ContainsByPredicate([&Source](const FPendingNotification& N)
+		{ return N.bSource && N.Source.Category == Source.Category && N.Source.SourceId == Source.SourceId; }))
+	{
+		FPendingNotification& Notification = PendingNotifications.AddDefaulted_GetRef();
+		Notification.bSource = true;
+		Notification.Source = Source;
+	}
 }
 
 double UARStatsComponent::GetNow() const

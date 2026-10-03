@@ -1,5 +1,35 @@
 # 다음 에이전트용 작업 인계 — 현재 상태
 
+## 2026-10-04 귀속 타이머 가이드 전반 통합 — 완료
+
+- 사용자 요청: 새 아이템/액션 타이머를 제작 가이드와 주의점 HTML 전반에 반영하고 사용을 권장. 기존 구현된 Set Item Timer by Event / Set Action Timer by Event의 헤더·동작 기준으로 문서만 수정. C++/GUN/BP/DA/IA/IMC/레벨 미변경, 빌드·에디터 실행·Git 커밋/푸시 없음. 기존 게임 개발 변경과 사용자 Content 보존.
+- 아이템 런타임 기본/스킬의 #managed-timers를 점검표 뒤 부록에서 본문 앞쪽으로 이동하고 목차 추가. 보유 효과는 Item Timer, 실행 스킬은 Action Timer를 권장. 적 액션에는 Action Timer만 핀 상세 안내(Item Timer는 적 Self에 사용 불가 명시). 기본/고급 핀, Custom Event/Create Event, 예약 직후 실행선 vs 지연 Event 콜백, Success/실패 출구, 정상 End Action, 실제 취소/해제, 중복 예약·실행별 저장 상태·유효 대상·Pause/Clear 설명. Action Delay는 순차 대기 분기 옵션으로 유지.
+- 기존 '타이머는 자동 정리 안 됨'은 일반 엔진 Timer에만 해당하도록 수정. On Item Unregistered 전에 Item Timer Clear / 해제 중 신규 예약 거절, On Item Skill Cancelled와 On Action Cancelled 직하에 액션 예약 자동 정리와 변수·연출·구독·일반 Timer 수동 정리 경계. 런타임·스킬·적 전체의 소유권 표/증상/점검표도 갱신.
+- DA→런타임 예약 안내, 공통 스탯/피해의 시간 만료와 예약 구분, DOT 자체 틱/피해 이름 제한에 BP Timer 불필요, 이미 적용한 일반 버프·DOT·독립 Actor/Permanent Flat은 예약 Clear로 회수되지 않음 명시. 적 이동/이동 주의점에는 상시 AI 판단 루프를 짧은 공격 액션에 묶지 말 것, CC 후 경로 재요청, 일반 Timer EndPlay 정리. 독립 스포너/픽업 Actor도 일반 Timer 예외로 안내. 아이템 검색·우선순위의 기존 조회/사전 검사 안내는 유지.
+- organize_development_guides.py의 원본 템플릿/보강 단계와 generate_node_search_guide.py를 함께 갱신. 전체 노드 검색에서 신규 타이머 권장 용도·콜백 경계·관련 상세 앵커와 On Item Unregistered 설명 갱신. 신규 Scripts/test_timer_guide_references.py는 TOC/권장 흐름/적 Target 제한/AI·스포너 예외/DOT·스탯 수명 경계 회귀 검사.
+- 검증: 20 HTML, 로컬 링크/에셋1527개, 중복 ID/태그/누락 링크 없음. 385개 노드 검색·필터·hash/인쇄, 공통 검색/펼침·접기 및 inline JS6개 구문 검사 통과. 타이머 내용 회귀 검사 통과. 생성기 재실행 HTML SHA 변화0(멱등성). 브라우저 화면 렌더링/실제 BP 실행은 이번 문서 작업에서 미검증.
+
+## 2026-10-04 스탯 알림 안전성·귀속 타이머·입력 태그 — 완료
+
+- 사용자 요청: 스탯 변경 이벤트 중 재변경 안전성 보강, 아이템/액션 타이머, 부하 검증 가능 여부, Q/W/E/R/A/S/D/F/G/Z/X/C 중 누락 입력 태그. 사용자 저장·에디터 종료 확인 후 구현·정식 Editor Development 빌드 성공. 개발용 통합 상태창(3번)은 설명만 했고 구현하지 않음. GUN 그래프·게임 에셋·레벨·IA/IMC 변경 및 Git 커밋/푸시 없음. 사용자 기존 Content 변경/삭제/신규 IA는 보존.
+- ARStatsComponent: 네이티브 FScopedNotifications로 추가/제거/스택 소비/만료/기본값 변경의 캐시 업데이트를 먼저 완료. 대기 중 동일 스탯/출처 알림은 합치고 중첩 콜백 알림은 재귀하지 않고 현재 Broadcast 이후 큐에서 처리. 알림은 스냅샷으로 전달해 배열/맵 참조 무효화를 방지. 1회 flush 1024 알림 예산 초과는 경고 후 다음 컴포넌트 틱으로 이월(콘텐츠 무한 루프를 자동 수정하는 기능 아님). 유한 효과 만료는 관련 스탯별 한 번 재계산, 틱은 시간제 효과/대기 알림이 있을 때만 사용. 파괴/EndPlay 후 새 변경·남은 알림 차단. 소유자 없는 미등록 계산용 컴포넌트는 기존대로 지원; 모든 SetBaseStat 비유한 값 거절. 실제 무결성 전체를 보장한다고 주장하지 말 것.
+- 액션/아이템 귀속 적용은 소유 핸들 기록까지 스탯 알림 보류. 액션 정리/아이템 다중 제거/획득·버림·진화·Loadout EndPlay 거래도 알림 배치. 아이템 제거는 재진입과 신규 효과·타이머·UI 생성 차단, 소유 핸들/UI 스냅샷을 분리해 반복 중 변경 안전성 보강. IsRegistered는 On Item Unregistered 중 false이며 Get Item Owner/기존 제거 경로는 사용 가능. 액션 EndPlay 중 새 액션 시작도 거절.
+- 새 노드 **Set Action Timer by Event**(AR Action Component Target + Action Handle) / **Set Item Timer by Event**(ARLoadoutItemInstance Self). 매개변수 없는 Event, Time>0, Looping, Success + 실제 FTimerHandle 반환. 고급 Initial Start Delay=-1은 Time, 0은 다음 Timer Manager 처리, 양수는 지정 지연; -1 외 음수/비유한 값 거절. Max Once Per Frame 기본true. false Looping은 1회 지연이므로 별도 Item Delay 미추가; 기존 Action Delay 유지. 호출마다 독립 타이머이며 Tick에서 중복 시작 금지. 엔진 핸들 Pause/Unpause/Clear 호환. 액션 End/Cancel/Owner EndPlay, 아이템 해제/교체/정상 Loadout Owner EndPlay에 자동 Clear. 아이템 타이머는 스킬 취소만으로 멈추지 않음. 완료만으로 End Action하지 않음. 원래 일반 타이머/BP는 자동 전환하거나 수정하지 않음. 내부 ARLifetimeTimer는 weak callback/predicate를 쓰고 무효 콜백/수명은 정리, 실행 콜백 안 자기 종료/해제도 지원.
+- Config/DefaultGameplayTags.ini에 **Input.Skill.W / A / S / D**만 추가. 나머지 요청 키 태그는 이미 있음. 키 매핑·기존 이동/상호작용·IA/IMC 변경 없음. 자동화에서 요청한 12태그 실제 등록 확인.
+- 신규 ARLifetimeSafetyTests.cpp 7검사. 최종 **AR. 65/65 Success, 실패0/보고서 경고0/미실행0**, Saved/Automation/LifetimeSafetyVerified/index.json / Saved/Logs/LifetimeSafetyVerified.log. 추가 중 제거+256재추가, 알림 재귀/1100단계 예산 이월, 그룹 다중 스탯 캐시 원자 갱신, 액션취소+128액션 재할당, 아이템 해제, 등록 후 인벤토리 가시성, 만료 후 재적용과 틱, 콜백 소유자 파괴, 타이머 1회/반복/Pause/Unpause/Clear/CC/자기 종료/아이템 해제/Owner EndPlay/실행별 격리/첫 지연/프레임 따라잡기·무효값 검증. 최초 64검사에서는 ownerless 계산 컴포넌트를 신규 CanMutate가 거절해 기존 수식2검사 실패; 호환성 복원 후 전체 재검증. 최초 빌드의 잘못된 GuardValue include 제거 후 정상 빌드. 로그 시작 시 기존 GUN GetInstanceId 미연결 BP 경고는 남았고 에셋 수정 안 함.
+- 합성 부하 검사: **32 적 × 20 사이클**, 시간제 보정 총10240, 액션/등록 히트박스/DOT/CC/액션 타이머 각640, 아이템 타이머20; 직접 피해640 및 동일 이름 즉시 중복640 거절, 잔여 효과/액션/등록 Actor/타이머 정리 확인. 렌더링 FPS·실제 NavMesh 주행·패키징·강제 GC/장시간 soak는 미검증. 단위 검사 실행시간을 게임 성능 상한으로 해석하지 말 것.
+- 가이드 생성기와 HTML 동기화: 아이템 기본/스킬·적 액션·액션 생명주기의 #managed-timers, 스탯 수명의 #notifications, 취소 이벤트 직하 자동/직접 정리 경계. 전체 노드 검색385항목(호출141)에서 신규2노드 용도·Target·입력·기본값·반환 핸들 설명. 정적 QA20 HTML/1502 로컬 링크·에셋 및 검색/공통 가이드 JS 검사 통과. 실제 브라우저 렌더링 QA 미실행.
+
+## 2026-10-03 간단한 제작용 경고 — 완료
+
+- 사용자 승인 범위: DA 설정 검사 + AI 이동 실패 로그. 실행 차단·자동 수정·타이머/액션 자동 종료는 추가하지 않음. 게임 콘텐츠·GUN·맵 저장 없음. 에디터가 닫혀 있음을 확인한 뒤 정식 Editor 빌드 성공.
+- ARItemDefinition의 WITH_EDITOR IsDataValid: 지원 유형/ID, 런타임 클래스 누락·추상·유형별 부모, 중복/빈 SkillId, 입력/비용/쿨타임, 아이템 기본 효과 PermanentFlat, 소모품에서 무시되는 스킬·기본 효과 경고. FDataValidationContext의 Warning + FUObjectToken 클릭 링크. 부모의 Invalid는 보존하되 신규 검사는 경고만 반환(Valid여도 경고 있음), 기존 획득·저장·게임 규칙 변경 없음. DA 우클릭 Asset Actions → Validate Assets, 저장 검증은 에디터 설정에 따름. InputTag/우선순위 공유는 허용, 액티브 슬롯의 빈 InputTag도 정상. 전체 카탈로그 ID 중복 검사와는 별개.
+- ARAIController: NoPawn/NoMovementControl/InvalidGoal/InvalidDestination/NoNavMesh/StartOffNavMesh/GoalOffNavMesh/MoveFailed 안내를 LogARFoundation Warning에 객체·Controller 이름과 함께 기록. 같은 이유는 Controller별 최대 5초마다 한 번, 추가 NavMesh 진단 자체도 5초 간격. 기존 Super::MoveTo 결과·경로는 그대로. CC·사망·이동 잠금의 정상 거절과 AlreadyAtGoal/성공은 경고 제외. Shipping은 로그/추가 Nav 조회 제외. Cast/Target/실행선 때문에 노드가 호출되지 않는 경우와 수락 이후 장기 정체는 탐지하지 못함. Nav 투영 실패는 설정 확인 안내이지 특정 메시가 원인이라는 확정 진단은 아님.
+- 전체 AR 자동화 **58/58 Success, 실패0/경고0/미실행0**. Saved/Automation/AuthoringWarningsVerified/index.json 및 Saved/Logs/AuthoringWarningsVerified.log. 신규 3검사: DA 경고+객체 토큰/값 미수정, 입력 공유·슬롯·비용·부모, 이동 로그 횟수·5초 재안내·이동 잠금 무경고·AlreadyAtGoal. 초기 테스트 코드의 TArray 내부 원소를 직접 Add하는 복사 오류와 목표를 같은 위치에 둔 잘못된 실패 가정을 수정한 뒤 전체 재검증. 제품 규칙은 변경하지 않음. 첫 빌드 NavAgentInterface include 경로도 실제 엔진 위치로 수정.
+- 가이드: nsh/ITEM_ASSET_CREATION_GUIDE_KO.html#authoring-warnings 및 precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html#warnings. 이동 문서는 organizer 생성기와 동기화. 20 HTML/로컬 링크·에셋1493개 검사, 기존 가이드/검색 JS 모형 검사 통과. 실제 메시지 로그 UI·실제 맵의 시작/목표 Nav 투영 경고 화면 검증은 별도.
+- 직전 이동 진단에서 저장된 Test_Level에는 NavMesh/병합 벽/적(label BP_TestEnemy2, 실제 BP_TestEnemy 클래스)이 있음. 이전 아래 기록의 '적/NavMesh 없음'은 당시 상태. 복사 PIE 월드에서 플레이어 test_Debug_body의 Nav 영향만 끄면 목표 투영 실패가 해소되고 이동 수락·이동을 확인했으며 원본은 저장하지 않았음. 진단 도구 LocalTools는 repo 밖이고 uproject 임시 연결 제거 후 정상 빌드로 복원.
+- 이번 경고 작업 커밋/푸시 없음. 직전 푸시 요청은 대상 저장소 확인 단계에서 차단됨. 사용자 요청으로 미푸시 커밋을 0e69e10(가이드·스크립트만)으로 수정했고 Content는 로컬 미커밋 상태로 보존. 에셋 업로드 금지 유지. 새 푸시 권한을 추정하지 말 것.
+
 ## 2026-10-03 BP_TestEnemy 이동 예제 네 종류 — 완료
 
 - 사용자가 BP_TestEnemy1이 아닌 BP_TestEnemy를 지목. 방향 이동, 좌표 직선 이동, Actor NavMesh 이동, 좌표 NavMesh 이동을 설명용으로 보여주되 Actor NavMesh만 실제 실행선 연결하도록 요청했다. 기존 사용자 Enemy_Attack/Enemy_Event 유지. 사용자 삭제 BP1/2/_/NewBlueprint 복구하지 않음.

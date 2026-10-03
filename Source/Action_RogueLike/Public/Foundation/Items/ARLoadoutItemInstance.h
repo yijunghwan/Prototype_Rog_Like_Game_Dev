@@ -5,6 +5,7 @@
 #include "Foundation/Items/ARItemTypes.h"
 #include "Foundation/Combat/ARStaggerTypes.h"
 #include "Foundation/Status/ARStatusEffectTypes.h"
+#include "TimerManager.h"
 #include "ARLoadoutItemInstance.generated.h"
 
 class AARPlayerCharacter;
@@ -51,6 +52,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Item")
 	int32 RemoveAllOwnItemModifiers();
 
+	/** Clears on item unregistration (including drop, replacement and owner EndPlay).
+	 * Not action-owned: a skill cancellation alone does not stop this timer.
+	 * Time>0. Initial Start Delay=-1 uses Time; bLooping=false performs one delayed call.
+	 * Each call creates an independent timer. Existing engine handle nodes can pause/unpause/clear it. */
+	UFUNCTION(BlueprintCallable, Category="AR|Item|Timer", meta=(DisplayName="Set Item Timer by Event", AdvancedDisplay="InitialStartDelay,bMaxOncePerFrame"))
+	FTimerHandle SetItemTimerByEvent(UPARAM(DisplayName="Event") FTimerDynamicDelegate Event, float Time,
+		bool bLooping, bool& bSuccess, float InitialStartDelay = -1.0f, bool bMaxOncePerFrame = true);
+
 	/** Item-owned guarantees are removed automatically when this runtime instance is unregistered. */
 	UFUNCTION(BlueprintCallable, Category="AR|Item|Guarantees")
 	FARSuperArmorHandle ApplyItemSuperArmor(const FARSuperArmorSpec& Spec, bool& bSuccess);
@@ -89,4 +98,6 @@ private:
 	UPROPERTY(Transient) TArray<FARCCImmunityHandle> OwnCCImmunityHandles;
 	UPROPERTY(Transient) TMap<FGameplayTag, FARItemUIState> UIStates;
 	bool bRegistered = false;
+	bool bUnregistering = false;
+	TArray<FTimerHandle> OwnTimerHandles;
 };

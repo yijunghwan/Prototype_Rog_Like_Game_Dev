@@ -126,7 +126,21 @@ public:
 	UARStatsComponent();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+	/** Native ownership transactions defer notifications until their handles are recorded.
+	 * Nested BP mutations are immediate, but their notifications are drained without recursion. */
+	class ACTION_ROGUELIKE_API FScopedNotifications
+	{
+	public:
+		explicit FScopedNotifications(UARStatsComponent* InStats);
+		~FScopedNotifications();
+		FScopedNotifications(const FScopedNotifications&) = delete;
+		FScopedNotifications& operator=(const FScopedNotifications&) = delete;
+	private:
+		UARStatsComponent* Stats;
+	};
 
 	UFUNCTION(BlueprintCallable, Category="AR|Stats")
 	FARStatModifierHandle AddStatModifier(const FARStatModifierSpec& Spec, bool& bSuccess);
@@ -211,6 +225,21 @@ private:
 	double GetNow() const;
 	static bool IsReductionStat(EARStatType StatType);
 	bool IsStatSupported(EARStatType StatType) const;
+	void FlushNotifications();
+	void RefreshTickState();
+	bool CanMutate() const;
+	struct FPendingNotification
+	{
+		bool bSource = false;
+		EARStatType StatType = EARStatType::AttackPower;
+		float OldValue = 0.0f;
+		FARSourceInfo Source;
+	};
+	TArray<FPendingNotification> PendingNotifications;
+	int32 NotificationScopeDepth = 0;
+	bool bDispatchingNotifications = false;
+	bool bEndingPlay = false;
+	bool bReportedNotificationLoop = false;
 
 	UPROPERTY(Transient)
 	TArray<FARActiveStatModifier> ActiveModifiers;

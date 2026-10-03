@@ -18,6 +18,11 @@ class ACTION_ROGUELIKE_API UARItemDefinition : public UPrimaryDataAsset
 public:
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 
+#if WITH_EDITOR
+	/** Advisory only: warnings do not change acquisition, saving or skill execution. */
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 	/** Only call after confirming this is a weapon or relic; consumables have no loadout kind. */
 	EARLoadoutItemKind GetItemKind() const;
 

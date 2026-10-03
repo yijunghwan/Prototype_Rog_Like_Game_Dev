@@ -70,6 +70,11 @@ def parameter(raw, meta='', direction=None):
             'advanced':False, 'automatic':False}
 
 PIN = {
+    'Event':'실행할 매개변수 없는 Custom Event / Create Event를 연결합니다. 예약 노드는 콜백 즉시 실행과 다릅니다.',
+    'Time':'타이머 실행 간격(초). 양수만 허용하며 Looping=false면 한 번 실행 뒤 끝납니다.',
+    'bLooping':'true면 반복, false면 한 번 실행합니다. 타이머 완료가 액션 자체를 종료하지는 않습니다.',
+    'InitialStartDelay':'첫 실행 대기(초). 기본 -1은 Time 사용, 0은 다음 타이머 처리 때, 양수는 지정 시간. -1 외 음수는 실패.',
+    'bMaxOncePerFrame':'기본 true. 지연된 반복 콜백을 같은 프레임에 여러 번 실행하지 않습니다.',
     'Target':'효과를 받거나 조회할 대상 Actor. 함수의 자동 Target(노드를 소유한 컴포넌트)과 별개의 명시적 대상일 수 있습니다.',
     'Attacker':'피해를 가하는 공격원 Actor. 진영·공격 스탯·공격 출처 판정에 사용합니다.',
     'DamageCauser':'직접 피해를 발생시킨 Actor(투사체·판정체 등). 공격 스탯을 읽을 Attacker와 구분합니다.',
@@ -335,6 +340,9 @@ PIN.update({
 })
 
 PURPOSE_EXTRA = {
+    'SetActionTimerByEvent':'스킬·적 공격의 선딜/후딜/반복 콜백에 권장합니다. 한 액션에 1회 또는 반복 타이머를 귀속하여 정상 종료·실제 취소·소유자 EndPlay 때 자동 Clear합니다. 콜백 완료만으로 액션은 끝나지 않습니다. 호출마다 독립 타이머입니다.',
+    'SetItemTimerByEvent':'무기·유물 보유 중 주기 효과/1회 지연에 권장합니다. 등록된 아이템에 예약을 귀속하여 버림·교체·소유자 EndPlay 때 On Item Unregistered 전에 자동 Clear합니다. 스킬 취소만으로는 멈추지 않습니다. 적/픽업 Actor나 소모품 런타임의 노드가 아닙니다.',
+    'ReceiveItemUnregistered':'아이템 해제 때 자기 변수·연출·구독·독립 작업을 정리합니다. 아이템 전용 타이머는 이 이벤트 전에 자동 Clear되어 있으며 새 아이템 타이머 등록은 거절됩니다. 기존 일반 엔진 타이머는 직접 Clear해야 합니다.',
     'AddCCImmunity':'이 상태 컴포넌트에 새 CC를 막는 보장 효과를 적용하고 핸들을 발급합니다. 기존 CC를 제거하지는 않습니다.',
     'ApplyCCImmunity':'Actor에게 CC 면역을 적용합니다. 새 기절·속박 등을 차단하고 이미 걸린 CC는 자동 해제하지 않습니다.',
     'ApplyActionCCImmunity':'실행 중 액션에 CC 면역을 귀속합니다. 해당 액션 종료·취소 시 자동 회수됩니다.',
@@ -491,7 +499,8 @@ def pin_html(p,structs,func='',owner='',chain=()):
     label=p['label']
     explanation=describe(name,typ,func,owner)
     if name=='ReturnValue':
-        if typ=='bool':explanation='이 함수의 성공 여부 또는 조회 조건 결과. 노드 용도의 조건을 참/거짓으로 돌려줍니다.'
+        if typ=='FTimerHandle':explanation='Success=true일 때 실제 Timer Handle. 기존 Pause Timer by Handle / Unpause Timer by Handle / Clear and Invalidate Timer by Handle에 연결합니다. Action Handle과 다른 타입입니다.'
+        elif typ=='bool':explanation='이 함수의 성공 여부 또는 조회 조건 결과. 노드 용도의 조건을 참/거짓으로 돌려줍니다.'
         elif 'Handle' in typ:explanation='이번 등록·적용에서 발급하거나 조회한 핸들. 이후 제거·종료·조회용으로 보관합니다. 별도 Success 출력이 있다면 먼저 확인하세요.'+(' Permanent Flat 성공은 빈 핸들입니다.' if func=='ApplyStatModifier' else '')
         elif typ in ('int32','float'):explanation='이 함수가 계산·조회한 수치 또는 실제 처리한 양/개수. 노드 용도와 선언 타입을 함께 확인하세요.'
         else:explanation='이 노드의 용도에 대한 결과 값/객체입니다. 배열은 여러 결과, 구조체는 묶음 결과이며 아래 내부 값을 펼쳐 확인하세요.'
@@ -515,8 +524,10 @@ def render_node(n,structs):
     warning=''
     if n['hidden']:warning='<p class="note">호환용/내부용 선언입니다. 새 그래프의 검색 메뉴에 표시되지 않을 수 있으므로 일반 노드를 우선 사용하세요.</p>'
     if n['name'] in ('ReceiveItemSkillCancelled','ReceiveActionCancelled','OnActionCancelled'):
-        warning+='<p class="note">실제 액션 취소 알림입니다. 시스템은 액션 귀속 자원을 정리하지만 Set Timer by Event로 만든 별도 타이머·독립 Actor까지 수거하지 않습니다. 저장한 Timer Handle을 Clear and Invalidate Timer by Handle로 정리하세요. 정상 종료 알림이 아닙니다.</p>'
+        warning+='<p class="note">실제 액션 취소 알림입니다. Set Action Timer by Event와 Action Delay는 자동 정리됩니다. 일반 Set Timer by Event·독립 Actor는 별도 정리하세요. Set Item Timer by Event는 아이템 해제에 귀속되며 스킬 취소만으로 멈추지 않습니다. 정상 종료 알림이 아닙니다.</p>'
     if n['name']=='ExecuteItemSkill':warning+='<p class="note">입력·비용 판정과 액션 시작 후 호출됩니다. 이 스킬에서 Try Start Action을 다시 하지 말고 전달된 Action Handle을 사용해 정상 완료에서 End Action 하세요.</p>'
+    if n['name'] in ('SetActionTimerByEvent','SetItemTimerByEvent'):
+        warning+='<p class="note">실행 출력은 예약 직후이며 실제 효과는 Event 콜백에 연결합니다. Success를 확인하고 Time은 양수로 지정하세요. 호출마다 새 타이머가 생기므로 Tick에서 반복 등록하지 않습니다. 자동 제거는 예약만 정리하며 이미 적용한 일반 버프·DOT·독립 Actor·Bool은 되돌리지 않습니다. 취소 출력이 없으므로 자체 상태 정리는 수명 이벤트에서 처리하세요.</p>'
     if is_struct:body=nested(n['name'],structs)
     else:
         inp=''.join(pin_html(p,structs,n['name'],n['owner']) for p in n['inputs'])
@@ -526,6 +537,8 @@ def render_node(n,structs):
         if dispatch:flow='Bind/Assign의 실행선과 콜백 이벤트의 실행선은 별개입니다.'
         body='<p class="muted">'+e(flow)+'</p><h3>입력값</h3><dl class="pins">'+(inp or '<dt>별도 데이터 입력 없음</dt><dd>위 연결 대상 설명을 확인하세요.</dd>')+'</dl><h3>출력값 · 반환값</h3><dl class="pins">'+(out or '<dt>별도 데이터 출력 없음</dt><dd>호출 노드는 다음 실행선으로 연결합니다.</dd>')+'</dl>'
     related=next((url for key,url in reversed(list(RELATED.items())) if key in n['category'] or key in n['owner']),None)
+    if n['name']=='SetActionTimerByEvent':related='../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers'
+    if n['name']=='SetItemTimerByEvent':related='../nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers'
     links='<a href="'+e(related)+'">관련 제작 가이드</a> · ' if related else ''
     source=os.path.relpath(ROOT/n['source'],OUT.parent).replace('\\','/')
     technical='<details class="declaration"><summary>개발자용 선언·원본 보기</summary><p><a href="'+e(source)+'">'+e(n['source'])+'</a> · 줄 '+str(n['line'])+'</p><pre>'+e(n['signature'] or n['name'])+'</pre></details>'

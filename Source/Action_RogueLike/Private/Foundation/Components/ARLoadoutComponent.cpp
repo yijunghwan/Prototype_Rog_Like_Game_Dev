@@ -78,6 +78,7 @@ void UARLoadoutComponent::BeginPlay()
 void UARLoadoutComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	bEndingPlay = true;
+	const UARStatsComponent::FScopedNotifications Notifications(StatsComponent);
 	TArray<UARLoadoutItemInstance*> Instances;
 	if (EquippedWeapon) Instances.Add(EquippedWeapon);
 	for (UARLoadoutItemInstance* Instance : ActiveRelics) Instances.Add(Instance);
@@ -126,6 +127,8 @@ FARLoadoutAcquisitionResult UARLoadoutComponent::BeginLoadoutAcquisition(const U
 
 UARLoadoutItemInstance* UARLoadoutComponent::CommitLoadoutAcquisition(FARAcquisitionToken Token, FARRequestStatus& Status)
 {
+	// Stat observers must see the completed inventory/skill ownership transaction.
+	const UARStatsComponent::FScopedNotifications Notifications(StatsComponent);
 	Status.Result = EARRequestResult::InvalidHandle;
 	FARPendingAcquisition Pending;
 	if (!PendingAcquisitions.RemoveAndCopyValue(Token.Id, Pending))
@@ -192,6 +195,7 @@ void UARLoadoutComponent::CancelAllPendingRequests()
 
 bool UARLoadoutComponent::DiscardLoadoutItem(FGuid InstanceId, FARLoadoutDropRequest& DropRequest, FARRequestStatus& Status)
 {
+	const UARStatsComponent::FScopedNotifications Notifications(StatsComponent);
 	Status.Result = EARRequestResult::InvalidHandle;
 	DropRequest = FARLoadoutDropRequest();
 	if (EquippedWeapon && EquippedWeapon->GetInstanceId() == InstanceId)
@@ -629,6 +633,7 @@ FARWeaponEvolutionResult UARLoadoutComponent::RequestWeaponEvolution()
 
 UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionToken Token, const UARItemDefinition* Candidate, FARRequestStatus& Status)
 {
+	const UARStatsComponent::FScopedNotifications Notifications(StatsComponent);
 	Status.Result = EARRequestResult::InvalidHandle;
 	FARPendingEvolution Pending;
 	if (!PendingEvolutions.RemoveAndCopyValue(Token.Id, Pending)) return nullptr;
@@ -658,7 +663,12 @@ UARLoadoutItemInstance* UARLoadoutComponent::CommitWeaponEvolution(FAREvolutionT
 
 bool UARLoadoutComponent::ValidateDefinition(const UARItemDefinition* Definition, FARRequestStatus& Status) const
 {
-	if (!PlayerOwner || !Definition || Definition->ItemId <= 0 || !Definition->RuntimeBehaviorClass)
+	if (bEndingPlay || !IsValid(PlayerOwner) || PlayerOwner->IsActorBeingDestroyed())
+	{
+		Status.Result = EARRequestResult::InvalidOwner;
+		return false;
+	}
+	if (!Definition || Definition->ItemId <= 0 || !Definition->RuntimeBehaviorClass)
 	{
 		Status.Result = !PlayerOwner ? EARRequestResult::InvalidOwner : EARRequestResult::InvalidDefinition;
 		return false;

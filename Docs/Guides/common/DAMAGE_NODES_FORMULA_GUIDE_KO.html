@@ -110,7 +110,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <p class="muted">프로젝트 코드의 현재 동작 기준입니다. 언리얼 전체의 표준 피해 공식이나 특정 아이템의 고정 수치가 아닙니다. 적 AI의 액션 저작 절차·상태 이상 상세 가이드는 포함하지 않습니다.</p>
 </div></header>
 <nav aria-label="목차">
-<div class="wrap"><a href="#quick">노드 선택</a><a href="#damage-nodes">직접 피해</a><a href="#results">피해 이벤트</a><a href="#dot">지속 피해</a><a href="#stagger">경직·그로기</a><a href="#hitbox">충돌 연결</a><a href="#shield">실드·판정</a><a href="#healing">회복</a><a href="#formula">공식</a><a href="#trouble">문제 찾기</a><a href="#terms">용어·속성</a>
+<div class="wrap"><a href="#damage-timing">예약 공격·주기 회복·DOT 구분</a><a href="#quick">노드 선택</a><a href="#damage-nodes">직접 피해</a><a href="#results">피해 이벤트</a><a href="#dot">지속 피해</a><a href="#stagger">경직·그로기</a><a href="#hitbox">충돌 연결</a><a href="#shield">실드·판정</a><a href="#healing">회복</a><a href="#formula">공식</a><a href="#trouble">문제 찾기</a><a href="#terms">용어·속성</a>
 </div></nav>
 <main class="wrap">
 <div class="search-tools"><label for="node-search">노드·용어 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 핀, 용어, 공식 검색" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button>
@@ -1096,6 +1096,7 @@ B × max(0, 1 + A/100) × C</pre>
 </div>
 </details>
 <div id="no-results" class="note" hidden>일치하는 항목이 없습니다. 노드의 영문 이름이나 더 짧은 검색어로 찾아보세요.</div>
+<details class="chapter" id="damage-timing"><summary>예약 공격·주기 회복·DOT 구분</summary><div class="chapter-body"><p>스킬/적의 선딜·반복 직접 피해·반복 회복은 <code>Set Action Timer by Event</code>, 무기/유물 보유 중 주기 회복은 <code>Set Item Timer by Event</code>를 사용하세요. 실제 피해/회복은 Event 콜백에서 적용하며 마지막 스킬 단계 뒤 End Action을 호출합니다.</p><p>등록한 DOT는 이미 자체 기간·틱 간격을 처리합니다. 틱마다 DOT 등록 노드를 다시 부르는 타이머를 추가하지 마세요. 동일 Damage Name 제한도 피해 요청의 설정이며 별도 BP 타이머가 필요 없습니다. 타이머 제거는 이미 등록한 독립 DOT·실드·보정을 제거하지 않습니다.</p><p><a href="../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers">타이머 핀·수명·콜백 연결</a> · <a href="../precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html">효과 수명과 제거</a></p></div></details>
 </main>
 <footer>
 <div class="wrap">

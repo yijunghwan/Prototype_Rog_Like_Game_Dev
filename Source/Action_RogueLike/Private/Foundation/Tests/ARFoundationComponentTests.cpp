@@ -625,6 +625,51 @@ bool FARAIMovementCCGateTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARAIMovementWarningsTest,
+	"AR.Foundation.AI.MovementWarnings",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FARAIMovementWarningsTest::RunTest(const FString& Parameters)
+{
+	ARFoundationTests::FScopedTestWorld TestWorld;
+	AARAIController* Controller = TestWorld.World->SpawnActor<AARAIController>();
+	AARBaseEnemy* Enemy = TestWorld.World->SpawnActor<AARBaseEnemy>();
+	AARPlayerCharacter* Player = TestWorld.World->SpawnActor<AARPlayerCharacter>();
+	if (!Controller || !Enemy || !Player) return false;
+	Enemy->DispatchBeginPlay();
+	Player->DispatchBeginPlay();
+	// Expected diagnostics are consumed by automation, rather than test warnings.
+	AddExpectedError(TEXT("[AR 이동:NoPawn]"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	for (int32 I = 0; I < 10; ++I)
+	{
+		TestEqual(TEXT("Unpossessed requests keep the original Failed result"), Controller->ARMoveToActor(Player), EPathFollowingRequestResult::Failed);
+	}
+	Controller->Possess(Enemy);
+	TestEqual(TEXT("Already at goal is normal and silent"), Controller->ARMoveToActor(Enemy), EPathFollowingRequestResult::AlreadyAtGoal);
+	Player->SetActorLocation(FVector(2000, 0, 88));
+	AddExpectedError(TEXT("[AR 이동:InvalidGoal]"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	AddExpectedError(TEXT("[AR 이동:InvalidDestination]"), EAutomationExpectedErrorFlags::Contains, 1, false);
+	for (int32 I = 0; I < 10; ++I)
+	{
+		TestEqual(TEXT("Empty actor goal fails"), Controller->ARMoveToActor(nullptr), EPathFollowingRequestResult::Failed);
+		TestEqual(TEXT("Nonfinite destination fails"), Controller->ARMoveToLocation(FVector(std::numeric_limits<double>::quiet_NaN(), 0, 0)), EPathFollowingRequestResult::Failed);
+	}
+	AddExpectedError(TEXT("[AR 이동:NoNavMesh]"), EAutomationExpectedErrorFlags::Contains, 2, false);
+	for (int32 I = 0; I < 20; ++I)
+	{
+		TestEqual(TEXT("Missing NavMesh fails without changing target"), Controller->ARMoveToActor(Player), EPathFollowingRequestResult::Failed);
+	}
+	const FARMovementLockHandle Lock = Enemy->GetMovementControlComponent()->AcquireMovementLock(TEXT("WarningTest"), EARMovementLockType::BasicMovementOnly);
+	ARFoundationTests::AdvanceWorld(TestWorld.World, 5.2f);
+	for (int32 I = 0; I < 10; ++I)
+	{
+		TestEqual(TEXT("Normal movement lock remains silent after warning cooldown"), Controller->ARMoveToActor(Player), EPathFollowingRequestResult::Failed);
+	}
+	Enemy->GetMovementControlComponent()->ReleaseMovementLock(Lock);
+	TestEqual(TEXT("A persistent configuration issue warns again after five seconds"), Controller->ARMoveToActor(Player), EPathFollowingRequestResult::Failed);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARStatusTenacityRefreshTest,
 	"AR.Foundation.Status.TenacityAndRefresh",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

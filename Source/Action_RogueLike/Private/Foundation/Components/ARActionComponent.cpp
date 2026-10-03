@@ -5,6 +5,7 @@
 #include "Foundation/Components/ARStaggerComponent.h"
 #include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Core/ARLogChannels.h"
+#include "Foundation/Actions/ARLifetimeTimer.h"
 
 UARActionComponent::UARActionComponent()
 {
@@ -22,6 +23,7 @@ void UARActionComponent::BeginPlay()
 
 void UARActionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	bEndingPlay = true;
 	CancelAllActions(EARActionCancelReason::Manual);
 	Super::EndPlay(EndPlayReason);
 }
@@ -29,7 +31,7 @@ void UARActionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 FARRequestStatus UARActionComponent::CanStartAction(const FARActionRequest& Request) const
 {
 	FARRequestStatus Status;
-	if (!GetOwner())
+	if (bEndingPlay || !IsValid(GetOwner()) || GetOwner()->IsActorBeingDestroyed())
 	{
 		Status.Result = EARRequestResult::InvalidOwner;
 		return Status;
@@ -237,15 +239,16 @@ bool UARActionComponent::RegisterActionHitbox(FARActionHandle Handle, AActor* Hi
 FARStatModifierHandle UARActionComponent::ApplyActionStatModifier(FARActionHandle Handle, const FARStatModifierSpec& Spec, bool& bSuccess)
 {
 	bSuccess = false;
-	FARActiveAction* Action = FindActiveAction(Handle);
-	if (!Action || !StatsComponent)
+	if (!FindActiveAction(Handle) || !IsValid(StatsComponent))
 	{
 		return FARStatModifierHandle();
 	}
+	// Record ownership before stat events can cancel this action or grow ActiveActions.
+	const UARStatsComponent::FScopedNotifications Notifications(StatsComponent);
 	FARStatModifierHandle Modifier = StatsComponent->AddStatModifier(Spec, bSuccess);
 	if (bSuccess)
 	{
-		Action->StatModifiers.Add(Modifier);
+		if (FARActiveAction* Action = FindActiveAction(Handle)) Action->StatModifiers.Add(Modifier);
 	}
 	return Modifier;
 }
@@ -309,6 +312,8 @@ const FARActiveAction* UARActionComponent::FindActiveAction(FARActionHandle Hand
 
 void UARActionComponent::CleanupAction(FARActiveAction& Action)
 {
+	ARLifetimeTimer::Clear(GetWorld(), Action.TimerHandles);
+	const UARStatsComponent::FScopedNotifications Notifications(StatsComponent);
 	if (StatsComponent)
 	{
 		for (const FARStatModifierHandle& Modifier : Action.StatModifiers)
@@ -344,6 +349,19 @@ void UARActionComponent::CleanupAction(FARActiveAction& Action)
 			Hitbox->Destroy();
 		}
 	}
+}
+
+FTimerHandle UARActionComponent::SetActionTimerByEvent(FARActionHandle ActionHandle, FTimerDynamicDelegate Event,
+	float Time, bool bLooping, bool& bSuccess, float InitialStartDelay, bool bMaxOncePerFrame)
+{
+	bSuccess = false;
+	FARActiveAction* Action = !bEndingPlay && IsValid(GetOwner()) && !GetOwner()->IsActorBeingDestroyed()
+		? FindActiveAction(ActionHandle) : nullptr;
+	if (!Action) return FTimerHandle();
+	const TWeakObjectPtr<UARActionComponent> WeakOwner(this);
+	return ARLifetimeTimer::Start(this, Event, Time, bLooping, InitialStartDelay, bMaxOncePerFrame,
+		[WeakOwner, ActionHandle]() { return WeakOwner.IsValid() && WeakOwner->IsActionActive(ActionHandle); },
+		Action->TimerHandles, bSuccess);
 }
 
 bool UARActionComponent::ShouldCancelForReason(const FARActiveAction& Action, EARActionCancelReason Reason) const

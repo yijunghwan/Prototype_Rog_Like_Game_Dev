@@ -18,11 +18,11 @@ PAGES = [
     ('common', 'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html', '피해·회복', '직접 피해·DOT·실드·회복·계산 공식'),
     ('common', 'common/CC_STAGGER_GUIDE_KO.html', 'CC·경직', '기절·속박·경직·강인함·면역'),
     ('item', 'nsh/ITEM_ASSET_CREATION_GUIDE_KO.html', '데이터 에셋', '아이템 DA 항목·타입·스킬 정의'),
-    ('item', 'nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html', '런타임 기본', '등록·해제·소유자·효과·픽업 연결'),
-    ('item', 'nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html', '아이템 스킬', '사전 조건·실행 이벤트·대기·취소·종료'),
+    ('item', 'nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html', '런타임 기본', '등록·해제·아이템 타이머·효과·픽업 연결'),
+    ('item', 'nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html', '아이템 스킬', '사전 조건·실행·액션 타이머·취소·종료'),
     ('enemy', 'hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html', '적 전체 가이드', '기본 설정·대상·그로기·사망·실드 이벤트'),
     ('enemy', 'hhc/ENEMY_MOVEMENT_GUIDE_KO.html', '적 이동', 'NavMesh 만들기·컨트롤러·추적·정지'),
-    ('enemy', 'hhc/ENEMY_ACTION_GUIDE_KO.html', '적 액션', '직접 액션 시작·선딜·공격·취소·종료'),
+    ('enemy', 'hhc/ENEMY_ACTION_GUIDE_KO.html', '적 액션', '직접 액션 시작·공격 타이머·취소·종료'),
     ('environment', 'environment/ENEMY_SPAWN_GUIDE_KO.html', '적 스폰', '적 클래스 생성·확률·가중치·실패 처리'),
     ('environment', 'environment/ITEM_SEARCH_GUIDE_KO.html', '아이템 검색', 'DA 검색·소유 제외·중복 없이 N개 추첨'),
     ('environment', 'environment/ITEM_PICKUP_SPAWN_GUIDE_KO.html', '픽업 소환', 'DA 결과→픽업 생성·여러 외형 선택'),
@@ -56,7 +56,36 @@ def chapter(key, title, body, opened=False):
 
 def cleanup(kind):
     event = 'On Item Skill Cancelled' if kind == 'item' else 'On Action Cancelled'
-    return note(f'<strong>취소 후 직접 정리할 것:</strong> 경직·기절 등으로 실제 액션이 취소되면 시스템이 액션 생명주기와 액션 귀속 자원을 처리합니다. 하지만 <code>Set Timer by Event</code>로 만든 별도 타이머·독립 Actor·공격 Bool·연출까지 자동 회수하지는 않습니다. <code>{event}</code>에서 해당 실행의 핸들을 확인한 뒤, 저장한 Timer Handle을 <code>Clear and Invalidate Timer by Handle</code>에 연결하고 자체 상태를 정리하세요. 모든 경직이 무조건 취소를 일으키지는 않습니다. <code>Action Delay</code> 내부 대기는 자동 정리되며, 정상 완료의 자체 정리는 별도 완료 경로에서 처리합니다.')
+    item_note=' 아이템 타이머는 스킬 취소만으로 멈추지 않고 아이템 해제 때 정리됩니다.' if kind=='item' else ''
+    return note(f'<strong>취소 후 직접 정리할 것:</strong> 경직·기절 등으로 실제 액션이 취소되면 시스템이 액션 생명주기와 액션 귀속 자원을 처리합니다. <code>Set Action Timer by Event</code>와 <code>Action Delay</code>는 자동 정리됩니다. 일반 <code>Set Timer by Event</code>·독립 Actor·공격 Bool·연출은 별도 정리가 필요합니다. <code>{event}</code>에서 해당 실행 핸들을 확인한 뒤 일반 Timer Handle을 <code>Clear and Invalidate Timer by Handle</code>에 연결하고 자체 상태를 정리하세요.{item_note} 모든 경직이 무조건 취소를 일으키지는 않습니다.')
+
+def managed_timers(context='all'):
+    shared=pins([('Event','매개변수 없는 Custom Event 또는 Create Event를 연결합니다. 콜백 안에서 자기 액션 종료/아이템 해제도 가능합니다.'),('Time','양수인 실행 간격(초). 0·음수·비유한 값은 실패. Looping=false면 이 시간 뒤 한 번 실행합니다.'),('Looping','반복 여부. false는 1회 예약, true는 정리될 때까지 반복합니다.'),('Success / Return Value','예약 성공 Bool / 실제 Timer Handle. Pause Timer by Handle·Unpause Timer by Handle·Clear and Invalidate Timer by Handle 등 기존 엔진 노드에 연결합니다.'),('Initial Start Delay · 고급','기본 -1은 첫 실행도 Time 뒤. 0은 다음 Timer Manager 처리 때, 양수는 지정 초 뒤 첫 실행합니다. -1 외 음수는 실패.'),('Max Once Per Frame · 고급','기본 true. 프레임 지연 시 밀린 반복을 같은 프레임에 여러 번 호출하지 않습니다. false면 엔진의 따라잡기 실행을 허용합니다.')])
+    action=node('set-action-timer','Set Action Timer by Event','스킬·적 공격의 선딜, 후딜, 반복 실행은 이 노드를 우선 사용하세요. 한 액션 실행에 예약을 귀속하여 정상 End Action·실제 Cancel·소유 Actor EndPlay 때 자동 Clear합니다.',pins([('Target','Get Action Component에서 받은 AR Action Component. 아이템에서는 Get Item Owner → Get Action Component.'),('Action Handle','Execute Item Skill 또는 Try Start Action에서 받은 이번 실행의 핸들. 무효/다른 관리자 핸들은 실패.')])+shared)
+    item=node('set-item-timer','Set Item Timer by Event','무기·유물 보유 중 주기 효과 또는 1회 지연 호출은 이 노드를 우선 사용하세요. 버림·교체·소유자 EndPlay로 아이템이 해제되면 자동 Clear합니다.',pins([('Target','등록된 ARLoadoutItemInstance 런타임 Self. 적 Actor·픽업 Actor·소모품 런타임에 놓는 노드가 아닙니다.'),('액션과 차이','스킬 취소만으로는 멈추지 않습니다. 스킬 선딜/반복 공격에는 액션 타이머를 사용하세요.'),('해제 이벤트 순서','아이템 타이머는 On Item Unregistered 호출 전에 제거됩니다. 해제 이벤트에서 새 아이템 타이머를 시작할 수 없습니다.')])+shared)
+    selection='<p>먼저 <strong>어느 수명이 끝날 때 예약도 없어져야 하는지</strong> 선택합니다. 새 아이템·공격 그래프에서 일반 Set Timer by Event를 기본으로 쓰지 말고, 아래 귀속 노드를 사용하세요.</p>'
+    if context=='enemy':
+        selection+='<p>적 공격에는 액션 타이머를 사용합니다. Set Item Timer by Event는 아이템 런타임 전용이라 적 Self에는 사용할 수 없습니다. 적의 상시 AI 판단 루프는 공격 액션과 분리합니다.</p>'
+    else:
+        selection+=pins([('스킬/적 공격이 끝나면 중단','Set Action Timer by Event. 보유 중 효과와 구분합니다.'),('무기/유물을 버리면 중단','Set Item Timer by Event. 스킬 취소 중에도 보유 효과를 계속할 때 사용합니다.'),('스포너·상시 AI·독립 Actor','일반 엔진 Timer를 사용하고 Actor EndPlay 등에서 직접 Clear합니다. 수명 관리를 위해 가짜 공격 액션을 만들지 않습니다.')])
+    flow=('<div class="flow">적: Try Start Action → Status 성공 → 이번 Action Handle 저장<br>Get Action Component → Set Action Timer by Event(Action Handle, Event, Time, Looping=false)<br>예약 Success → 대기 / 예약 실패 → End Action과 자체 상태 정리<br>Event 콜백 → 대상 유효성·공격 조건 확인 → 판정 → End Action</div>' if context=='enemy' else
+          '<div class="flow">보유 효과: On Item Registered → Set Item Timer by Event(Target=Self) → Success 확인<br>스킬: Execute Item Skill → 받은 Action Handle 저장 → Set Action Timer by Event → Success 확인<br>Event 콜백 → 대상/콘텐츠 조건 확인 → 효과 처리 → 스킬 완료라면 End Action</div>')
+    return chapter('managed-timers','권장 타이머 · 수명 선택과 연결',selection+action+(item if context!='enemy' else '')+flow+
+        node('timer-callback','Event 콜백 · 완료와 취소의 차이','흰 실행 출력은 예약 직후이지 시간이 지난 출력이 아닙니다. 실제 효과는 Event에 연결한 Custom Event 안에서 실행합니다.',pins([('매개변수','Event는 입력 핀이 없는 Custom Event / Create Event입니다. 액션 핸들·대상은 실행별 상태에 저장해 콜백에서 읽습니다.'),('정상 완료','1회 호출이 끝나도 액션이 자동 종료되지는 않습니다. 마지막 효과 뒤 같은 관리자·핸들로 End Action. 실패 출구도 종료합니다.'),('자동 취소/해제','타이머에는 Cancelled 출력이 없습니다. On Item Skill Cancelled / On Action Cancelled / On Item Unregistered에서 자체 변수·연출·구독을 정리합니다.'),('콜백의 대상','귀속 수명과 별개로 대상 Actor가 삭제되거나 사망할 수 있습니다. Is Valid·사망·거리 등 콘텐츠 조건을 다시 확인합니다.'),('동시 실행','하나의 저장 변수로 이전 실행 핸들을 덮어쓰지 마세요. 중복 실행을 막거나 실행별 상태를 구분해야 합니다.')]),'연결 규칙')+
+        node('timer-pitfalls','중복 예약·Pause·이미 적용한 효과','전용 타이머는 예약의 수명만 관리합니다. 콘텐츠의 모든 상태를 자동 되돌리는 기능은 아닙니다.',pins([('중복 예약','호출마다 독립된 Timer가 생깁니다. 같은 Event를 넣어도 덮어쓰지 않습니다. Tick마다 시작하지 말고 등록/실행 시 한 번 시작하거나 Does Timer Exist by Handle 등으로 중복을 막습니다.'),('Pause / Unpause / Clear','Return Value를 Timer Handle 변수에 저장해 엔진 노드에 연결합니다. Pause는 남은 시간을 보존하며, 수명이 끝나면 일시정지 중이어도 제거됩니다. Clear한 타이머는 Unpause로 되살릴 수 없습니다.'),('CC와 취소 규칙','경직/기절 자체가 모든 타이머를 중단시키지는 않습니다. 해당 Action이 실제 취소되어야 액션 타이머가 제거됩니다. 아이템 보유 타이머는 별개입니다.'),('기존 일반 Timer','새 노드로 자동 전환되지 않습니다. 일반 Timer는 직접 Clear하거나 원하는 귀속 노드로 교체해야 합니다.'),('이미 적용한 효과','일반 스탯 보정·독립 투사체·등록한 DOT·Bool·구독은 타이머 Clear만으로 사라지지 않습니다. 각각의 귀속/제거 정책을 따릅니다.'),('단순 1회 대기','Looping=false로 한 번 예약할 수 있습니다. 순차 실행과 Completed/Cancelled 분기가 필요한 액션 대기는 Action Delay도 사용할 수 있습니다. 일반 Delay에는 귀속 수명이 없습니다.')]),'주의점'))
+
+def refresh_cleanup(text, kind):
+    return re.sub(r'<p class="note[^\"]*"><strong>취소 후 직접 정리할 것:</strong>.*?</p>',lambda _: cleanup(kind),text,flags=re.S)
+
+def add_managed_timers(text, context='all'):
+    if 'managed-timers' in DetailBlocks(text).blocks:
+        text=replace_block(text,'managed-timers','')
+    # Place the working reference before existing chapters, not after the checklist.
+    pos=text.index('<details class="chapter"')
+    text=text[:pos]+managed_timers(context)+text[pos:]
+    if 'href="#managed-timers"' not in text:
+        text=re.sub(r'(<nav (?:class="local-toc"[^>]*|aria-label="목차")>\s*<div class="wrap">)',r'\1<a href="#managed-timers">권장 타이머</a>',text,count=1)
+    return text
 
 def navigation(path, category):
     home = rel(path, GUIDES/'index.html')
@@ -72,7 +101,7 @@ def page(url, category, title, lead, sections, sources=()):
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} · Action RogueLike</title><link rel="stylesheet" href="{rel(path,GUIDES/'assets/guide.css')}"></head>
 <body data-guide-ui="shared"><!-- GUIDE PORTAL START -->{navigation(path,category)}<!-- GUIDE PORTAL END -->
-<header><div class="wrap"><div class="eyebrow">Action RogueLike · 개발자 참고서 · 2026-10-03</div><h1>{title}</h1><p class="lead">{lead}</p><p class="guide-contract">노드의 용도 → 연결 대상 → 입력·출력 → 정리 책임 순서로 확인합니다. 구조체는 설명 아래에서 펼쳐 보거나 Blueprint의 Split Struct Pin / Make 노드로 연결할 수 있습니다.</p></div></header>
+<header><div class="wrap"><div class="eyebrow">Action RogueLike · 개발자 참고서 · 2026-10-04</div><h1>{title}</h1><p class="lead">{lead}</p><p class="guide-contract">노드의 용도 → 연결 대상 → 입력·출력 → 정리 책임 순서로 확인합니다. 구조체는 설명 아래에서 펼쳐 보거나 Blueprint의 Split Struct Pin / Make 노드로 연결할 수 있습니다.</p></div></header>
 <nav class="local-toc" aria-label="이 문서 목차"><div class="wrap">{toc}</div></nav>
 <main class="wrap"><div class="guide-tools"><label for="node-search">노드·내용 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 핀, 증상…" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button><button id="expand-all" type="button">모두 펼치기</button><button id="collapse-all" type="button">모두 접기</button></div><p id="search-result" class="search-result" role="status" aria-live="polite"></p>
 {''.join(html for _,_,html in sections)}
@@ -125,6 +154,7 @@ def build_priority():
 
 def build_lifecycle():
     s=[]
+    s.append(('managed-timers','귀속 타이머',managed_timers()))
     s.append(('contract','기본 계약',chapter('contract','시작 경로·핸들·정상 종료',pins([
         ('아이템 스킬','Execute Item Skill에 도달했다면 시스템이 이미 액션을 시작하고 DA 비용·쿨타임을 처리했습니다. 받은 Action Handle을 사용하고 동일 액션을 다시 시작하지 않습니다.'),('적의 직접 액션','Get Action Component → Try Start Action → Status 성공 확인 → Return Value 핸들 저장. 비용·쿨타임·패턴 조건은 적 콘텐츠 책임입니다.'),('정상 완료','같은 Action Component의 End Action에 이번 Action Handle을 전달합니다. 완료/빗나감/생성 실패 등 모든 출구에 종료 책임을 둡니다.'),('식별값','Action Component는 관리자 참조, Action Handle은 한 실행의 식별값입니다. Skill Id / Timer Handle / Stat Modifier Handle과 대체할 수 없습니다.')]),True)))
     s.append(('owned-resources','자동 정리',chapter('owned-resources','자동 정리와 직접 정리의 경계',
@@ -132,14 +162,16 @@ def build_lifecycle():
     s.append(('cancel-events','취소 이벤트',chapter('cancel-events','취소 이벤트 · 용도 아래에 정리 연결',
         node('item-cancelled','On Item Skill Cancelled','아이템 런타임에서 실제 실행했던 자기 스킬이 취소됐을 때 받습니다. 직접 이벤트이며 별도 Bind가 필요 없습니다.',cleanup('item')+pins([('Skill Id','취소된 아이템 내부 스킬. Switch on Name으로 정리 분기.'),('Action Handle','취소된 특정 실행. 저장 핸들과 비교해 오래된 콜백이 새 실행을 지우지 않게 합니다.'),('Reason','Stagger / Stun / ItemRemoved / Death / Manual 등 실제 취소 사유.')])+note('정상 End Action·사전 검사 실패·실행 전 거래 롤백에는 이 스킬 취소 알림이 오지 않습니다. 이미 취소된 액션을 다시 End Action하지 않습니다.'),'아이템 직접 이벤트')+
         node('character-cancelled','On Action Cancelled','ARBaseCharacter 자식(적/플레이어)에서 자기 행동 취소를 직접 받습니다. 일반 Actor는 보유한 Action Component의 디스패처를 구독해야 합니다.',cleanup('enemy')+pins([('Action Handle','관리자가 취소한 실행. 자기 공격 핸들과 비교합니다.'),('Reason','취소 사유. 특정 사유만 정리할지 정책을 정하되 모든 실제 취소 경로에 필요한 정리를 빠뜨리지 않습니다.')])+note('한 처리에 직접 이벤트와 Bind를 중복 연결하지 않습니다. Action Delay.Cancelled에도 같은 정리를 연결했다면 중복 호출돼도 안전하게 구성합니다.'),'캐릭터 직접 이벤트'))))
-    s.append(('timer-cleanup','타이머 정리',chapter('timer-cleanup','별도 Timer를 쓸 때 연결 순서',node('clear-timer','Clear and Invalidate Timer by Handle','예약된 Timer를 제거하고 보관한 핸들을 무효화합니다. Pause처럼 재개를 위해 보존하는 동작이 아닙니다.',pins([('Handle','Set Timer by Event의 Return Value를 저장한 Timer Handle 변수. Action Handle을 넣는 곳이 아닙니다.')])+ '<div class="flow">시작: Set Timer by Event → Return Value를 Timer Handle 변수에 저장<br>취소 이벤트: 실행 핸들 비교 → Clear and Invalidate Timer by Handle → 자체 상태 초기화<br>콜백: 대상 Is Valid + Is Action Active 검사 → 후속 효과</div>'+note('Pause / Unpause는 기존 타이머를 보존·재개할 때 사용합니다. 취소된 스킬의 늦은 공격을 막으려면 Clear합니다. Clear한 Timer는 Unpause로 되살릴 수 없습니다. 판단 루프용 Timer와 공격용 Timer를 구분하세요.')+'<p>아이템은 On Item Unregistered, Actor는 Event EndPlay에서도 필요한 자체 정리를 처리합니다. 정상 완료에서는 Timer의 반복 여부에 따라 직접 Clear하고 End Action을 호출합니다.</p>','언리얼 기본'))))
-    s.append(('delay','권장 대기',chapter('delay','액션 대기는 Action Delay 우선',node('action-delay','Action Delay','선딜·후딜이 액션 수명에 묶여야 한다면 일반 Delay/Timer보다 간편합니다.',pins([('Action Component / Action Handle','이번 실행의 같은 관리자와 활성 핸들.'),('Duration','초 단위 대기 시간.'),('Completed','시간을 채운 후 효과/판정/다음 단계. 여기서 정상 End Action까지 이어갑니다.'),('Cancelled','대기 중 End/Cancel 또는 무효 요청. 공격하지 않고 자체 정리만 수행합니다.')])+note('상단 즉시 실행 출력은 대기를 마친 출력이 아닙니다. Action Delay의 Cancelled는 정상 End에서도 올 수 있으므로 취소 사유가 필요하면 실제 취소 이벤트를 사용하세요.')))))
+    s.append(('timer-cleanup','일반 Timer 예외',chapter('timer-cleanup','일반 엔진 Timer가 필요한 예외·조기 제거',node('clear-timer','Clear and Invalidate Timer by Handle','기존 일반 Timer의 수동 정리, 귀속 Timer를 수명보다 먼저 끝내려는 경우에 사용합니다. 새 스킬·아이템은 위의 전용 Timer를 우선 사용하세요.',pins([('Handle','각 Set Timer 노드의 Return Value를 저장한 Timer Handle 변수. Action Handle을 넣는 곳이 아닙니다.')])+'<div class="flow">상시 AI/스포너: BeginPlay → 일반 Set Timer by Event → Timer Handle 저장<br>Actor EndPlay → Clear and Invalidate Timer by Handle<br>기존 일반 공격 Timer: 실제 취소 이벤트 → 실행 핸들 비교 → Clear → 자체 상태 초기화</div>'+note('Pause / Unpause는 남은 시간을 보존·재개할 때 사용합니다. Clear한 Timer는 Unpause로 되살릴 수 없습니다. 전용 Timer는 액션 종료/아이템 해제로 자동 제거되므로 그 목적으로 수동 Clear를 중복 작성할 필요는 없습니다. 변수·연출 정리는 별개입니다.')+'<p>AI 전체 판단·웨이브 루프를 한 공격의 액션 핸들에 묶으면 공격이 끝날 때 판단도 멈춥니다. 공격용 예약만 액션 Timer로 분리하세요.</p>','언리얼 기본'))))
+    s.append(('delay','순차 대기 옵션',chapter('delay','Action Delay · 순차 실행 분기가 필요할 때',node('action-delay','Action Delay','한 번 기다린 뒤 실행선을 이어가고 Completed/Cancelled로 분기하려면 사용할 수 있는 액션 귀속 대기입니다. 반복 콜백은 Set Action Timer by Event를 사용하세요.',pins([('Action Component / Action Handle','이번 실행의 같은 관리자와 활성 핸들.'),('Duration','초 단위 대기 시간.'),('Completed','시간을 채운 후 효과/판정/다음 단계. 여기서 정상 End Action까지 이어갑니다.'),('Cancelled','대기 중 End/Cancel 또는 무효 요청. 공격하지 않고 자체 정리만 수행합니다.')])+note('상단 즉시 실행 출력은 대기를 마친 출력이 아닙니다. Action Delay의 Cancelled는 정상 End에서도 올 수 있으므로 취소 사유가 필요하면 실제 취소 이벤트를 사용하세요.')))))
     s.append(('rules','취소 규칙',chapter('rules','Cancel Rules · 종료와 강제 취소 구분',pins([
         ('Cancel On Stagger / Cancel On Stun','기본 true. 해당 사유의 취소 요청을 받았을 때 현재 액션을 취소하도록 합니다. 꺼져 있다면 경직/기절이 생겨도 해당 이유로 이 액션이 자동 취소되지는 않을 수 있습니다.'),('Cancel On Roll / Cancel On Basic Movement Input','기본 false. 액션별 중단 정책을 설정합니다.'),('Cancel Action','특정 핸들을 직접 취소. 자동 사유 규칙과 별개의 명시적 요청입니다.'),('End Action','정상 종료 알림. 취소 이벤트를 대신 발생시키는 노드가 아닙니다.'),('시간만 끝내고 종료하지 않은 경우','일반 타이머 완료나 Action Delay.Completed만으로 액션이 끝나지 않습니다. End Action을 연결해야 합니다.')])+'<p><a href="../hhc/ENEMY_ACTION_GUIDE_KO.html#action-request">적의 Action Request 입력</a> · <a href="../nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html#cancel">아이템 액션 설정</a></p>')))
     save('precautions/ACTION_LIFECYCLE_GUIDE_KO.html',page('precautions/ACTION_LIFECYCLE_GUIDE_KO.html','precautions','액션 핸들·생명주기·정리 책임','아이템과 적이 공유하는 종료 계약입니다. 취소 이벤트의 용도 바로 아래에서 자체 타이머 정리까지 확인할 수 있습니다.',s,[(ACTION,'액션 API'),(ITEM,'아이템 취소 이벤트'),('Source/Action_RogueLike/Private/Foundation/Actions/ARAsyncActionDelay.cpp','액션 대기')]))
 
 def build_stat_lifecycle():
     s=[]
+    s.append(('notifications','변경 알림 안전성',chapter('notifications','스탯 변경 이벤트 안에서 다시 변경할 때',
+        '<p>스탯 적용·제거는 최종값 캐시와 귀속 핸들 등록을 끝낸 뒤 변경 알림을 보냅니다. 묶음 제거는 관련 스탯 최종값을 모두 갱신한 상태에서 알림을 전달합니다.</p><p>알림 콜백에서 다시 적용·제거하면 데이터는 즉시 바뀌지만, 추가 알림은 현재 알림 전달 이후 순서대로 처리됩니다. 같은 처리에서 대기 중인 동일 스탯/출처 알림은 합쳐질 수 있습니다. 이벤트 개수를 적용 횟수나 스택 수로 사용하지 말고 조회 노드로 확인하세요.</p>'+note('한 콜백이 같은 값을 계속 변경해 자기 이벤트를 무한 유발하면 처리 예산 경고를 기록하고 남은 알림은 다음 틱으로 넘깁니다. 재귀·한 프레임 무한 반복 방지 장치이지 잘못된 콘텐츠 로직의 자동 수정은 아닙니다. 콜백 안에서 즉시 제거된 효과의 반환 핸들은 이미 비활성일 수 있습니다.'))))
     s.append(('choose','노드 선택',chapter('choose','어디까지 유지할지 먼저 선택',
         '<div class="scroll"><table><thead><tr><th>의도</th><th>권장 노드</th><th>Target / 수명</th></tr></thead><tbody><tr><td>대상에게 독립 버프·스택</td><td>Apply Stat Modifier</td><td>Actor / 시간·명시적 제거·대상 수명</td></tr><tr><td>아이템 버리면 사라질 효과</td><td>Apply Item Stat Modifier</td><td>런타임 Self / 시간 또는 아이템 해제</td></tr><tr><td>행동 끝나면 사라질 효과</td><td>Apply Action Stat Modifier</td><td>Action Component + Action Handle / 시간 또는 End·Cancel</td></tr><tr><td>버프 없이 기본값 증가·감소</td><td>Apply Stat Modifier · Permanent Flat</td><td>Actor / 기본값 자체 변경, 제거 핸들 없음</td></tr></tbody></table></div>'+note('위 세 적용 노드는 생명주기가 달라 중복이 아닙니다. Blueprint 작성 위치가 아이템 내부라는 이유만으로 일반 노드가 아이템 귀속으로 바뀌지 않습니다. Duration=-1도 아이템/액션 해제를 무시하지 않습니다.'),True)))
     apply_body=pins([('Target','일반 노드는 실제 대상 Actor. 아이템에서는 Get Item Owner, 픽업에서는 실제 Interactor를 전달합니다.'),('Spec','스탯·연산·값·시간·출처·스택·HUD 설정 구조체. 아래에서 필드별로 펼칩니다.'),('Success','요청 성공 Bool. 실패면 효과가 생겼다고 간주하지 않습니다.'),('Return Value','일반 임시 효과의 Stat Modifier Handle. 성공했을 때 저장해 정확한 조기 제거에 사용합니다. Permanent Flat 성공은 빈 핸들입니다.')])
@@ -202,6 +234,9 @@ def build_movement_checklist():
         '<p>AR 경로/일반 이동 요청은 공통 Can Basic Move를 검사하여 사망·기절·경직·이동 잠금 중인 요청을 거절합니다. ARAIController는 이동 잠금 발생 시 진행 중 경로도 정지시킵니다.</p>'+note('CC가 풀려도 정지시킨 경로가 자동 재개된다고 가정하지 않습니다. AI 판단 루프가 이동 가능·목표 유효성을 다시 확인하고 필요하면 새 요청을 발행해야 합니다.')+pins([('공격 조건','이동 노드가 적의 사거리·쿨타임·타깃 선정까지 판단하지 않습니다.'),('도착 판정','Request Successful은 요청 수락이지 이동 완료가 아닙니다. 공격 전 현재 거리/높이를 다시 확인합니다.'),('정지','AI 경로를 취소하려면 Controller의 Stop Movement. 순간 속도 정지와 경로 요청 정지는 역할이 다릅니다.'),('잠금 해제','자신이 발급받은 이동 잠금만 해제합니다. 다른 상태·액션의 잠금을 전체 Clear하지 않습니다.')]))))
     s.append(('diagnose','안 움직임',chapter('diagnose','안 움직일 때 순서대로 확인',
         '<ol><li>실행선이 실제로 노드까지 오는가? 시작 Tick/Timer/이벤트가 동작하는가?</li><li>적 Get Controller가 유효하고 ARAIController Cast가 성공하는가?</li><li>Goal이 유효한 실제 Pawn/Actor인가? 플레이어 생성 전에 캐시한 빈 참조는 아닌가?</li><li>MoveSpeed&gt;0이고 현재 Can Basic Move가 true인가?</li><li>NavMesh가 바닥에 생성되어 시작/목표까지 연결되는가?</li><li>Capsule·바닥 충돌·이동 평면 제한·물리 시뮬레이션이 충돌하지 않는가?</li><li>경로 반환 Failed / Already At Goal / Request Successful 중 무엇인가?</li><li>공격 종료의 End Action 또는 자체 이동 잠금 해제가 누락됐는가?</li></ol><p><a href="../hhc/ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build">NavMesh 생성 단계</a> · <a href="ACTION_LIFECYCLE_GUIDE_KO.html">액션 수명 점검</a></p>')))
+    s.append(('warnings','개발용 경고',chapter('warnings','출력 로그에서 이동 경고 확인',
+        '<p>개발용 실행에서 AR AI Move To Actor / Location 요청이 실패하면 <strong>출력 로그(Output Log)</strong>의 <code>LogARFoundation</code>에 <code>[AR 이동:원인]</code>, 객체 이름, Controller 이름, 확인할 설정을 표시합니다. 팝업이나 화면 경고가 아니며 이동 결과와 경로를 바꾸지 않습니다.</p>'+pins([
+        ('NoPawn / NoMovementControl','제어 중인 Pawn 또는 Movement Control Component가 없습니다. 빙의·Auto Possess AI·클래스와 컴포넌트를 확인합니다.'),('InvalidGoal / InvalidDestination','Goal Actor가 없거나 제거됨 / 좌표에 유효하지 않은 수치가 있음.'),('NoNavMesh','해당 Agent가 사용할 Navigation Data가 없습니다. Bounds Volume·생성 상태·Agent 설정 확인.'),('StartOffNavMesh / GoalOffNavMesh','현재 위치 또는 목표 위치를 NavMesh에 투영하지 못함. 배치 높이·바닥 충돌·Can Ever Affect Navigation을 점검하되 특정 메시가 원인이라고 확정하는 경고는 아닙니다.'),('MoveFailed','정확한 원인을 확정하지 못한 일반 실패. 경로 연결·필터·이동 컴포넌트 상태 확인.')])+note('같은 Controller의 같은 원인은 최대 5초마다 한 번 안내합니다. 추가 NavMesh 진단도 5초 간격으로 제한합니다. CC·사망·액션 이동 잠금에 의한 정상 거절은 경고하지 않으며 Already At Goal·Request Successful도 경고하지 않습니다. Shipping 빌드에서는 이 진단을 실행하지 않습니다.')+'<p>이 경고는 C++ 이동 요청까지 도달한 경우만 검사합니다. 실행선 미연결, 실패한 Cast, 빈 Target 때문에 노드가 호출되지 않은 상황이나 이동 수락 후의 장기 정체까지 자동 발견하는 기능은 아닙니다.</p>')))
     s.append(('repeat','반복 요청',chapter('repeat','반복 요청·난수·성능 주의',
         '<p>매 Tick마다 새로운 AI 경로를 강제로 재발행하면 불필요한 경로 계산·중단·재시작이 생길 수 있습니다. 타깃 변경·일정 주기·기존 이동 완료/중단 등 재요청 기준을 정하세요. 단, Request Basic Move는 방향 입력 방식이므로 지속 이동에는 반복 입력이 필요합니다.</p>'+note('두 이동 방식을 동시에 계속 호출하거나 공격 중 추적 루프가 경로를 재시작하지 않게 합니다. 공격 거리와 Acceptance Radius는 Capsule 크기 때문에 같지 않을 수 있습니다.'))))
     save('precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html',page('precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html','precautions','적 이동 주의점·진단','이동 상세 문서와 별도로, 제작 중 자주 생기는 연결·CC·경로 오류를 빠르게 점검합니다.',s,[('Source/Action_RogueLike/Private/Foundation/AI/ARAIController.cpp','경로 요청·CC 정지'),('Source/Action_RogueLike/Private/Foundation/Components/ARMovementControlComponent.cpp','일반/액션 이동 검사')]))
@@ -281,7 +316,7 @@ def extract_enemy():
     msections.append(('recovery','CC 이후 재요청',chapter('recovery','CC가 끝난 뒤 추적 재요청',
         '<p>ARAIController는 공통 이동 잠금이 생기면 진행 중 경로를 Stop합니다. 상태가 제거됐다고 중단한 경로가 자동 재개되지는 않습니다. AI 판단 루프에서 대상 유효성·Can Basic Move·공격 여부를 확인하고 다시 요청하세요.</p><p><a href="../precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html">이동 실패 점검표</a> · <a href="ENEMY_ACTION_GUIDE_KO.html">공격 중 이동 잠금</a></p>')))
     save('hhc/ENEMY_MOVEMENT_GUIDE_KO.html',page('hhc/ENEMY_MOVEMENT_GUIDE_KO.html','enemy','적 이동·NavMesh 참고서','장애물 우회 경로 추적과 일반 방향 입력을 구분하고, 컨트롤러·목표·정지·CC 이후 재요청을 연결합니다.',msections,[('Source/Action_RogueLike/Public/Foundation/AI/ARAIController.h','정확한 경로 노드명'),('Source/Action_RogueLike/Private/Foundation/AI/ARAIController.cpp','CC 이동 정지'),('Source/Action_RogueLike/Public/Foundation/Components/ARMovementControlComponent.h','일반/액션 이동')]))
-    asections=[]
+    asections=[('managed-timers','권장 액션 타이머',managed_timers('enemy'))]
     for key,title in [('action','시작·종료'),('delay','선딜·후딜'),('damage','공격·판정'),('cancel','취소·효과')]:
         raw=block(action_source,key)
         if key=='cancel' and '취소 후 직접 정리할 것:' not in raw:
@@ -289,16 +324,16 @@ def extract_enemy():
             first_end=event.index('</p>')+len('</p>')
             raw=replace_block(raw,'action-events',event[:first_end]+cleanup('enemy')+event[first_end:])
         # From Result is the recommended direct-damage path; no old request node duplication.
-        asections.append((key,title,rewrite_links(raw,action_origin,action)))
+        asections.append((key,title,refresh_cleanup(rewrite_links(raw,action_origin,action),'enemy')))
     save('hhc/ENEMY_ACTION_GUIDE_KO.html',page('hhc/ENEMY_ACTION_GUIDE_KO.html','enemy','적 액션·공격 참고서','적이 직접 시작하는 행동의 선딜·공격·취소·종료입니다. 아이템 Execute Item Skill 경로와 비용·쿨타임 책임이 다릅니다.',asections,[(ACTION,'액션 API'),('Source/Action_RogueLike/Public/Foundation/Actions/ARActionTypes.h','Request·취소 규칙'),(COMBAT,'피해·경직')]))
     # Overview keeps the complete workflow and event/groggy/death content, not duplicate pin manuals.
     replacements={
         'movement':('일반 이동 · 상세 문서','ENEMY_MOVEMENT_GUIDE_KO.html#movement','직선 방향 입력, 순간 정지, 이동 잠금·조회. 장애물 우회와는 다른 목적입니다.'),
         'navigation':('경로 이동 · NavMesh','ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build','NavMesh 생성 단계, Get Controller 연결, AR AI Move To Actor/Location의 핀과 재요청.'),
         'action':('액션 시작·종료','ENEMY_ACTION_GUIDE_KO.html#action','직접 Try Start Action에서 성공 핸들을 저장하고 모든 완료 경로를 End Action으로 끝냅니다.'),
-        'delay':('선딜·후딜','ENEMY_ACTION_GUIDE_KO.html#delay','Action Delay.Completed에서 공격합니다. Cancelled는 공격하지 않고 자체 정리로 연결합니다.'),
+        'delay':('공격 타이머·선딜·후딜','ENEMY_ACTION_GUIDE_KO.html#managed-timers','선딜·후딜·반복 공격은 Set Action Timer by Event를 우선 사용합니다. Event 콜백에서 판정하고 마지막에 End Action. 순차 대기 분기가 필요하면 Action Delay도 사용할 수 있습니다.'),
         'damage':('피해·원 판정·히트박스','ENEMY_ACTION_GUIDE_KO.html#damage','공격력 비례 피해, 결과→경직/그로기, 단일/다중 대상 판정과 액션 귀속 Actor.'),
-        'cancel':('경직·기절 취소·자체 정리','ENEMY_ACTION_GUIDE_KO.html#action-events','실제 취소 이벤트에서 자기 핸들을 확인하여 별도 Timer·변수·연출을 정리합니다.'),
+        'cancel':('경직·기절 취소·자체 정리','ENEMY_ACTION_GUIDE_KO.html#action-events','액션 타이머는 실제 취소 때 자동 Clear됩니다. 취소 이벤트에서 자기 핸들을 확인하여 기존 일반 Timer·변수·연출을 정리합니다.'),
         'spawn':('스폰·확률','../environment/ENEMY_SPAWN_GUIDE_KO.html','배치·Spawn Actor·생성 실패, 확률/가중치 선택과 스포너 역할.')}
     for key,(title,href,description) in replacements.items():
         original=replace_block(original,key,chapter(key,title,f'<p>{description}</p><p>{link(href,"상세 노드·연결 방법 보기 →")}</p>'))
@@ -312,7 +347,7 @@ def extract_enemy():
         pos=overview.index('</p>')+len('</p>')
         original=replace_block(original,'direct-events',overview[:pos]+cleanup('enemy')+overview[pos:])
     original=original.replace('2026-10-02 코드 기준','2026-10-03 코드 기준')
-    save('hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html',rewrite_links(original,enemy,enemy))
+    save('hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html',refresh_cleanup(rewrite_links(original,enemy,enemy),'enemy'))
     # Aliases for removed DA-specific anchors resolve to the simple CC node, without a second tutorial.
     cc=GUIDES/'common/CC_STAGGER_GUIDE_KO.html'
     text=cc.read_text(encoding='utf-8')
@@ -336,7 +371,7 @@ def enhance_item():
         # Anonymous details has no indexed id; exact existing end is after three paragraphs.
         end=text.index('</div></details>',pos)+len('</div></details>')
         text=text[:pos]+node('shared-action-notification','직접 시작한 액션·정상 종료 알림이 필요한 경우','아이템 스킬 취소는 위 On Item Skill Cancelled가 가장 간편합니다. 직접 액션/정상 종료의 외부 알림은 별도 책임으로 확인합니다.','<p><a href="../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#cancel-events">액션 알림과 정리 책임 보기</a></p>','추가 참고')+text[end:]
-    save(url,text)
+    save(url,add_managed_timers(refresh_cleanup(text,'item')))
     runtime='nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html'
     text=(GUIDES/runtime).read_text(encoding='utf-8')
     text=text.replace('<h1>유물 런타임 블루프린트 노드 가이드</h1>','<h1>아이템 런타임 기본 참고서</h1>')
@@ -349,7 +384,7 @@ def enhance_item():
         text=text.replace('<a href="#check">','<a href="#pickup-interaction">픽업·상호작용</a><a href="#check">',1)
     if 'STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html#spec' not in text:
         text=text.replace('<h3>먼저 블루프린트에서 펼치는 방법</h3>','<p><a href="../precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html#spec">일반·아이템·액션 노드의 전체 필드와 수명 비교</a></p><h3>먼저 블루프린트에서 펼치는 방법</h3>')
-    save(runtime,text)
+    save(runtime,add_managed_timers(text))
 
 def portal_index():
     path=GUIDES/'index.html'
@@ -422,6 +457,102 @@ def legacy_links():
         text=f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>가이드 위치 변경</title><link rel="stylesheet" href="assets/guide.css"></head><body><main class="guide-legacy"><h1>공통 가이드로 이동했습니다</h1><p>이전 파일 링크와 세부 항목 주소는 새 참고서로 이어집니다.</p><p><a id="destination" href="{href}">새 가이드 열기</a> · <a href="index.html">전체 가이드 메인</a></p></main><script>const target={href!r}+location.hash;document.getElementById('destination').href=target;location.replace(target);</script></body></html>'''
         save(old.relative_to(GUIDES),text)
 
+def update_timer_references():
+    """Keep retained manuals and generated pages consistent with lifetime timers."""
+    replacements={
+        '타이머는 자동 정리 대상이 아닙니다. BP에서 보관한 Timer Handle은 이 이벤트에서 <code>Clear and Invalidate Timer by Handle</code>로 멈추세요.':
+            '<code>Set Item Timer by Event</code>는 이 이벤트 전에 자동 Clear됩니다. 기존 일반 <code>Set Timer by Event</code>만 저장한 Timer Handle을 여기서 직접 Clear하세요. 해제 중에는 새 아이템 타이머를 만들 수 없습니다.',
+        '반복 타이머 해제, 직접 묶은 이벤트 해제, 직접 만든 별도 액터 정리 등에 사용합니다.':
+            '아이템 전용 타이머가 이미 정리된 뒤 자체 상태 초기화, 일반 타이머 해제, 직접 묶은 이벤트 해제, 독립 액터 정리 등에 사용합니다.',
+        '타이머 시작, 이벤트 구독, 초기 변수 설정에 사용합니다.':
+            '보유 중 효과의 Set Item Timer by Event 시작, 이벤트 구독, 초기 변수 설정에 사용합니다. 스킬 예약은 Execute Item Skill에서 액션 타이머로 시작합니다.',
+        '시전이 끝나면 소유자의 Action Component에서 받은 핸들로 <code>End Action</code>을 호출하고, 취소 시 정리가 필요한 타이머·연출은 행동 종료/취소 이벤트에 연결합니다.':
+            '스킬 예약은 <code>Set Action Timer by Event</code>를 사용하고, 시전이 끝나면 같은 Action Component·핸들로 <code>End Action</code>을 호출합니다. 액션 타이머는 종료/취소 때 자동 제거됩니다. 일반 타이머·자체 변수·연출 정리는 취소 이벤트에 연결합니다.',
+        'Switch on Name으로 스킬을 구분하여 자체 타이머·상태·연출을 정리합니다.':
+            'Switch on Name과 실행 핸들로 스킬을 구분하여 자체 상태·연출·기존 일반 타이머를 정리합니다. 액션 타이머는 이미 자동 제거된 상태이며, 보유 중 아이템 타이머는 스킬 취소만으로 제거되지 않습니다.',
+        '<code>On Item Unregistered</code>에서 해당 Timer Handle을 해제했는지.':
+            'Set Item Timer by Event를 썼는지, 정상 아이템 해제 경로인지 확인. 기존 일반 Timer라면 On Item Unregistered에서 직접 Clear했는지 확인.',
+        '저장한 핸들 Get → Action Delay·Apply Action·End Action의 Handle':
+            '저장한 핸들 Get → Set Action Timer by Event·Action Delay·Apply Action·End Action의 Handle',
+        'Event On Item Skill Cancelled → Switch on Name(Skill Id) → 해당 스킬의 Timer Handle Clear → 자체 상태·연출 정리':
+            'Event On Item Skill Cancelled → Switch on Name(Skill Id) + 실행 핸들 비교 → 자체 상태·연출 정리<br>Set Action Timer by Event는 이미 자동 Clear / 기존 일반 Timer만 수동 Clear',
+        '런타임은 자체 타이머·구독·외부 작업·참조를 정리합니다.':
+            'Set Item Timer by Event는 이 이벤트 전에 자동 Clear됩니다. 런타임은 기존 일반 타이머·구독·외부 작업·참조를 정리합니다. 해제 이벤트에서는 새 아이템 예약이 거절됩니다.',
+        '자체 타이머를 썼다면 종료·취소·아이템 해제 시점의 책임을 정합니다. 런타임 해제는 임의의 BP 타이머·외부 Actor를 모두 자동 삭제하는 기능이 아닙니다.':
+            '스킬은 Set Action Timer by Event, 보유 효과는 Set Item Timer by Event를 사용하세요. 귀속 수명이 끝날 때 예약은 자동 정리됩니다. 기존 일반 BP 타이머·외부 Actor·변수·연출은 별도 책임이며, 조기 중단할 때는 저장한 Timer Handle로 Clear할 수 있습니다.',
+        '<tr><td>외부 타이머·이벤트 구독</td><td>아이템 관리 목록에 자동 등록되지 않음</td><td>타이머 Clear, 자신이 Bind한 연결 해제, 늦은 콜백 방어</td></tr>':
+            '<tr><td>Set Action Timer by Event</td><td>해당 액션 End/Cancel/Owner EndPlay</td><td>콜백에서 정상 완료 End Action, 자체 변수·연출 정리</td></tr><tr><td>Set Item Timer by Event</td><td>아이템 해제/교체/정상 소유자 EndPlay</td><td>보유 중 효과용. 스킬 취소만으로 중단되지 않음</td></tr><tr><td>일반 엔진 Timer·이벤트 구독</td><td>액션/아이템 자동 귀속 없음</td><td>일반 Timer Clear, 자신이 Bind한 연결 해제, 늦은 콜백 방어</td></tr>',
+        '외부 타이머·구독·독립 Actor의 수동 정리 책임':
+            '전용 타이머의 귀속 수명·정상 해제 확인. 기존 일반 Timer·구독·독립 Actor는 수동 정리',
+        'Action Delay가 자신의 대기를 정리해도 다른 타이머·연출은 자동으로 정리하지 않습니다.':
+            'Action Delay의 정리는 자신의 대기에 한정됩니다. 액션/아이템 전용 타이머는 각 귀속 수명에 따라 별도로 자동 정리되며, 일반 타이머·연출은 직접 정리합니다.',
+        'Action Delay.Completed가 아니라 즉시 출력 사용, Duration':
+            'Timer 예약 직후 출력에서 공격하지 않았는지 / Action Delay는 Completed 사용 / 시간 핀 확인',
+        '선딜/효과 → End Action':
+            'Set Action Timer by Event → Event 콜백의 판정/효과 → End Action',
+        '일반 Delay나 직접 만든 Timer는 Action Handle을 모릅니다. 경직으로 행동이 취소되어도 예약 콜백이 뒤늦게 공격을 실행하지 않도록 직접 방어해야 합니다.':
+            '새 공격의 예약은 Set Action Timer by Event를 사용하세요. 실제 액션 취소 때 자동 제거됩니다. 기존 일반 Delay / Set Timer by Event는 Action Handle을 모르므로 수동 정리와 콜백 방어가 필요합니다.',
+        '<dt>자체 Timer 사용 시</dt>': '<dt>기존 일반 Timer 사용 시</dt>',
+        '<tr><td>직접 만든 Timer·외부 이벤트 구독</td><td>액션 목록에 자동 등록 안 됨</td><td>Clear / 자신이 Bind한 연결 해제</td></tr>':
+            '<tr><td>Set Action Timer by Event</td><td>액션 종료/취소 시 자동 Clear</td><td>콜백 정상 완료에서 End Action / 변수·연출 별도 정리</td></tr><tr><td>일반 엔진 Timer·외부 이벤트 구독</td><td>액션 자동 귀속 없음</td><td>Clear / 자신이 Bind한 연결 해제</td></tr>',
+        '<tr><td>선딜이 취소되는데 뒤늦게 피해</td><td>일반 Timer/Delay 콜백, 활성 핸들 재검사</td>':
+            '<tr><td>선딜이 취소되는데 뒤늦게 피해</td><td>Set Action Timer by Event로 교체 / 기존 일반 Timer Clear / 실제 취소 규칙 확인</td>',
+        '<tr><td>Set Timer by Event의 Timer Handle</td><td>자동 액션 귀속 없음. 제작자가 Clear</td></tr>':
+            '<tr><td>Set Action Timer by Event</td><td>해당 액션 End/Cancel/Owner EndPlay 때 자동 Clear</td></tr><tr><td>Set Item Timer by Event</td><td>아이템 해제 때 자동 Clear. 스킬 취소만으로는 유지</td></tr><tr><td>일반 Set Timer by Event</td><td>자동 액션/아이템 귀속 없음. 제작자가 Clear</td></tr>',
+    }
+    for category,url,_,_ in PAGES:
+        if url.endswith('BLUEPRINT_NODE_SEARCH_KO.html'): continue
+        text=(GUIDES/url).read_text(encoding='utf-8')
+        text=text.replace('2026-10-03 코드 기준','2026-10-04 코드 기준')
+        for old,new in replacements.items(): text=text.replace(old,new)
+        # Keep alternative Action Delay examples, but mark them as alternatives.
+        if url=='hhc/ENEMY_ACTION_GUIDE_KO.html':
+            text=text.replace('01 선딜 · 후딜 · 액션에 묶인 대기','01 Action Delay · 순차 대기 옵션')
+            text=text.replace('<div class="flow">Try Start Action Success → Set AttackHandle → Action Delay',
+                '<div class="flow">순차 대기 옵션: Try Start Action Success → Set AttackHandle → Action Delay')
+        if url in ('nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html','nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html','hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html'):
+            choice=('적 공격 예약은 Set Action Timer by Event로, 상시 AI 판단 루프는 별도로 구성했는가?' if category=='enemy' else
+                    '스킬에는 Set Action Timer by Event, 보유 중 효과에는 Set Item Timer by Event를 골랐는가?')
+            text=upsert_reference(text,'timer-checklist','타이머 제작 점검',
+                f'<ul><li>{choice}</li><li>Time&gt;0, Event 연결, Success 확인과 예약 실패 출구를 만들었는가?</li><li>일반 흰 실행 출력이 아니라 Event 콜백에서 후속 효과를 실행하는가?</li><li>정상 스킬 완료의 End Action과 취소 이벤트의 변수·연출 정리를 분리했는가?</li><li>중복 예약·실행 핸들 덮어쓰기·삭제된 대상 참조를 막았는가?</li><li>기존 일반 Timer는 해제/EndPlay에서 Clear하는가?</li></ul>')
+        save(url,text)
+
+    # Short cross-links where the timer is not the subject of the page.
+    references={
+        'nsh/ITEM_ASSET_CREATION_GUIDE_KO.html': ('runtime-timing','Runtime에서 시간 작업을 만들 때',
+            '<p>DA의 쿨타임·기본 효과 Duration과 BP 예약은 서로 다릅니다. 보유 주기 효과는 런타임의 <code>On Item Registered → Set Item Timer by Event</code>, 스킬 선딜·반복 효과는 <code>Execute Item Skill → Set Action Timer by Event</code>로 연결하세요. DA에 시간을 적는 것만으로 BP 콜백이 생성되지는 않습니다.</p><p><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers">보유 타이머 핀·등록/해제</a> · <a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html#managed-timers">스킬 타이머 핀·완료/취소</a></p>'),
+        'common/OBJECT_STAT_GUIDE_KO.html': ('stat-timing','시간 만료와 반복 스탯 적용 구분',
+            '<p>스탯 보정의 양수 Duration 만료는 시스템이 처리하므로 제거용 BP 타이머를 따로 만들 필요가 없습니다. 일정 주기로 새 효과를 적용할 때만 예약이 필요합니다. 보유 효과는 <code>Set Item Timer by Event</code>, 한 행동의 효과는 <code>Set Action Timer by Event</code>를 사용하세요. 예약이 정리된다고 일반 보정이나 Permanent Flat 변경까지 되돌아가지는 않습니다.</p><p><a href="../precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html#timer-stat-lifetime">보정과 예약의 수명 차이</a></p>'),
+        'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html': ('damage-timing','예약 공격·주기 회복·DOT 구분',
+            '<p>스킬/적의 선딜·반복 직접 피해·반복 회복은 <code>Set Action Timer by Event</code>, 무기/유물 보유 중 주기 회복은 <code>Set Item Timer by Event</code>를 사용하세요. 실제 피해/회복은 Event 콜백에서 적용하며 마지막 스킬 단계 뒤 End Action을 호출합니다.</p><p>등록한 DOT는 이미 자체 기간·틱 간격을 처리합니다. 틱마다 DOT 등록 노드를 다시 부르는 타이머를 추가하지 마세요. 동일 Damage Name 제한도 피해 요청의 설정이며 별도 BP 타이머가 필요 없습니다. 타이머 제거는 이미 등록한 독립 DOT·실드·보정을 제거하지 않습니다.</p><p><a href="../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers">타이머 핀·수명·콜백 연결</a> · <a href="../precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html">효과 수명과 제거</a></p>'),
+        'precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html': ('timer-stat-lifetime','보정의 수명과 적용 타이머의 수명은 별개',
+            '<p>유한 Duration의 스탯 보정은 시스템이 만료시킵니다. BP 타이머는 앞으로 적용할 효과를 예약할 때만 필요합니다. 보유 중 주기 효과는 Set Item Timer by Event, 스킬 중 효과는 Set Action Timer by Event를 사용하세요.</p><p>예를 들어 아이템 타이머의 콜백에서 일반 Apply Stat Modifier를 호출하면, 버릴 때 다음 호출은 멈추지만 이미 생긴 일반 보정은 남을 수 있습니다. 함께 회수할 효과는 Apply Item Stat Modifier를 사용합니다. 액션도 같은 원칙으로 Apply Action Stat Modifier를 사용합니다. Permanent Flat은 타이머 정리나 아이템 해제로 되돌아가지 않습니다.</p><p><a href="ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers">예약 노드·입력 핀·중복 방지</a></p>'),
+        'hhc/ENEMY_MOVEMENT_GUIDE_KO.html': ('ai-timer-lifetime','상시 AI 판단과 공격 예약을 분리',
+            '<p>상시 추적 판단은 Tick 또는 일반 엔진 Timer로 구성하고, 반복 Timer Handle은 Event EndPlay에서 Clear하세요. 한 공격의 Action Handle에 전체 판단 루프를 묶으면 공격 완료/취소 때 추적 판단까지 멈춥니다.</p><p>선딜·후딜·반복 공격 예약만 <code>Set Action Timer by Event</code>로 구성하세요. CC 후에는 중단된 경로를 판단 루프가 다시 요청해야 합니다. 타이머 실행 여부와 이동 허용 여부는 다르므로 공통 이동 검사와 공격 상태를 유지합니다.</p><p><a href="ENEMY_ACTION_GUIDE_KO.html#managed-timers">적 공격용 타이머 연결</a> · <a href="../precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html#ai-timer-lifetime">판단 루프 주의점</a></p>'),
+        'precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html': ('ai-timer-lifetime','AI 루프와 공격 타이머 점검',
+            '<ul><li>공격 선딜/후딜은 Set Action Timer by Event에 성공한 이번 Action Handle을 연결했는가?</li><li>공격 정상 완료에서 End Action을 호출하고 취소 이벤트에서 자체 Bool·연출을 정리하는가?</li><li>상시 판단 루프를 공격 액션에 묶어 공격 취소 후 판단까지 멈추지 않았는가?</li><li>상시 일반 Timer는 EndPlay에서 Clear하고, CC 해제 후 유효 목표로 경로를 재요청하는가?</li><li>매 Tick에 새 Timer를 만들거나 불필요한 경로 재계산을 반복하지 않는가?</li></ul><p><a href="../hhc/ENEMY_ACTION_GUIDE_KO.html#managed-timers">권장 공격 타이머</a> · <a href="ACTION_LIFECYCLE_GUIDE_KO.html#timer-cleanup">일반 Timer 예외</a></p>'),
+        'environment/ENEMY_SPAWN_GUIDE_KO.html': ('spawner-timing','스포너·웨이브 예약의 수명',
+            '<p>맵의 독립 스포너 Actor는 일반 Set Timer by Event로 시도 주기를 만들고 Return Value를 저장해 EndPlay에서 Clear합니다. 스포너 Self는 아이템 런타임이 아니므로 Set Item Timer by Event를 사용할 수 없습니다. 전체 웨이브를 한 적의 공격 액션에 묶지도 않습니다.</p><p>실제로 한 액션의 일부인 소환 스킬만 Set Action Timer by Event를 사용합니다. 예약 취소는 이미 생성한 적을 자동 삭제하지 않으며, 생성 Actor의 사망/삭제 정책은 별도입니다.</p><p><a href="../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#timer-cleanup">일반 Timer의 정리 예외</a></p>'),
+        'environment/ITEM_PICKUP_SPAWN_GUIDE_KO.html': ('pickup-timing','픽업 Actor와 아이템 타이머 구분',
+            '<p>Set Item Timer by Event는 획득 뒤 등록되는 무기/유물 런타임의 노드입니다. 월드 픽업 Actor Self에서는 사용할 수 없습니다. 픽업의 독립 연출·수명 예약은 엔진 Timer와 EndPlay 정리로 구현합니다. 스킬 중 드롭 예약은 실제 활성 Action Handle이 있을 때 Set Action Timer by Event를 사용합니다. 타이머 Clear만으로 이미 생성한 픽업이 삭제되지는 않습니다.</p><p><a href="../nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers">획득 후 런타임의 권장 타이머</a></p>'),
+    }
+    for url,(key,title,body) in references.items():
+        text=(GUIDES/url).read_text(encoding='utf-8')
+        text=upsert_reference(text,key,title,body)
+        save(url,text)
+
+def upsert_reference(text,key,title,body):
+    section=chapter(key,title,body)
+    if key in DetailBlocks(text).blocks: text=replace_block(text,key,section)
+    else: text=text.replace('</main>',section+'\n</main>')
+    if f'href="#{key}"' not in text:
+        # The stat reference uses a different local navigation; it still gets a
+        # visible entry beside its tools, without changing the stat filters.
+        match=re.search(r'(<nav (?:class="local-toc"[^>]*|aria-label="목차")>\s*<div class="wrap">)',text)
+        if match: text=text[:match.end()]+link('#'+key,title)+text[match.end():]
+        else: text=text.replace('<main',f'<p class="wrap">{link("#"+key,title)}</p><main',1)
+    return text
+
 def main():
     migrate_common()
     build_cc()
@@ -433,6 +564,7 @@ def main():
     extract_enemy()
     enhance_item()
     simplify_damage()
+    update_timer_references()
     from generate_node_search_guide import generate
     generate()
     save('index.html',portal_index())

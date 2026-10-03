@@ -6,6 +6,7 @@
 #include "Foundation/Components/ARStatsComponent.h"
 #include "Foundation/Combat/ARStaggerTypes.h"
 #include "Foundation/Status/ARStatusEffectTypes.h"
+#include "TimerManager.h"
 #include "ARActionComponent.generated.h"
 
 class UARMovementControlComponent;
@@ -24,6 +25,7 @@ struct FARActiveAction
 	UPROPERTY() TArray<FARCCImmunityHandle> CCImmunityHandles;
 	UPROPERTY() TArray<FARMovementLockHandle> MovementLockHandles;
 	UPROPERTY() TArray<TWeakObjectPtr<AActor>> HitboxActors;
+	UPROPERTY() TArray<FTimerHandle> TimerHandles;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FARActionEndedSignature, FARActionHandle, Handle);
@@ -61,6 +63,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Action") FARSuperArmorHandle ApplyActionSuperArmor(FARActionHandle Handle, const FARSuperArmorSpec& Spec, bool& bSuccess);
 	UFUNCTION(BlueprintCallable, Category="AR|Action") FARCCImmunityHandle ApplyActionCCImmunity(FARActionHandle Handle, const FARCCImmunitySpec& Spec, bool& bSuccess);
 
+	/** Clears automatically on normal end, cancellation or owner EndPlay. Does not end the action itself.
+	 * Time must be positive. Initial Start Delay=-1 uses Time; 0 schedules at the next timer-manager update.
+	 * Each call creates an independent timer. Use the returned handle for pause/unpause/clear. */
+	UFUNCTION(BlueprintCallable, Category="AR|Action|Timer", meta=(DisplayName="Set Action Timer by Event", AdvancedDisplay="InitialStartDelay,bMaxOncePerFrame"))
+	FTimerHandle SetActionTimerByEvent(FARActionHandle ActionHandle, UPARAM(DisplayName="Event") FTimerDynamicDelegate Event,
+		float Time, bool bLooping, bool& bSuccess, float InitialStartDelay = -1.0f, bool bMaxOncePerFrame = true);
+
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsActionActive(FARActionHandle Handle) const;
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsRollBlocked() const;
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsBasicMovementBlocked() const;
@@ -81,4 +90,5 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UARMovementControlComponent> MovementComponent;
 	UPROPERTY(Transient) TArray<FARActiveAction> ActiveActions;
 	int64 NextActionSerial = 1;
+	bool bEndingPlay = false;
 };

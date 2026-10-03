@@ -37,6 +37,13 @@ private:
 	void HandleMovementLockChanged(AActor* Target, bool bCanBasicMove, bool bCanMoveAtAll);
 
 	void UnbindMovementControl();
+	void WarnBlockedMoveConfiguration();
+	void WarnFailedMove(const FAIMoveRequest& MoveRequest);
+	void WarnMove(FName Reason, const FString& Message);
+	bool IsWarningDue(FName Reason) const;
+
+	/** Bounded reason keys; repeated requests produce at most one warning per reason / five seconds. */
+	TMap<FName, double> NextMoveWarningTimes;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UARMovementControlComponent> MovementControlComponent;

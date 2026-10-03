@@ -75,7 +75,7 @@
   <h1>아이템 에셋 제작 가이드</h1>
   <p class="lead">무기, 액티브 유물, 패시브 유물, 소모품을 만드는 공통 데이터 에셋과 각 항목의 의미를 현재 프로젝트 코드 기준으로 설명합니다. <strong>정보를 담는 데이터 에셋</strong>과 <strong>실제 동작을 만드는 런타임 블루프린트</strong>를 구분해서 읽으세요.</p>
 </div></header>
-<nav aria-label="목차"><div class="wrap">
+<nav aria-label="목차"><div class="wrap"><a href="#runtime-timing">Runtime에서 시간 작업을 만들 때</a>
   <a href="#start">제작 순서</a><a href="#types">유형별 사용표</a><a href="#identity">Identity</a><a href="#display">Display</a><a href="#stats">Stats</a><a href="#skills">Skills</a><a href="#runtime">Runtime</a><a href="#ui">UI</a><a href="#guarantees">보장 효과</a><a href="#evolution">Evolution</a><a href="#catalog">검색·획득</a><a href="#checks">검증</a>
 </div></nav>
 <main class="wrap"><div class="guide-tools"><label for="node-search">노드·내용 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 필드, 수명…" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button></div><p id="search-result" class="search-result" role="status" aria-live="polite"></p>
@@ -246,8 +246,10 @@
       <li>BP 반복 타이머와 이벤트 바인딩은 해제 이벤트에서 정리하는가? 특히 버린 뒤 다시 줍는 테스트를 했는가?</li>
       <li>새 에셋을 <strong>저장</strong>한 뒤 <code>Validate Item Catalog</code>로 전체 유형·ID·런타임 클래스 오류를 확인했는가?</li>
     </ul>
+    <details class="node" id="authoring-warnings"><summary>제작용 DA 설정 경고 확인</summary><div class="node-body"><p>콘텐츠 브라우저에서 아이템 DA를 우클릭하여 <strong>에셋 작업(Asset Actions) → 에셋 검증(Validate Assets)</strong>을 실행하면 메시지 로그에 <code>[AR 아이템]</code> 경고와 해당 객체 링크를 표시합니다. 저장 시 검증은 에디터의 데이터 검증 설정에 따릅니다.</p><p>지원하지 않는 유형·0 이하 ID·런타임 클래스 누락/추상 클래스/유형에 맞지 않는 부모, 중복 또는 빈 Skill Id, 잘못된 입력·음수/비유한 비용·쿨타임, 아이템 기본 효과의 Permanent Flat을 안내합니다. 소모품 경로에서 무시되는 스킬·기본 효과 배열도 안내합니다.</p><p>이 검사는 경고만 남기며 값을 자동 수정하거나 저장·실행 규칙을 새로 차단하지 않습니다. 검증 결과가 Valid여도 경고 내용을 확인하세요. 다른 에셋과의 ID 중복은 기존 Validate Item Catalog를 사용합니다. 같은 Input Tag·우선순위 공유와 액티브 슬롯 스킬의 빈 Input Tag는 정상 설정일 수 있으므로 그 이유만으로 경고하지 않습니다.</p></div></details>
     <p class="small muted">현재 코드의 데이터 구조를 설명하는 문서입니다. UI 스킨·픽업 스프라이트·공격 판정은 별도 블루프린트/위젯 제작 영역입니다.</p>
   </div></details>
+<details class="chapter" id="runtime-timing"><summary>Runtime에서 시간 작업을 만들 때</summary><div class="chapter-body"><p>DA의 쿨타임·기본 효과 Duration과 BP 예약은 서로 다릅니다. 보유 주기 효과는 런타임의 <code>On Item Registered → Set Item Timer by Event</code>, 스킬 선딜·반복 효과는 <code>Execute Item Skill → Set Action Timer by Event</code>로 연결하세요. DA에 시간을 적는 것만으로 BP 콜백이 생성되지는 않습니다.</p><p><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers">보유 타이머 핀·등록/해제</a> · <a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html#managed-timers">스킬 타이머 핀·완료/취소</a></p></div></details>
 </main>
 <footer><div class="wrap">코드 대조 기준: <code>ARItemDefinition.h</code>, <code>ARItemTypes.h</code>, <code>ARStatsComponent.h</code>, <code>ARLoadoutComponent.cpp</code>, <code>ARConsumableComponent.cpp</code>, <code>ARItemCatalogBlueprintLibrary.cpp</code>. 기존 코드·기획서를 바꾸지 않고 제작 절차를 풀어 쓴 가이드입니다.</div></footer>
 

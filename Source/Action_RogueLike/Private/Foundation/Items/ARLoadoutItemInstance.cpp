@@ -6,6 +6,7 @@
 #include "Foundation/Components/ARStatusEffectComponent.h"
 #include "Foundation/Core/ARLogChannels.h"
 #include "Foundation/Items/ARItemDefinition.h"
+#include "Foundation/Actions/ARLifetimeTimer.h"
 
 UWorld* UARLoadoutItemInstance::GetWorld() const
 {
@@ -21,11 +22,12 @@ void UARLoadoutItemInstance::InitializeInstance(AARPlayerCharacter* InOwner, con
 
 bool UARLoadoutItemInstance::RegisterItem()
 {
-	if (bRegistered || !ItemOwner.IsValid() || !Definition)
+	if (bRegistered || bUnregistering || !ItemOwner.IsValid() || ItemOwner->IsActorBeingDestroyed() || !Definition)
 	{
 		return false;
 	}
 	bRegistered = true;
+	const UARStatsComponent::FScopedNotifications Notifications(ItemOwner->GetStatsComponent());
 	TMap<FName, FARStatModifierHandle> DefaultGroups;
 	for (const FARStatModifierSpec& DefaultSpec : Definition->DefaultStatModifiers)
 	{
@@ -51,15 +53,19 @@ bool UARLoadoutItemInstance::RegisterItem()
 		}
 	}
 	ReceiveItemRegistered();
-	return true;
+	return bRegistered;
 }
 
 void UARLoadoutItemInstance::UnregisterItem(EARItemRemovalReason Reason)
 {
-	if (!bRegistered)
+	if (!bRegistered || bUnregistering)
 	{
 		return;
 	}
+	TGuardValue<bool> UnregisterGuard(bUnregistering, true);
+	bRegistered = false; // Prevent recursive unregister/new effects/timers during cleanup callbacks.
+	ARLifetimeTimer::Clear(GetWorld(), OwnTimerHandles);
+	const UARStatsComponent::FScopedNotifications Notifications(ItemOwner.IsValid() ? ItemOwner->GetStatsComponent() : nullptr);
 	ReceiveItemUnregistered(Reason);
 	if (ItemOwner.IsValid())
 	{
@@ -81,12 +87,12 @@ void UARLoadoutItemInstance::UnregisterItem(EARItemRemovalReason Reason)
 	OwnSuperArmorHandles.Reset();
 	OwnCCImmunityHandles.Reset();
 	RemoveAllOwnItemModifiers();
-	for (const TPair<FGameplayTag, FARItemUIState>& Pair : UIStates)
+	const TMap<FGameplayTag, FARItemUIState> RemovedUIStates = MoveTemp(UIStates);
+	UIStates.Reset();
+	for (const TPair<FGameplayTag, FARItemUIState>& Pair : RemovedUIStates)
 	{
 		OnItemUIStateChanged.Broadcast(InstanceId, Pair.Value, true);
 	}
-	UIStates.Reset();
-	bRegistered = false;
 }
 
 bool UARLoadoutItemInstance::CanExecuteItemSkill_Implementation(FName SkillId, FGameplayTag& FailureTag) const
@@ -107,6 +113,7 @@ FARStatModifierHandle UARLoadoutItemInstance::ApplyItemStatModifier(const FARSta
 	{
 		return FARStatModifierHandle();
 	}
+	const UARStatsComponent::FScopedNotifications Notifications(Stats);
 	FARStatModifierSpec OwnedSpec = Spec;
 	OwnedSpec.Source = MakeOwnedSource(Spec.Source);
 	// Item ownership is tracked by OwnModifierHandles; keep an explicit gameplay Source Id queryable.
@@ -125,26 +132,40 @@ bool UARLoadoutItemInstance::RemoveOwnItemModifier(FARStatModifierHandle Handle)
 	{
 		return false;
 	}
+	// Detach first, so nested cleanup never iterates the same mutable handle list.
+	OwnModifierHandles.Remove(Handle);
 	const bool bRemoved = ItemOwner->GetStatsComponent()->RemoveStatModifier(Handle);
-	if (bRemoved)
-	{
-		OwnModifierHandles.Remove(Handle);
-	}
 	return bRemoved;
 }
 
 int32 UARLoadoutItemInstance::RemoveAllOwnItemModifiers()
 {
 	int32 Removed = 0;
+	const TArray<FARStatModifierHandle> Handles = MoveTemp(OwnModifierHandles);
+	OwnModifierHandles.Reset();
+	const UARStatsComponent::FScopedNotifications Notifications(ItemOwner.IsValid() ? ItemOwner->GetStatsComponent() : nullptr);
 	if (ItemOwner.IsValid())
 	{
-		for (const FARStatModifierHandle& Handle : OwnModifierHandles)
+		for (const FARStatModifierHandle& Handle : Handles)
 		{
 			Removed += ItemOwner->GetStatsComponent()->RemoveStatModifier(Handle) ? 1 : 0;
 		}
 	}
-	OwnModifierHandles.Reset();
 	return Removed;
+}
+
+FTimerHandle UARLoadoutItemInstance::SetItemTimerByEvent(FTimerDynamicDelegate Event, float Time, bool bLooping,
+	bool& bSuccess, float InitialStartDelay, bool bMaxOncePerFrame)
+{
+	bSuccess = false;
+	if (!bRegistered || bUnregistering || !ItemOwner.IsValid() || ItemOwner->IsActorBeingDestroyed()) return FTimerHandle();
+	const TWeakObjectPtr<UARLoadoutItemInstance> WeakOwner(this);
+	return ARLifetimeTimer::Start(this, Event, Time, bLooping, InitialStartDelay, bMaxOncePerFrame,
+		[WeakOwner]()
+		{
+			const AARPlayerCharacter* Owner = WeakOwner.IsValid() ? WeakOwner->GetItemOwner() : nullptr;
+			return WeakOwner.IsValid() && WeakOwner->IsRegistered() && IsValid(Owner) && !Owner->IsActorBeingDestroyed();
+		}, OwnTimerHandles, bSuccess);
 }
 
 FARSuperArmorHandle UARLoadoutItemInstance::ApplyItemSuperArmor(const FARSuperArmorSpec& Spec, bool& bSuccess)
@@ -215,7 +236,7 @@ bool UARLoadoutItemInstance::RemoveOwnItemCCImmunity(FARCCImmunityHandle Handle)
 
 bool UARLoadoutItemInstance::SetItemUIState(FGameplayTag StateId, float CurrentValue, float MaximumValue)
 {
-	if (!Definition || !StateId.IsValid() || !FMath::IsFinite(CurrentValue) || !FMath::IsFinite(MaximumValue))
+	if (!bRegistered || !Definition || !StateId.IsValid() || !FMath::IsFinite(CurrentValue) || !FMath::IsFinite(MaximumValue))
 	{
 		return false;
 	}
@@ -238,7 +259,8 @@ bool UARLoadoutItemInstance::SetItemUIState(FGameplayTag StateId, float CurrentV
 		State.EffectiveDisplayType = EARItemUIStateDisplayType::Number;
 		UE_LOG(LogARItems, Warning, TEXT("SmallStack state %s exceeded six slots and was changed to Number."), *StateId.ToString());
 	}
-	OnItemUIStateChanged.Broadcast(InstanceId, State, false);
+	const FARItemUIState StateSnapshot = State;
+	OnItemUIStateChanged.Broadcast(InstanceId, StateSnapshot, false);
 	return true;
 }
 
