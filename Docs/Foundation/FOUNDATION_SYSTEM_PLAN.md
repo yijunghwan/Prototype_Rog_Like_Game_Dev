@@ -1,8 +1,8 @@
 # 전투 기반 시스템 계획서
 
-> **현행 추가 (2026-10-03):** Money는 플레이어 전용 스탯(기본0)이고 자동 수입·결제·돈 UI는 없다. 일반 Apply Stat Modifier의 Permanent Flat은 대상 기본값에 Value를 직접 더하며 버프 기록/핸들/만료 없음. 성공 시 빈 핸들이므로 Success로 판정한다. 기본 돈 잔액 부족 차감은 실패. 기존 보정 연산과 안전 범위는 유지하며 아이템·액션 귀속/DA 기본 효과에서는 사용하지 않는다. 대상 객체 수명에만 유지하고 자동 저장/새 객체 이전은 없다. [필드 참고](../Guides/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
+> **현행 추가 (2026-10-03):** Money는 플레이어 전용 스탯(기본0)이고 자동 수입·결제·돈 UI는 없다. 일반 Apply Stat Modifier의 Permanent Flat은 대상 기본값에 Value를 직접 더하며 버프 기록/핸들/만료 없음. 성공 시 빈 핸들이므로 Success로 판정한다. 기본 돈 잔액 부족 차감은 실패. 기존 보정 연산과 안전 범위는 유지하며 아이템·액션 귀속/DA 기본 효과에서는 사용하지 않는다. 대상 객체 수명에만 유지하고 자동 저장/새 객체 이전은 없다. [필드 참고](../Guides/common/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
 
-> **현행 보완 (2026-10-02):** 공통 Character의 직접 BP 이벤트 6개(사망·그로기 소진·실드 파괴·피해 적용·액션 취소·상태 제거)를 지원한다. 등장 초기화는 기존 Event BeginPlay. 기존 컴포넌트/Character 디스패처와 중복 처리하지 않는다. 실드 파괴는 총합 양수→0의 피해 또는 명시적 제거만 발생하고 시간 만료·Ignore Shield는 제외한다. Health의 변경 알림 이후 파괴 전이 스냅샷을 전달한다. Restore Health/Mana/Stamina는 현재값을 최대치까지만 더하며 실제 증가량을 반환한다. 최대 스탯 변경·부활·RecoveryPower 자동 배율은 아니다. [직접 이벤트](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events) · [회복 핀 참고](../Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing).
+> **현행 보완 (2026-10-02):** 공통 Character의 직접 BP 이벤트 6개(사망·그로기 소진·실드 파괴·피해 적용·액션 취소·상태 제거)를 지원한다. 등장 초기화는 기존 Event BeginPlay. 기존 컴포넌트/Character 디스패처와 중복 처리하지 않는다. 실드 파괴는 총합 양수→0의 피해 또는 명시적 제거만 발생하고 시간 만료·Ignore Shield는 제외한다. Health의 변경 알림 이후 파괴 전이 스냅샷을 전달한다. Restore Health/Mana/Stamina는 현재값을 최대치까지만 더하며 실제 증가량을 반환한다. 최대 스탯 변경·부활·RecoveryPower 자동 배율은 아니다. [직접 이벤트](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events) · [회복 핀 참고](../Guides/common/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing).
 
 > **현행 보완 (2026-09-30):** 슈퍼아머와 CC 면역은 강인함 숫자와 별도의 핸들 기반 보장 효과다. 슈퍼아머는 경직만 막고 그로기 피해는 받는다. CC 면역은 새 기절·속박 및 Definition에 CC로 표시한 상태의 적용을 시작 전에 차단한다. 이미 걸린 상태는 해제하지 않는다. 아이템·행동 소유 효과는 각 수명 종료 시 자동 회수된다. 자세한 현행 노드는 [아이템 에셋 제작 가이드](../Guides/ITEM_ASSET_CREATION_GUIDE_KO.html)와 실제 C++를 우선한다.
 

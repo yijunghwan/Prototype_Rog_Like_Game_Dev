@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Foundation/Core/ARFoundationTypes.h"
+#include "Foundation/Time/ARTimeSubsystem.h"
 #include "ARActionTypes.generated.h"
 
 USTRUCT(BlueprintType)
@@ -21,6 +22,7 @@ struct ACTION_ROGUELIKE_API FARActionRequest
 	GENERATED_BODY()
 
 	// Actions are identified by their handle, not by a mandatory classification tag.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) EARTimeGroup TimeGroup = EARTimeGroup::World;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) FARActionCancelRules CancelRules;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bBlockRollWhileActive = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite) bool bBlockBasicMovementWhileActive = false;

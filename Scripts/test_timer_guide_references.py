@@ -25,9 +25,13 @@ def main():
         assert ('#managed-timers', True) in Document(GUIDES / url).links, url
         assert 'Set Action Timer by Event' in chapter
         for phrase in ['Time', 'Looping', 'Initial Start Delay', 'Max Once Per Frame',
-                       'Success / Return Value', '예약 직후', '실제 취소', 'End Action',
+                       'Success / Return Value', '예약 직후', '실제 Cancel', 'End Action',
                        '중복 예약', '이미 적용한 효과', 'Cancelled 출력이 없습니다']:
             assert phrase in chapter, (url, phrase)
+        for phrase in ['Time Group', 'World / Player', '기본 World', 'Variance', '기본 0',
+                       '기본 false', '같은 Action Handle', 'Pause Time Group Timer']:
+            assert phrase in chapter, (url, phrase)
+        assert 'Legacy' not in chapter, url
         if '/hhc/' in '/' + url:
             assert 'set-item-timer' not in DetailBlocks(chapter).blocks
             assert '적 Self에는 사용할 수 없습니다' in chapter
@@ -66,6 +70,12 @@ def main():
     catalog = read('common/BLUEPRINT_NODE_SEARCH_KO.html')
     assert '../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers' in catalog
     assert '../nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers' in catalog
+    time = read('precautions/TIME_GROUP_GUIDE_KO.html')
+    assert '모두 World로 맞추는 것을 권장' in time
+    assert '플레이어 측 무기·유물 제작 시에는 의도에 따라' in time
+    assert '자동 복구되지 않습니다' in time
+    assert '게임 Pause' in time and 'Legacy' not in time
+    assert '시간 그룹을 지원하는 Set Item Timer by Event / Set Action Timer by Event만 제공합니다' in time
     print('PASS: timer recommendations, TOC entries, callback/cleanup rules, enemy scope, '
           'independent AI/spawner/pickup exceptions and DOT/stat lifetime boundaries.')
 

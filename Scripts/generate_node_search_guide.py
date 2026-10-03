@@ -71,10 +71,14 @@ def parameter(raw, meta='', direction=None):
 
 PIN = {
     'Event':'실행할 매개변수 없는 Custom Event / Create Event를 연결합니다. 예약 노드는 콜백 즉시 실행과 다릅니다.',
-    'Time':'타이머 실행 간격(초). 양수만 허용하며 Looping=false면 한 번 실행 뒤 끝납니다.',
+    'Time':'타이머 실행 간격(초). 새 전용 타이머는 0·음수면 같은 수명·Event의 기존 예약을 제거합니다. 양수로 예약하고 Looping=false면 한 번 호출합니다.',
     'bLooping':'true면 반복, false면 한 번 실행합니다. 타이머 완료가 액션 자체를 종료하지는 않습니다.',
-    'InitialStartDelay':'첫 실행 대기(초). 기본 -1은 Time 사용, 0은 다음 타이머 처리 때, 양수는 지정 시간. -1 외 음수는 실패.',
-    'bMaxOncePerFrame':'기본 true. 지연된 반복 콜백을 같은 프레임에 여러 번 실행하지 않습니다.',
+    'InitialStartDelay':'첫 실행에 더하는 대기(초). 기본 0. 첫 실행은 Time + Initial Start Delay ± Variance이며 이후에는 Time 간격입니다.',
+    'InitialStartDelayVariance':'첫 대기의 무작위 편차(초), 기본 0. 언리얼 Set Timer by Event와 같은 방식입니다.',
+    'bMaxOncePerFrame':'기본 false. true면 밀린 반복을 한 프레임에 최대 한 번 호출합니다.',
+    'TimeGroup':'흐르는 시간 기준: World 또는 Player. 선택형 기본값은 World. 수명 귀속과 별개입니다.',
+    'CooldownTimeGroup':'이 스킬 쿨타임이 흐르는 World/Player 시간. Action Request의 Time Group과 별도로 지정합니다.',
+    'Rate':'시간 속도 배율. 1=정상, 0.2=5배 느림. 유한한 0.001~10만 허용하며 적용된 World 값은 엔진 제한을 받을 수 있습니다.',
     'Target':'효과를 받거나 조회할 대상 Actor. 함수의 자동 Target(노드를 소유한 컴포넌트)과 별개의 명시적 대상일 수 있습니다.',
     'Attacker':'피해를 가하는 공격원 Actor. 진영·공격 스탯·공격 출처 판정에 사용합니다.',
     'DamageCauser':'직접 피해를 발생시킨 Actor(투사체·판정체 등). 공격 스탯을 읽을 Attacker와 구분합니다.',
@@ -340,8 +344,19 @@ PIN.update({
 })
 
 PURPOSE_EXTRA = {
-    'SetActionTimerByEvent':'스킬·적 공격의 선딜/후딜/반복 콜백에 권장합니다. 한 액션에 1회 또는 반복 타이머를 귀속하여 정상 종료·실제 취소·소유자 EndPlay 때 자동 Clear합니다. 콜백 완료만으로 액션은 끝나지 않습니다. 호출마다 독립 타이머입니다.',
-    'SetItemTimerByEvent':'무기·유물 보유 중 주기 효과/1회 지연에 권장합니다. 등록된 아이템에 예약을 귀속하여 버림·교체·소유자 EndPlay 때 On Item Unregistered 전에 자동 Clear합니다. 스킬 취소만으로는 멈추지 않습니다. 적/픽업 Actor나 소모품 런타임의 노드가 아닙니다.',
+    'ActionDelay':'활성 액션에 귀속된 순차 대기입니다. 연결한 Action Handle의 Time Group을 자동 사용합니다. 대기가 끝나면 Completed, 액션이 먼저 정상 종료되거나 취소되면 Cancelled입니다. Completed만으로 액션이 끝나지 않습니다.',
+    'SetGroupedActionTimerByEvent':'한 액션에 콜백 예약을 귀속합니다. 정상 종료·취소·소유자 EndPlay 때 선택 그룹과 무관하게 자동 제거됩니다. World/Player는 흐르는 시간만 선택하며 기본 World입니다.',
+    'SetGroupedItemTimerByEvent':'등록된 무기·유물 보유 수명에 예약을 귀속합니다. 해제 전 자동 제거되며 스킬 취소만으로 멈추지 않습니다. 시간 그룹 기본 World입니다.',
+    'GetActionTimeGroup':'활성 Action Handle에 저장된 시간 그룹을 조회합니다. Action Delay가 따르는 기준이며 무효 핸들은 World를 반환합니다. 먼저 Is Action Active를 확인하세요.',
+    'SetTimeGroupRate':'World 또는 Player의 시간 속도를 변경합니다. World는 엔진 글로벌 시간이며 Player는 별도 시계와 ARPlayerCharacter 보정입니다. 진행 중 타이머·쿨타임에도 적용됩니다.',
+    'GetTimeGroupRate':'현재 그룹 배율을 확인합니다. World는 엔진이 실제 적용한 유효 배율입니다.',
+    'GetTimeGroupSeconds':'일시정지를 제외한 그룹의 누적 시간을 조회합니다. 운영체제 실시간이 아닙니다.',
+    'PauseTimeGroupTimer':'월드·플레이어 중 해당 Timer Handle의 관리자를 찾아 남은 시간을 보존하고 일시정지합니다.',
+    'UnpauseTimeGroupTimer':'선택 그룹을 다시 지정하지 않고 핸들로 일시정지된 타이머를 재개합니다. 제거된 타이머는 재생성하지 않습니다.',
+    'ClearTimeGroupTimer':'해당 그룹 타이머 예약을 제거합니다. 핸들 변수 자체는 무효화하지 않으므로 존재 조회로 확인합니다.',
+    'GetTimeGroupTimerRemaining':'해당 그룹 초 단위의 남은 시간을 조회합니다. 존재하지 않으면 -1입니다.',
+    'DoesTimeGroupTimerExist':'두 관리자를 찾아 핸들의 예약이 존재하는지 확인합니다. 일시정지된 예약도 존재합니다.',
+    'IsTimeGroupTimerPaused':'그룹 타이머가 일시정지되어 있는지 확인합니다.',
     'ReceiveItemUnregistered':'아이템 해제 때 자기 변수·연출·구독·독립 작업을 정리합니다. 아이템 전용 타이머는 이 이벤트 전에 자동 Clear되어 있으며 새 아이템 타이머 등록은 거절됩니다. 기존 일반 엔진 타이머는 직접 Clear해야 합니다.',
     'AddCCImmunity':'이 상태 컴포넌트에 새 CC를 막는 보장 효과를 적용하고 핸들을 발급합니다. 기존 CC를 제거하지는 않습니다.',
     'ApplyCCImmunity':'Actor에게 CC 면역을 적용합니다. 새 기절·속박 등을 차단하고 이미 걸린 CC는 자동 해제하지 않습니다.',
@@ -499,7 +514,7 @@ def pin_html(p,structs,func='',owner='',chain=()):
     label=p['label']
     explanation=describe(name,typ,func,owner)
     if name=='ReturnValue':
-        if typ=='FTimerHandle':explanation='Success=true일 때 실제 Timer Handle. 기존 Pause Timer by Handle / Unpause Timer by Handle / Clear and Invalidate Timer by Handle에 연결합니다. Action Handle과 다른 타입입니다.'
+        if typ=='FTimerHandle':explanation='Success=true일 때 Timer Handle. Pause / Unpause / Clear Time Group Timer 및 그룹 타이머 조회 노드에 연결합니다. Player 타이머를 엔진 기본 월드 핸들 노드로 제어할 수는 없습니다. Action Handle과 다른 타입입니다.'
         elif typ=='bool':explanation='이 함수의 성공 여부 또는 조회 조건 결과. 노드 용도의 조건을 참/거짓으로 돌려줍니다.'
         elif 'Handle' in typ:explanation='이번 등록·적용에서 발급하거나 조회한 핸들. 이후 제거·종료·조회용으로 보관합니다. 별도 Success 출력이 있다면 먼저 확인하세요.'+(' Permanent Flat 성공은 빈 핸들입니다.' if func=='ApplyStatModifier' else '')
         elif typ in ('int32','float'):explanation='이 함수가 계산·조회한 수치 또는 실제 처리한 양/개수. 노드 용도와 선언 타입을 함께 확인하세요.'
@@ -526,8 +541,8 @@ def render_node(n,structs):
     if n['name'] in ('ReceiveItemSkillCancelled','ReceiveActionCancelled','OnActionCancelled'):
         warning+='<p class="note">실제 액션 취소 알림입니다. Set Action Timer by Event와 Action Delay는 자동 정리됩니다. 일반 Set Timer by Event·독립 Actor는 별도 정리하세요. Set Item Timer by Event는 아이템 해제에 귀속되며 스킬 취소만으로 멈추지 않습니다. 정상 종료 알림이 아닙니다.</p>'
     if n['name']=='ExecuteItemSkill':warning+='<p class="note">입력·비용 판정과 액션 시작 후 호출됩니다. 이 스킬에서 Try Start Action을 다시 하지 말고 전달된 Action Handle을 사용해 정상 완료에서 End Action 하세요.</p>'
-    if n['name'] in ('SetActionTimerByEvent','SetItemTimerByEvent'):
-        warning+='<p class="note">실행 출력은 예약 직후이며 실제 효과는 Event 콜백에 연결합니다. Success를 확인하고 Time은 양수로 지정하세요. 호출마다 새 타이머가 생기므로 Tick에서 반복 등록하지 않습니다. 자동 제거는 예약만 정리하며 이미 적용한 일반 버프·DOT·독립 Actor·Bool은 되돌리지 않습니다. 취소 출력이 없으므로 자체 상태 정리는 수명 이벤트에서 처리하세요.</p>'
+    if n['name'] in ('SetGroupedActionTimerByEvent','SetGroupedItemTimerByEvent'):
+        warning+='<p class="note">실행 출력은 예약 직후이며 효과는 Event 콜백에 연결합니다. 같은 수명·같은 Event 재등록은 기존 예약을 교체합니다. Time≤0이면 그 예약을 제거하고 Success=false입니다. Time Group은 수명이 아닙니다. 자동 제거는 이미 적용한 일반 효과·독립 Actor·Bool을 되돌리지 않습니다.</p>'
     if is_struct:body=nested(n['name'],structs)
     else:
         inp=''.join(pin_html(p,structs,n['name'],n['owner']) for p in n['inputs'])
@@ -537,8 +552,8 @@ def render_node(n,structs):
         if dispatch:flow='Bind/Assign의 실행선과 콜백 이벤트의 실행선은 별개입니다.'
         body='<p class="muted">'+e(flow)+'</p><h3>입력값</h3><dl class="pins">'+(inp or '<dt>별도 데이터 입력 없음</dt><dd>위 연결 대상 설명을 확인하세요.</dd>')+'</dl><h3>출력값 · 반환값</h3><dl class="pins">'+(out or '<dt>별도 데이터 출력 없음</dt><dd>호출 노드는 다음 실행선으로 연결합니다.</dd>')+'</dl>'
     related=next((url for key,url in reversed(list(RELATED.items())) if key in n['category'] or key in n['owner']),None)
-    if n['name']=='SetActionTimerByEvent':related='../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers'
-    if n['name']=='SetItemTimerByEvent':related='../nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers'
+    if n['name']=='SetGroupedActionTimerByEvent':related='../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers'
+    if n['name']=='SetGroupedItemTimerByEvent':related='../nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers'
     links='<a href="'+e(related)+'">관련 제작 가이드</a> · ' if related else ''
     source=os.path.relpath(ROOT/n['source'],OUT.parent).replace('\\','/')
     technical='<details class="declaration"><summary>개발자용 선언·원본 보기</summary><p><a href="'+e(source)+'">'+e(n['source'])+'</a> · 줄 '+str(n['line'])+'</p><pre>'+e(n['signature'] or n['name'])+'</pre></details>'

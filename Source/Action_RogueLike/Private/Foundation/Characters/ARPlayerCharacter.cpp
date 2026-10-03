@@ -45,6 +45,7 @@ AARPlayerCharacter::AARPlayerCharacter()
 void AARPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	if (UARTimeSubsystem* Time = GetWorld()->GetSubsystem<UARTimeSubsystem>()) Time->RegisterPlayer(this);
 	GetActionComponent()->OnActionEnded.AddDynamic(this, &AARPlayerCharacter::HandleRollActionEnded);
 	GetActionComponent()->OnActionCancelled.AddDynamic(this, &AARPlayerCharacter::HandleRollActionCancelled);
 	PostHitDamageDelegateHandle = GetHealthComponent()->OnDamageAppliedNative.AddUObject(
@@ -56,6 +57,7 @@ void AARPlayerCharacter::BeginPlay()
 void AARPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	FinishRoll(true);
+	if (UARTimeSubsystem* Time = GetWorld()->GetSubsystem<UARTimeSubsystem>()) Time->UnregisterPlayer(this);
 	GetActionComponent()->OnActionEnded.RemoveDynamic(this, &AARPlayerCharacter::HandleRollActionEnded);
 	GetActionComponent()->OnActionCancelled.RemoveDynamic(this, &AARPlayerCharacter::HandleRollActionCancelled);
 	if (GetHealthComponent())
@@ -207,7 +209,7 @@ void AARPlayerCharacter::HandleMouseRollPressed(const FInputActionValue& Value)
 
 float AARPlayerCharacter::GetRollCooldownRemaining() const
 {
-	return GetWorld() ? FMath::Max(0.0, RollCooldownEndsAt - GetWorld()->GetTimeSeconds()) : 0.0f;
+	return GetWorld() ? FMath::Max(0.0, RollCooldownEndsAt - UARTimeSubsystem::Now(this, EARTimeGroup::Player)) : 0.0f;
 }
 
 bool AARPlayerCharacter::TryStartRoll(bool bForceMouseDirection)
@@ -238,6 +240,7 @@ bool AARPlayerCharacter::TryStartRoll(bool bForceMouseDirection)
 	if (!StaminaComponent->CanAfford(Cost)) return false;
 
 	FARActionRequest Request;
+	Request.TimeGroup = EARTimeGroup::Player;
 	Request.bIsRollAction = true;
 	Request.bBlockBasicMovementWhileActive = true;
 	Request.CancelRules.bCancelOnStagger = true;
@@ -421,7 +424,7 @@ void AARPlayerCharacter::ClearRollMovement()
 {
 	if (RollRootMotionId != 0)
 	{
-		RollCooldownEndsAt = GetWorld() ? GetWorld()->GetTimeSeconds() + FMath::Max(0.0f, RollCooldown) : -1.0;
+		RollCooldownEndsAt = GetWorld() ? UARTimeSubsystem::Now(this, EARTimeGroup::Player) + FMath::Max(0.0f, RollCooldown) : -1.0;
 		GetCharacterMovement()->RemoveRootMotionSourceByID(RollRootMotionId);
 		RollRootMotionId = 0;
 	}

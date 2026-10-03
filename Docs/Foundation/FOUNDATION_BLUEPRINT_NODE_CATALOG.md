@@ -1,6 +1,6 @@
 # Foundation Blueprint 노드 목록과 테스트 콘텐츠 제작 안내
 
-> **현행 추가 (2026-10-03):** 플레이어 전용 Money(번호47, 기본0) 및 Operation의 Permanent Flat(번호4)을 추가했다. 기존 enum 번호는 보존한다. 일반 Apply Stat Modifier에서만 기본값을 직접 증감하며 버프 기록 없이 Success 반환, 성공 시에도 빈 핸들이다. 부족한 기본 돈 잔액 차감·무효 수치 실패; Duration/Source/HUD/Tenacity/Stack Group 무시, Stack Only/Guarantee 거절. 아이템/액션/DA 기본 효과 및 컴포넌트 보정 등록은 Permanent Flat 거절. Get Final Stat/OnFinalStatChanged/플레이어의 전체 스탯 조회에 반영, 적·환경의 Money 적용 거절/전체 목록 제외. 자동 세이브·돈 UI·상점은 미구현. [기본값 수정 참고서](../Guides/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
+> **현행 추가 (2026-10-03):** 플레이어 전용 Money(번호47, 기본0) 및 Operation의 Permanent Flat(번호4)을 추가했다. 기존 enum 번호는 보존한다. 일반 Apply Stat Modifier에서만 기본값을 직접 증감하며 버프 기록 없이 Success 반환, 성공 시에도 빈 핸들이다. 부족한 기본 돈 잔액 차감·무효 수치 실패; Duration/Source/HUD/Tenacity/Stack Group 무시, Stack Only/Guarantee 거절. 아이템/액션/DA 기본 효과 및 컴포넌트 보정 등록은 Permanent Flat 거절. Get Final Stat/OnFinalStatChanged/플레이어의 전체 스탯 조회에 반영, 적·환경의 Money 적용 거절/전체 목록 제외. 자동 세이브·돈 UI·상점은 미구현. [기본값 수정 참고서](../Guides/common/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
 
 > **현행 추가 (2026-10-03):** `Apply Crowd Control`은 DA 없이 Target Actor / CC Type(Stun·Root) / Duration(초, >0) / Affected By Tenacity(기본 true)를 받는 간편 CC 노드다. Success와 상태 핸들(Return Value)을 출력하며 Source / Failure Reason / Applied Duration은 고급 핀이다. 기존 상태·면역·동일 태그 긴 시간 갱신·종료 알림을 재사용한다. 기존 `Apply Status Effect`/`Remove Status Effect`와 CC 면역 노드는 유지한다. [적 제작 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#apply-crowd-control).
 
@@ -8,7 +8,7 @@
 
 작성 기준: 2026-09-24, 현재 `Source`의 실제 선언과 구현.
 
-> **현행 보완 (2026-10-02):** ARBaseCharacter 자식(적·플레이어)은 `On Character Death`, `On Groggy Gauge Depleted`, `On Shield Broken`, `On Damage Applied`, `On Action Cancelled`, `On Status Removed`를 직접 이벤트로 구현한다. 등장 초기화는 기존 `Event BeginPlay`. 기존 Bind 디스패처는 유지하지만 같은 처리를 두 방식에 중복 연결하지 않는다. 실드 파괴는 총합 양수→0의 피해/수동 제거만 알리고 만료·우회는 제외한다. [적 이벤트 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events), [현재 자원 회복 노드](../Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing)를 참조한다.
+> **현행 보완 (2026-10-02):** ARBaseCharacter 자식(적·플레이어)은 `On Character Death`, `On Groggy Gauge Depleted`, `On Shield Broken`, `On Damage Applied`, `On Action Cancelled`, `On Status Removed`를 직접 이벤트로 구현한다. 등장 초기화는 기존 `Event BeginPlay`. 기존 Bind 디스패처는 유지하지만 같은 처리를 두 방식에 중복 연결하지 않는다. 실드 파괴는 총합 양수→0의 피해/수동 제거만 알리고 만료·우회는 제외한다. [적 이벤트 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events), [현재 자원 회복 노드](../Guides/common/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing)를 참조한다.
 
 > 2026-09-30 아이템 통합 변경: 아래의 이전 아이템 클래스명·시그니처 표는 역사적 스냅샷이다. 현재 저작 가능한 데이터 에셋은 `UARItemDefinition` 하나이며, `DefinitionTag` 대신 `(ItemTypeTag, ItemId)`와 `AdditionalTags`를 사용한다. 정확한 현행 아이템 필드·조회·획득 노드는 [아이템 에셋 제작 가이드](../Guides/ITEM_ASSET_CREATION_GUIDE_KO.html)와 `Source` 선언을 우선한다. 이 목록 전체를 새 API로 재생성하는 작업은 아직 하지 않았다.
 

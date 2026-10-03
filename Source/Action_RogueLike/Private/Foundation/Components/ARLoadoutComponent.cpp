@@ -323,7 +323,7 @@ FARRequestStatus UARLoadoutComponent::ExecuteSkillCandidates(TArray<FARRegistere
 		for (int32 Index = Start; Index < End; ++Index)
 		{
 			FARRegisteredSkillRecord* Skill = Candidates[Index];
-			if (GetNow() < Skill->CooldownEndsAt)
+			if (GetNow(Skill->Definition.CooldownTimeGroup) < Skill->CooldownEndsAt)
 			{
 				Status.Result = EARRequestResult::Cooldown;
 				bGroupValid = false;
@@ -421,7 +421,7 @@ FARRequestStatus UARLoadoutComponent::ExecuteSkillCandidates(TArray<FARRegistere
 	{
 		FARRegisteredSkillRecord* Skill = Accepted[Index];
 		Skill->CooldownTotal = FMath::Max(Skill->Definition.MinimumCooldown, Skill->Definition.BaseCooldown * (1.0f - FMath::Clamp(CooldownReduction, 0.0f, 100.0f) / 100.0f));
-		Skill->CooldownEndsAt = GetNow() + Skill->CooldownTotal;
+		Skill->CooldownEndsAt = GetNow(Skill->Definition.CooldownTimeGroup) + Skill->CooldownTotal;
 		FARActiveItemSkillExecution& Execution = ExecutionsToDispatch.AddDefaulted_GetRef();
 		Execution.Instance = Skill->Instance;
 		Execution.SkillId = Skill->Definition.SkillId;
@@ -469,7 +469,7 @@ TArray<FARRegisteredSkillUIData> UARLoadoutComponent::GetRegisteredSkillUIData()
 		UI.HUDSortOrder = Skill.Definition.HUDSortOrder;
 		UI.ResourceCost = Skill.Definition.ResourceCost;
 		UI.CooldownTotal = Skill.CooldownTotal;
-		UI.CooldownRemaining = FMath::Max(0.0f, static_cast<float>(Skill.CooldownEndsAt - GetNow()));
+		UI.CooldownRemaining = FMath::Max(0.0f, static_cast<float>(Skill.CooldownEndsAt - GetNow(Skill.Definition.CooldownTimeGroup)));
 		UI.bReady = UI.CooldownRemaining <= 0.0f;
 	}
 	Result.Sort([](const FARRegisteredSkillUIData& A, const FARRegisteredSkillUIData& B)
@@ -492,7 +492,7 @@ bool UARLoadoutComponent::GetSkillCooldownState(FARRegisteredSkillHandle Handle,
 		return false;
 	}
 	Total = Skill->CooldownTotal;
-	Remaining = FMath::Max(0.0f, static_cast<float>(Skill->CooldownEndsAt - GetNow()));
+	Remaining = FMath::Max(0.0f, static_cast<float>(Skill->CooldownEndsAt - GetNow(Skill->Definition.CooldownTimeGroup)));
 	bReady = Remaining <= 0.0f;
 	Ratio = Total > 0.0f ? Remaining / Total : 0.0f;
 	return true;
@@ -515,7 +515,7 @@ bool UARLoadoutComponent::ModifySkillCooldown(FARRegisteredSkillHandle Handle, f
 	NewRemaining = 0.0f;
 	FARRegisteredSkillRecord* Skill = FindSkill(Handle);
 	if (!Skill || !FMath::IsFinite(DeltaSeconds)) return false;
-	const double Now = GetNow();
+	const double Now = GetNow(Skill->Definition.CooldownTimeGroup);
 	Skill->CooldownEndsAt = FMath::Max(Now, Skill->CooldownEndsAt + DeltaSeconds);
 	NewRemaining = static_cast<float>(Skill->CooldownEndsAt - Now);
 	OnRegisteredSkillsChanged.Broadcast();
@@ -698,6 +698,8 @@ bool UARLoadoutComponent::ValidateDefinition(const UARItemDefinition* Definition
 			|| !FMath::IsFinite(Skill.BaseCooldown) || !FMath::IsFinite(Skill.MinimumCooldown)
 			|| !FMath::IsFinite(Skill.ResourceCost.Mana) || !FMath::IsFinite(Skill.ResourceCost.Stamina)
 			|| Skill.BaseCooldown < 0.0f || Skill.MinimumCooldown < 0.0f || Skill.ResourceCost.Mana < 0.0f || Skill.ResourceCost.Stamina < 0.0f
+			|| (Skill.CooldownTimeGroup != EARTimeGroup::World && Skill.CooldownTimeGroup != EARTimeGroup::Player)
+			|| (Skill.ActionRequest.TimeGroup != EARTimeGroup::World && Skill.ActionRequest.TimeGroup != EARTimeGroup::Player)
 			|| SkillIds.Contains(Skill.SkillId))
 		{
 			Status.Result = EARRequestResult::InvalidDefinition;
@@ -831,9 +833,9 @@ void UARLoadoutComponent::NotifyLoadoutChanged()
 	OnLoadoutChanged.Broadcast(LoadoutRevision);
 }
 
-double UARLoadoutComponent::GetNow() const
+double UARLoadoutComponent::GetNow(EARTimeGroup TimeGroup) const
 {
-	return GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return UARTimeSubsystem::Now(this, TimeGroup);
 }
 
 void UARLoadoutComponent::HandleItemUIStateChanged(FGuid ItemInstanceId, const FARItemUIState& State, bool bRemoved)

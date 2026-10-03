@@ -1,4 +1,5 @@
 #include "Foundation/Components/ARStatsComponent.h"
+#include "Foundation/Time/ARTimeSubsystem.h"
 
 #include "Engine/World.h"
 #include "Foundation/Core/ARLogChannels.h"
@@ -657,7 +658,7 @@ void UARStatsComponent::BroadcastSourceChange(const FARSourceInfo& Source)
 
 double UARStatsComponent::GetNow() const
 {
-	return GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return UARTimeSubsystem::OwnerNow(GetOwner());
 }
 
 bool UARStatsComponent::IsReductionStat(EARStatType StatType)

@@ -16,6 +16,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Foundation/Characters/ARPlayerCharacter.h"
 #include "Foundation/Components/ARUIManagerComponent.h"
+#include "Foundation/Time/ARTimeSubsystem.h"
 #include "Foundation/Status/ARStatusEffectDefinition.h"
 
 void UARResourceHUDWidget::BuildDefaultLayout(UWidgetTree* Tree)
@@ -143,7 +144,7 @@ void UARResourceHUDWidget::NativeConstruct()
 void UARResourceHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
-	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const double Now = UARTimeSubsystem::Now(this, EARTimeGroup::Player);
 	for (FTimedLabel& Label : TimedLabels)
 	{
 		if (UTextBlock* Text = Label.Text.Get())
@@ -233,7 +234,7 @@ void UARResourceHUDWidget::ApplySnapshot(const FARPlayerHUDSnapshot& Snapshot)
 		EffectKeys.Add(FString::Printf(TEXT("C:%s"), *Effect.Handle.Id.ToString(EGuidFormats::Digits)));
 		TimedRemaining.Add(Effect.RemainingTime);
 	}
-	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const double Now = UARTimeSubsystem::Now(this, EARTimeGroup::Player);
 	if (EffectKeys == CachedEffectKeys && TimedRemaining.Num() == TimedLabels.Num())
 	{
 		for (int32 Index = 0; Index < TimedLabels.Num(); ++Index)

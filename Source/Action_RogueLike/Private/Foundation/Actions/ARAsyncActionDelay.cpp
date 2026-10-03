@@ -36,7 +36,10 @@ void UARAsyncActionDelay::Activate()
 		Finish(false);
 		return;
 	}
-	World->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateUObject(this, &UARAsyncActionDelay::Finish, false), Duration, false);
+	UARTimeSubsystem* Time = World->GetSubsystem<UARTimeSubsystem>();
+	if (!Time) { Finish(true); return; }
+	Time->GetTimers(ActionComponent->GetActionTimeGroup(ActionHandle)).SetTimer(TimerHandle,
+		FTimerDelegate::CreateUObject(this, &UARAsyncActionDelay::Finish, false), Duration, false);
 }
 
 void UARAsyncActionDelay::Finish(bool bWasCancelled)
@@ -48,7 +51,8 @@ void UARAsyncActionDelay::Finish(bool bWasCancelled)
 	bFinished = true;
 	if (UWorld* World = GEngine ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull) : nullptr)
 	{
-		World->GetTimerManager().ClearTimer(TimerHandle);
+		if (UARTimeSubsystem* Time = World->GetSubsystem<UARTimeSubsystem>()) Time->ClearTimeGroupTimer(TimerHandle);
+		else World->GetTimerManager().ClearTimer(TimerHandle);
 	}
 	if (ActionComponent)
 	{

@@ -6,7 +6,7 @@
 - 일반 Apply Stat Modifier에서만 Permanent Flat을 기본값 직접 수정으로 분기. 보정 기록/핸들/타이머/Source 알림 없음, Success=true여도 반환 핸들 비어 있음. Duration/Source/HUD/Tenacity/Stack Group 무시. Stack Only와 무적/회피 보장은 실패. 대상 객체 수명에만 유지하며 세이브/상점/돈 HUD는 별도.
 - 기존 비율/배율과 안전 범위 및 OnFinalStatChanged 유지. 돈 차감은 기본 잔액 기준, 음수 결과면 원자적 실패. 임시 돈 버프를 영구 잔액으로 소비하지 않음. 부정확한 초기 잔액(음수/비유한)은0으로 초기화. C++ 직접 Money setter도 음수/비유한 거절.
 - 컴포넌트 보정 등록(AddStatModifier)에서 Permanent Flat 거절하여 아이템/액션/DA 기본 효과가 돌이킬 수 없는 변경을 일으키지 못하게 함. 일반 노드는 아이템/픽업 BP에서도 Target을 플레이어로 지정하여 사용 가능.
-- Docs/Guides/OBJECT_STAT_GUIDE_KO.html #permanent-flat 및 유물 런타임 참고서/에셋 참고서 갱신, Foundation 생성 레퍼런스48스탯. 조건부 Details metadata 및 에디터 테스트 갱신. 기존 콘텐츠 그래프/DA 저장·교체 없음.
+- Docs/Guides/common/OBJECT_STAT_GUIDE_KO.html #permanent-flat 및 유물 런타임 참고서/에셋 참고서 갱신, Foundation 생성 레퍼런스48스탯. 조건부 Details metadata 및 에디터 테스트 갱신. 기존 콘텐츠 그래프/DA 저장·교체 없음.
 
 ## 2026-10-03 — DA 없는 기본 CC 노드
 

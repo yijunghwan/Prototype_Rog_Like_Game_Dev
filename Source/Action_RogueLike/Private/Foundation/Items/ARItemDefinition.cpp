@@ -98,6 +98,11 @@ EDataValidationResult UARItemDefinition::IsDataValid(FDataValidationContext& Con
 			{
 				Warn(Prefix + TEXT("기본·최소 쿨타임은 유한한 0 이상의 값이어야 합니다."));
 			}
+			if ((Skill.CooldownTimeGroup != EARTimeGroup::World && Skill.CooldownTimeGroup != EARTimeGroup::Player)
+				|| (Skill.ActionRequest.TimeGroup != EARTimeGroup::World && Skill.ActionRequest.TimeGroup != EARTimeGroup::Player))
+			{
+				Warn(Prefix + TEXT("쿨타임·액션 시간 그룹은 World 또는 Player여야 합니다."));
+			}
 		}
 		for (int32 Index = 0; Index < DefaultStatModifiers.Num(); ++Index)
 		{

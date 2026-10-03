@@ -63,12 +63,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Action") FARSuperArmorHandle ApplyActionSuperArmor(FARActionHandle Handle, const FARSuperArmorSpec& Spec, bool& bSuccess);
 	UFUNCTION(BlueprintCallable, Category="AR|Action") FARCCImmunityHandle ApplyActionCCImmunity(FARActionHandle Handle, const FARCCImmunitySpec& Spec, bool& bSuccess);
 
-	/** Clears automatically on normal end, cancellation or owner EndPlay. Does not end the action itself.
-	 * Time must be positive. Initial Start Delay=-1 uses Time; 0 schedules at the next timer-manager update.
-	 * Each call creates an independent timer. Use the returned handle for pause/unpause/clear. */
-	UFUNCTION(BlueprintCallable, Category="AR|Action|Timer", meta=(DisplayName="Set Action Timer by Event", AdvancedDisplay="InitialStartDelay,bMaxOncePerFrame"))
-	FTimerHandle SetActionTimerByEvent(FARActionHandle ActionHandle, UPARAM(DisplayName="Event") FTimerDynamicDelegate Event,
-		float Time, bool bLooping, bool& bSuccess, float InitialStartDelay = -1.0f, bool bMaxOncePerFrame = true);
+	/** Clears on normal end, cancellation or owner EndPlay; does not end the action itself.
+	 * Unreal Blueprint timer semantics; re-registering the same event replaces only this action's timer. */
+	UFUNCTION(BlueprintCallable, Category="AR|Action|Timer", meta=(DisplayName="Set Action Timer by Event", AdvancedDisplay="InitialStartDelay,InitialStartDelayVariance,bMaxOncePerFrame"))
+	FTimerHandle SetGroupedActionTimerByEvent(FARActionHandle ActionHandle, UPARAM(DisplayName="Event") FTimerDynamicDelegate Event,
+		float Time, bool bLooping, bool& bSuccess, EARTimeGroup TimeGroup = EARTimeGroup::World,
+		float InitialStartDelay = 0.0f, float InitialStartDelayVariance = 0.0f, bool bMaxOncePerFrame = false);
+	UFUNCTION(BlueprintPure, Category="AR|Action") EARTimeGroup GetActionTimeGroup(FARActionHandle Handle) const;
 
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsActionActive(FARActionHandle Handle) const;
 	UFUNCTION(BlueprintPure, Category="AR|Action") bool IsRollBlocked() const;

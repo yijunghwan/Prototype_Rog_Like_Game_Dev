@@ -148,7 +148,7 @@ private:
 	const UARLoadoutItemInstance* FindItemInstance(FGuid InstanceId) const;
 	FARLoadoutItemSnapshot MakeSnapshot(const UARLoadoutItemInstance* Instance) const;
 	void NotifyLoadoutChanged();
-	double GetNow() const;
+	double GetNow(EARTimeGroup TimeGroup = EARTimeGroup::World) const;
 
 	UFUNCTION() void HandleItemUIStateChanged(FGuid ItemInstanceId, const FARItemUIState& State, bool bRemoved);
 	UFUNCTION() void HandleActionEnded(FARActionHandle Handle);

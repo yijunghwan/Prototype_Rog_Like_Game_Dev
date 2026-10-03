@@ -20,6 +20,10 @@
 #include "Foundation/Core/ARGameplayTags.h"
 #include "Foundation/Combat/ARCombatSubsystem.h"
 #include "Foundation/Blueprint/ARCombatBlueprintLibrary.h"
+#include "Foundation/Time/ARTimeSubsystem.h"
+#include "Foundation/Actions/ARAsyncActionDelay.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/WorldSettings.h"
 #include <limits>
 
 namespace ARLifetimeSafetyTests
@@ -45,6 +49,9 @@ namespace ARLifetimeSafetyTests
 			FActorSpawnParameters Parameters;
 			Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 			T* Actor = World->SpawnActor<T>(FVector::ZeroVector, FRotator::ZeroRotator, Parameters);
+			// Synthetic worlds do not run map initialization. RouteEndPlay requires this
+			// step; manually dispatching BeginPlay alone would skip Actor EndPlay.
+			if (!Actor->IsActorInitialized()) Actor->PostInitializeComponents();
 			Actor->DispatchBeginPlay();
 			return Actor;
 		}
@@ -313,12 +320,12 @@ bool FARManagedTimerTest::RunTest(const FString& Parameters)
 	int32 Calls = 0;
 	Callbacks.OnTimer = [&](UARLoadoutItemInstance*) { ++Calls; };
 	bool bSuccess;
-	const FTimerHandle Once = Instance->SetItemTimerByEvent(Event(Instance), 0.02f, false, bSuccess);
+	const FTimerHandle Once = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.02f, false, bSuccess);
 	TestTrue(TEXT("One-shot item delay scheduled"), bSuccess);
 	Scope.Advance(0.08f);
 	TestEqual(TEXT("One-shot only calls once"), Calls, 1);
 	TestFalse(TEXT("Completed one-shot not left in manager"), Timers.TimerExists(Once));
-	const FTimerHandle Loop = Instance->SetItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
+	const FTimerHandle Loop = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
 	Scope.Advance(0.08f);
 	TestTrue(TEXT("Loop repeats"), Calls > 2);
 	Timers.PauseTimer(Loop);
@@ -335,12 +342,12 @@ bool FARManagedTimerTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Manual clear stops calls"), Calls, ClearedCalls);
 	FARRequestStatus Status;
 	FARActionHandle Action = Actions->TryStartAction(FARActionRequest(), Status);
-	const FTimerHandle ActionLoop = Actions->SetActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
+	const FTimerHandle ActionLoop = Actions->SetGroupedActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
 	TestTrue(TEXT("Action timer scheduled"), bSuccess);
 	Actions->EndAction(Action);
 	TestFalse(TEXT("Normal end clears timer immediately"), Timers.TimerExists(ActionLoop));
 	Action = Actions->TryStartAction(FARActionRequest(), Status);
-	const FTimerHandle CancelledLoop = Actions->SetActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
+	const FTimerHandle CancelledLoop = Actions->SetGroupedActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
 	bool bCCSuccess; EARRequestResult Failure; float Duration;
 	UARCombatBlueprintLibrary::ApplyCrowdControl(Player, EARCrowdControlType::Stun, 0.1f, true, bCCSuccess, Failure, Duration, FARSourceInfo());
 	TestTrue(TEXT("Stun applied"), bCCSuccess);
@@ -348,22 +355,22 @@ bool FARManagedTimerTest::RunTest(const FString& Parameters)
 	Player->GetStatusEffectComponent()->ClearAllStatusEffects();
 	Action = Actions->TryStartAction(FARActionRequest(), Status);
 	Callbacks.OnTimer = [&](UARLoadoutItemInstance*) { ++Calls; Actions->EndAction(Action); };
-	const FTimerHandle SelfEnding = Actions->SetActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
+	const FTimerHandle SelfEnding = Actions->SetGroupedActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
 	const int32 BeforeSelf = Calls;
 	Scope.Advance(0.08f);
 	TestEqual(TEXT("Callback may end its own action; no second call"), Calls, BeforeSelf + 1);
 	TestFalse(TEXT("Executing timer cleared safely"), Timers.TimerExists(SelfEnding));
 	Callbacks.OnTimer = [&](UARLoadoutItemInstance* I) { ++Calls; I->UnregisterItem(EARItemRemovalReason::Discarded); };
-	const FTimerHandle SelfUnregister = Instance->SetItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
+	const FTimerHandle SelfUnregister = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
 	const int32 BeforeUnregister = Calls;
 	Scope.Advance(0.08f);
 	TestEqual(TEXT("Callback may unregister its item; no second call"), Calls, BeforeUnregister + 1);
 	TestFalse(TEXT("Unregistration clears executing timer"), Timers.TimerExists(SelfUnregister));
-	TestFalse(TEXT("Unregistered item cannot create timer"), Instance->SetItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess).IsValid());
+	TestFalse(TEXT("Unregistered item cannot create timer"), Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess).IsValid());
 	TestFalse(TEXT("Creation failure reported"), bSuccess);
 	Instance->RegisterItem();
 	Callbacks.OnTimer = nullptr;
-	const FTimerHandle OwnerTimer = Instance->SetItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
+	const FTimerHandle OwnerTimer = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
 	Player->Destroy();
 	TestFalse(TEXT("Owner EndPlay clears loadout item timer"), Timers.TimerExists(OwnerTimer));
 	return true;
@@ -446,16 +453,16 @@ bool FARManagedTimerValidationTest::RunTest(const FString& Parameters)
 	int32 Calls = 0;
 	Callbacks.OnTimer = [&](UARLoadoutItemInstance*) { ++Calls; };
 	bool bSuccess;
-	TestFalse(TEXT("Zero interval rejected"), Instance->SetItemTimerByEvent(Event(Instance), 0.0f, true, bSuccess).IsValid());
-	TestFalse(TEXT("Unbound callback rejected"), Instance->SetItemTimerByEvent(FTimerDynamicDelegate(), 1.0f, false, bSuccess).IsValid());
-	TestFalse(TEXT("NaN interval rejected"), Instance->SetItemTimerByEvent(Event(Instance), std::numeric_limits<float>::quiet_NaN(), true, bSuccess).IsValid());
-	TestFalse(TEXT("Unsupported negative delay rejected"), Instance->SetItemTimerByEvent(Event(Instance), 1.0f, false, bSuccess, -2.0f).IsValid());
+	TestFalse(TEXT("Zero interval rejected"), Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.0f, true, bSuccess).IsValid());
+	TestFalse(TEXT("Unbound callback rejected"), Instance->SetGroupedItemTimerByEvent(FTimerDynamicDelegate(), 1.0f, false, bSuccess).IsValid());
+	TestFalse(TEXT("NaN interval rejected"), Instance->SetGroupedItemTimerByEvent(Event(Instance), std::numeric_limits<float>::quiet_NaN(), true, bSuccess).IsValid());
+	TestFalse(TEXT("Nonfinite initial delay rejected"), Instance->SetGroupedItemTimerByEvent(Event(Instance), 1.0f, false, bSuccess, EARTimeGroup::World, std::numeric_limits<float>::infinity()).IsValid());
 	FARRequestStatus Status;
 	UARActionComponent* Actions = Player->GetActionComponent();
 	const FARActionHandle A = Actions->TryStartAction(FARActionRequest(), Status);
 	const FARActionHandle B = Actions->TryStartAction(FARActionRequest(), Status);
-	const FTimerHandle TimerA = Actions->SetActionTimerByEvent(A, Event(Instance), 0.01f, true, bSuccess);
-	const FTimerHandle TimerB = Actions->SetActionTimerByEvent(B, Event(Instance), 0.01f, true, bSuccess);
+	const FTimerHandle TimerA = Actions->SetGroupedActionTimerByEvent(A, Event(Instance), 0.01f, true, bSuccess);
+	const FTimerHandle TimerB = Actions->SetGroupedActionTimerByEvent(B, Event(Instance), 0.01f, true, bSuccess);
 	TestTrue(TEXT("Separate calls produce independent handles"), TimerA != TimerB);
 	Actions->CancelAction(A, EARActionCancelReason::Manual);
 	TestFalse(TEXT("Only A is cleared"), Scope.World->GetTimerManager().TimerExists(TimerA));
@@ -463,16 +470,16 @@ bool FARManagedTimerValidationTest::RunTest(const FString& Parameters)
 	Scope.Advance(0.04f);
 	TestTrue(TEXT("Other action keeps firing"), Calls > 0);
 	Actions->EndAction(B);
-	const FTimerHandle Delayed = Instance->SetItemTimerByEvent(Event(Instance), 0.01f, false, bSuccess, 0.1f);
+	const FTimerHandle Delayed = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.01f, false, bSuccess, EARTimeGroup::World, 0.1f);
 	const int32 Before = Calls;
 	Scope.Advance(0.05f);
-	TestEqual(TEXT("Initial delay separate from interval"), Calls, Before);
+	TestEqual(TEXT("Extra initial delay postpones the first call"), Calls, Before);
 	Scope.Advance(0.08f);
 	TestEqual(TEXT("Initial delay fires once"), Calls, Before + 1);
-	const FTimerHandle MaxOnce = Instance->SetItemTimerByEvent(Event(Instance), 0.0001f, true, bSuccess);
+	const FTimerHandle MaxOnce = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.0001f, true, bSuccess, EARTimeGroup::World, 0.0f, 0.0f, true);
 	const int32 BeforeMaxOnce = Calls;
 	Scope.Advance(0.01f);
-	TestEqual(TEXT("Default limits catch-up to one call per frame"), Calls, BeforeMaxOnce + 1);
+	TestEqual(TEXT("Explicit Max Once Per Frame limits catch-up to one call per frame"), Calls, BeforeMaxOnce + 1);
 	Instance->UnregisterItem(EARItemRemovalReason::Discarded);
 	TestFalse(TEXT("Paused/completed/active ownership cleanup is safe"), Scope.World->GetTimerManager().TimerExists(MaxOnce));
 	return true;
@@ -496,7 +503,7 @@ bool FARCombatLifetimeStressTest::RunTest(const FString& Parameters)
 	{
 		UARLoadoutItemInstance* Instance = Item(Player);
 		bool bSuccess;
-		const FTimerHandle ItemTimer = Instance->SetItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
+		const FTimerHandle ItemTimer = Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.02f, true, bSuccess);
 		TestTrue(TEXT("Stress item timer scheduled"), bSuccess);
 		Instance->ApplyItemStatModifier(Modifier(TEXT("StressItem")), bSuccess);
 		for (AARBaseEnemy* Enemy : Enemies)
@@ -515,7 +522,7 @@ bool FARCombatLifetimeStressTest::RunTest(const FString& Parameters)
 			Enemy->GetHealthComponent()->ApplyShield(Shield, bSuccess);
 			FARRequestStatus Status;
 			const FARActionHandle Action = Enemy->GetActionComponent()->TryStartAction(FARActionRequest(), Status);
-			const FTimerHandle ActionTimer = Enemy->GetActionComponent()->SetActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
+			const FTimerHandle ActionTimer = Enemy->GetActionComponent()->SetGroupedActionTimerByEvent(Action, Event(Instance), 0.02f, true, bSuccess);
 			TestTrue(TEXT("Stress action timer scheduled"), bSuccess);
 			Enemy->GetActionComponent()->ApplyActionStatModifier(Action, Modifier(TEXT("StressAction")), bSuccess);
 			AActor* Hitbox = Scope.World->SpawnActor<AActor>();
@@ -567,6 +574,198 @@ bool FARCombatLifetimeStressTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("No expired modifier records left to manually remove"), RemovedModifiers, 0);
 	AddInfo(FString::Printf(TEXT("Synthetic 32-enemy/20-cycle test: 10,240 timed modifiers, 640 actions/hitboxes/DOTs/CC; %.3f seconds. This is not rendered FPS or a shipping benchmark."), FPlatformTime::Seconds() - Start));
 	for (AARBaseEnemy* Enemy : Enemies) Enemy->Destroy();
+	Player->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARGroupedTimerTest, "AR.Foundation.Time.GroupsAndLifetime",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FARGroupedTimerTest::RunTest(const FString& Parameters)
+{
+	using namespace ARLifetimeSafetyTests;
+	FWorldScope Scope;
+	AARPlayerCharacter* Player = Scope.Spawn<AARPlayerCharacter>();
+	UARTimeSubsystem* Clock = Scope.World->GetSubsystem<UARTimeSubsystem>();
+	if (!TestNotNull(TEXT("Clock created for gameplay world"), Clock)) return false;
+	UARLoadoutItemInstance* First = Item(Player);
+	UARLoadoutItemInstance* Second = Item(Player);
+	FCallbacks Callbacks;
+	int32 PlayerCalls = 0, WorldCalls = 0;
+	Callbacks.OnTimer = [&](UARLoadoutItemInstance* Item) { if (Item == First) ++PlayerCalls; else ++WorldCalls; };
+	bool Success;
+	FTimerHandle PlayerTimer = First->SetGroupedItemTimerByEvent(Event(First), 1.f, false, Success, EARTimeGroup::Player);
+	TestTrue(TEXT("Player timer created"), Success);
+	FTimerHandle WorldTimer = Second->SetGroupedItemTimerByEvent(Event(Second), 1.f, false, Success);
+	TestTrue(TEXT("World is the timer default"), Scope.World->GetTimerManager().TimerExists(WorldTimer));
+	TestFalse(TEXT("Player handle is not a world timer"), Scope.World->GetTimerManager().TimerExists(PlayerTimer));
+	Clock->SetTimeGroupRate(EARTimeGroup::World, 0.2f);
+	Scope.Advance(0.6f);
+	TestEqual(TEXT("Neither clock fires early"), PlayerCalls + WorldCalls, 0);
+	TestTrue(TEXT("Player movement keeps normal rate"), FMath::IsNearlyEqual(Player->CustomTimeDilation, 5.f));
+	TestTrue(TEXT("Player remaining uses its group seconds"), FMath::IsNearlyEqual(Clock->GetTimeGroupTimerRemaining(PlayerTimer), 0.4f, 0.04f));
+	Clock->PauseTimeGroupTimer(PlayerTimer);
+	Scope.Advance(0.6f);
+	TestTrue(TEXT("Group pause preserves remaining"), FMath::IsNearlyEqual(Clock->GetTimeGroupTimerRemaining(PlayerTimer), 0.4f, 0.04f));
+	Clock->UnpauseTimeGroupTimer(PlayerTimer);
+	Clock->SetTimeGroupRate(EARTimeGroup::World, 1.f);
+	Scope.Advance(0.45f);
+	TestEqual(TEXT("Rate change affects already scheduled player timer"), PlayerCalls, 1);
+	TestEqual(TEXT("World timer still waiting for world seconds"), WorldCalls, 0);
+	Scope.Advance(0.4f);
+	TestEqual(TEXT("World timer resumes at changed rate without resetting"), WorldCalls, 1);
+	TestFalse(TEXT("Completed timer handle no longer exists"), Clock->DoesTimeGroupTimerExist(PlayerTimer));
+	PlayerTimer = First->SetGroupedItemTimerByEvent(Event(First), 0.1f, true, Success, EARTimeGroup::Player);
+	const FTimerHandle Replacement = First->SetGroupedItemTimerByEvent(Event(First), 0.2f, true, Success, EARTimeGroup::Player);
+	TestFalse(TEXT("Same item and event replaces old timer"), Clock->DoesTimeGroupTimerExist(PlayerTimer));
+	Clock->PauseTimeGroupTimer(Replacement);
+	First->UnregisterItem(EARItemRemovalReason::Discarded);
+	TestFalse(TEXT("Item cleanup removes paused player timer"), Clock->DoesTimeGroupTimerExist(Replacement));
+	UARActionComponent* Actions = Player->GetActionComponent();
+	FARRequestStatus Status;
+	const FARActionHandle A = Actions->TryStartAction(FARActionRequest(), Status);
+	const FARActionHandle B = Actions->TryStartAction(FARActionRequest(), Status);
+	const FTimerHandle ATimer = Actions->SetGroupedActionTimerByEvent(A, Event(Second), .5f, true, Success, EARTimeGroup::Player);
+	const FTimerHandle BTimer = Actions->SetGroupedActionTimerByEvent(B, Event(Second), .5f, true, Success, EARTimeGroup::Player);
+	Actions->CancelAction(A, EARActionCancelReason::Stagger);
+	TestFalse(TEXT("Action cleanup removes its player timer"), Clock->DoesTimeGroupTimerExist(ATimer));
+	TestTrue(TEXT("Same event on another action stays independent"), Clock->DoesTimeGroupTimerExist(BTimer));
+	Second->SetGroupedItemTimerByEvent(Event(Second), .5f, true, Success, EARTimeGroup::Player);
+	Second->SetGroupedItemTimerByEvent(Event(Second), 0.f, true, Success, EARTimeGroup::World);
+	TestFalse(TEXT("Non-positive registration clears that item's event across groups"), Success);
+	TestTrue(TEXT("Action component began play before destruction"), Actions->HasBegunPlay());
+	Player->Destroy();
+	TestEqual(TEXT("Actor destruction cancels actions"), Actions->GetActiveActionCount(), 0);
+	TestFalse(TEXT("Owner destruction cleans the other action timer"), Clock->DoesTimeGroupTimerExist(BTimer));
+	TestFalse(TEXT("Invalid rates rejected"), Clock->SetTimeGroupRate(EARTimeGroup::World, 0.f));
+	TestFalse(TEXT("Nonfinite rates rejected"), Clock->SetTimeGroupRate(EARTimeGroup::Player, std::numeric_limits<float>::quiet_NaN()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARGroupCooldownDelayTest, "AR.Foundation.Time.CooldownDelayEffectsAndPause",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FARGroupCooldownDelayTest::RunTest(const FString& Parameters)
+{
+	using namespace ARLifetimeSafetyTests;
+	FWorldScope Scope;
+	AARPlayerCharacter* Player = Scope.Spawn<AARPlayerCharacter>();
+	AARBaseEnemy* Enemy = Scope.Spawn<AARBaseEnemy>();
+	UARTimeSubsystem* Clock = Scope.World->GetSubsystem<UARTimeSubsystem>();
+	Clock->SetTimeGroupRate(EARTimeGroup::World, .2f);
+	FARStatModifierSpec Spec = Modifier(TEXT("GroupDuration"));
+	Spec.Duration = .3f;
+	bool Success;
+	Player->GetStatsComponent()->AddStatModifier(Spec, Success);
+	Enemy->GetStatsComponent()->AddStatModifier(Spec, Success);
+	UARItemDefinition* Definition = NewObject<UARItemDefinition>(Player);
+	Definition->ItemId = 1001;
+	Definition->ItemTypeTag = ARGameplayTags::Item_Type_ActiveRelic;
+	Definition->RuntimeBehaviorClass = UARLoadoutItemInstance::StaticClass();
+	FARSkillDefinition Skill;
+	Skill.SkillId = TEXT("ClockSkill");
+	Skill.InputTag = ARGameplayTags::Input_Skill_Primary;
+	Skill.BaseCooldown = .5f;
+	Skill.CooldownTimeGroup = EARTimeGroup::Player;
+	Skill.ActionRequest.TimeGroup = EARTimeGroup::Player;
+	Definition->SkillDefinitions.Add(Skill);
+	FARSkillDefinition WorldSkill = Skill;
+	WorldSkill.SkillId = TEXT("WorldSkill");
+	WorldSkill.InputTag = ARGameplayTags::Input_Skill_1;
+	WorldSkill.CooldownTimeGroup = EARTimeGroup::World;
+	WorldSkill.ActionRequest.TimeGroup = EARTimeGroup::World;
+	Definition->SkillDefinitions.Add(WorldSkill);
+	UARLoadoutComponent* Loadout = Player->GetLoadoutComponent();
+	const auto Acquisition = Loadout->BeginLoadoutAcquisition(Definition);
+	FARRequestStatus Status;
+	UARLoadoutItemInstance* Instance = Loadout->CommitLoadoutAcquisition(Acquisition.Token, Status);
+	if (!TestNotNull(TEXT("Grouped cooldown definition accepted"), Instance)) return false;
+	FARSkillGroupHandle Group;
+	TestTrue(TEXT("Skill starts"), Loadout->HandleSkillInput(Skill.InputTag, Group).IsSuccess());
+	Player->GetActionComponent()->CancelAllActions();
+	FARActionRequest Request;
+	TestTrue(TEXT("World skill starts independently"), Loadout->HandleSkillInput(WorldSkill.InputTag, Group).IsSuccess());
+	Player->GetActionComponent()->CancelAllActions();
+	Request.TimeGroup = EARTimeGroup::Player;
+	const auto Action = Player->GetActionComponent()->TryStartAction(Request, Status);
+	TestEqual(TEXT("Action remembers the selected group"), Player->GetActionComponent()->GetActionTimeGroup(Action), EARTimeGroup::Player);
+	FCallbacks Callbacks;
+	int32 Completed = 0;
+	Callbacks.OnTimer = [&](UARLoadoutItemInstance*) { ++Completed; };
+	UARAsyncActionDelay* Delay = UARAsyncActionDelay::ActionDelay(Player, Player->GetActionComponent(), Action, .5f);
+	FScriptDelegate Callback;
+	Callback.BindUFunction(Instance, TEXT("ReceiveItemRegistered"));
+	Delay->Completed.Add(Callback);
+	Delay->Activate();
+	Scope.World->GetWorldSettings()->SetPauserPlayerState(Scope.World->SpawnActor<APlayerState>());
+	const double Before = Clock->GetTimeGroupSeconds(EARTimeGroup::Player);
+	Scope.Advance(.6f);
+	TestEqual(TEXT("Game pause stops player clock"), Clock->GetTimeGroupSeconds(EARTimeGroup::Player), Before);
+	TestEqual(TEXT("Game pause stops delay callback"), Completed, 0);
+	Scope.World->GetWorldSettings()->SetPauserPlayerState(nullptr);
+	Scope.Advance(.6f);
+	TestEqual(TEXT("Player effect duration expires on player clock"), Player->GetStatsComponent()->GetFinalStat(EARStatType::AttackPower), 0.f);
+	TestEqual(TEXT("Enemy effect still has world duration"), Enemy->GetStatsComponent()->GetFinalStat(EARStatType::AttackPower), 1.f);
+	TestEqual(TEXT("Action Delay inherits player group"), Completed, 1);
+	TestTrue(TEXT("Delay completion does not end the action"), Player->GetActionComponent()->IsActionActive(Action));
+	Player->GetActionComponent()->EndAction(Action);
+	TestTrue(TEXT("Player cooldown becomes ready while world slow"), Loadout->HandleSkillInput(Skill.InputTag, Group).IsSuccess());
+	Player->GetActionComponent()->CancelAllActions();
+	TestEqual(TEXT("World cooldown still blocked under slow world"), Loadout->HandleSkillInput(WorldSkill.InputTag, Group).Result, EARRequestResult::Cooldown);
+	for (const auto& UI : Loadout->GetRegisteredSkillUIData())
+	{
+		if (UI.SkillId != WorldSkill.SkillId) continue;
+		float Remaining;
+		TestTrue(TEXT("Cooldown adjustment uses selected group"), Loadout->ModifySkillCooldown(UI.RegisteredHandle, -.2f, Remaining));
+		TestTrue(TEXT("World remaining is expressed in world seconds"), FMath::IsNearlyEqual(Remaining, .18f, .03f));
+	}
+	Player->Destroy(); Enemy->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FARGroupedTimerSemanticsTest, "AR.Foundation.Time.UnrealTimerSemantics",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FARGroupedTimerSemanticsTest::RunTest(const FString& Parameters)
+{
+	using namespace ARLifetimeSafetyTests;
+	FWorldScope Scope;
+	AARPlayerCharacter* Player = Scope.Spawn<AARPlayerCharacter>();
+	UARLoadoutItemInstance* Instance = Item(Player, true);
+	UARTimeSubsystem* Clock = Scope.World->GetSubsystem<UARTimeSubsystem>();
+	FCallbacks Callbacks;
+	int32 Calls = 0;
+	Callbacks.OnTimer = [&](UARLoadoutItemInstance*) { ++Calls; };
+	bool Success;
+	const FTimerHandle First = Instance->SetGroupedItemTimerByEvent(Event(Instance), .1f, true, Success, EARTimeGroup::Player, .2f);
+	TestTrue(TEXT("First delay is interval plus extra delay"), FMath::IsNearlyEqual(Clock->GetTimeGroupTimerRemaining(First), .3f));
+	Scope.Advance(.25f);
+	TestEqual(TEXT("No first call at only the extra delay"), Calls, 0);
+	Scope.Advance(.08f);
+	TestEqual(TEXT("One call after the combined first delay"), Calls, 1);
+	Scope.Advance(.11f);
+	TestEqual(TEXT("Following calls use the interval only"), Calls, 2);
+	const FTimerHandle Replacement = Instance->SetGroupedItemTimerByEvent(Event(Instance), 1.f, false, Success);
+	TestFalse(TEXT("Re-registration also replaces a timer in another group"), Clock->DoesTimeGroupTimerExist(First));
+	TestTrue(TEXT("Replacement uses default zero extra delay"), FMath::IsNearlyEqual(Clock->GetTimeGroupTimerRemaining(Replacement), 1.f));
+	for (int32 Index = 0; Index < 50; ++Index)
+	{
+		const FTimerHandle Random = Instance->SetGroupedItemTimerByEvent(Event(Instance), 1.f, false, Success, EARTimeGroup::Player, 1.f, .25f);
+		const float Remaining = Clock->GetTimeGroupTimerRemaining(Random);
+		TestTrue(TEXT("Variance stays within the native first-delay range"), Remaining >= 1.75f && Remaining <= 2.25f);
+	}
+	const FTimerHandle BeforeInvalid = Clock->FindEventTimer({}, Event(Instance));
+	TestFalse(TEXT("An unrelated lifetime cannot find a timer"), BeforeInvalid.IsValid());
+	const FTimerHandle Invalid = Instance->SetGroupedItemTimerByEvent(Event(Instance), .1f, true, Success, static_cast<EARTimeGroup>(255));
+	TestFalse(TEXT("Invalid timer group rejected"), Success || Invalid.IsValid());
+	const FTimerHandle Overflow = Instance->SetGroupedItemTimerByEvent(Event(Instance), std::numeric_limits<float>::max(), false,
+		Success, EARTimeGroup::Player, std::numeric_limits<float>::max());
+	TestFalse(TEXT("First delay arithmetic overflow rejected"), Success || Overflow.IsValid());
+	Instance->SetGroupedItemTimerByEvent(Event(Instance), 0.f, false, Success);
+	Scope.Advance(3.f);
+	TestEqual(TEXT("Zero clears rather than executing"), Calls, 2);
+	const auto Loop = Instance->SetGroupedItemTimerByEvent(Event(Instance), .1f, true, Success, EARTimeGroup::Player);
+	Callbacks.OnTimer = [&](UARLoadoutItemInstance* Item) { ++Calls; Item->UnregisterItem(EARItemRemovalReason::Discarded); };
+	Scope.Advance(.4f);
+	TestEqual(TEXT("Player callback may unregister itself without another firing"), Calls, 3);
+	TestFalse(TEXT("Executing player timer removed safely"), Clock->DoesTimeGroupTimerExist(Loop));
 	Player->Destroy();
 	return true;
 }

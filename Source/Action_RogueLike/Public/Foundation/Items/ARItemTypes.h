@@ -94,6 +94,7 @@ struct ACTION_ROGUELIKE_API FARSkillDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cost") FARResourceCost ResourceCost;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cooldown", meta=(ClampMin="0.0")) float BaseCooldown = 0.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cooldown", meta=(ClampMin="0.0")) float MinimumCooldown = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cooldown") EARTimeGroup CooldownTimeGroup = EARTimeGroup::World;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Action") FARActionRequest ActionRequest;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display") FText SkillDisplayName;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Display", meta=(MultiLine="true")) FText SkillDescription;

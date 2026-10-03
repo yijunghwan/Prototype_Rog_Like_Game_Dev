@@ -1,4 +1,5 @@
 #include "Foundation/Components/ARStaminaComponent.h"
+#include "Foundation/Time/ARTimeSubsystem.h"
 
 #include "Engine/World.h"
 #include "Foundation/Components/ARStatsComponent.h"
@@ -121,6 +122,5 @@ void UARStaminaComponent::BroadcastChange(float Delta, EARResourceChangeReason R
 
 double UARStaminaComponent::GetNow() const
 {
-	return GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return UARTimeSubsystem::OwnerNow(GetOwner());
 }
-

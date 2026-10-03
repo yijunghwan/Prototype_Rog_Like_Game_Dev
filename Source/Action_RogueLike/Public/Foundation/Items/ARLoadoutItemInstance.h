@@ -52,13 +52,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AR|Item")
 	int32 RemoveAllOwnItemModifiers();
 
-	/** Clears on item unregistration (including drop, replacement and owner EndPlay).
-	 * Not action-owned: a skill cancellation alone does not stop this timer.
-	 * Time>0. Initial Start Delay=-1 uses Time; bLooping=false performs one delayed call.
-	 * Each call creates an independent timer. Existing engine handle nodes can pause/unpause/clear it. */
-	UFUNCTION(BlueprintCallable, Category="AR|Item|Timer", meta=(DisplayName="Set Item Timer by Event", AdvancedDisplay="InitialStartDelay,bMaxOncePerFrame"))
-	FTimerHandle SetItemTimerByEvent(UPARAM(DisplayName="Event") FTimerDynamicDelegate Event, float Time,
-		bool bLooping, bool& bSuccess, float InitialStartDelay = -1.0f, bool bMaxOncePerFrame = true);
+	/** Clears on item unregistration (drop, replacement or owner EndPlay), not skill cancellation alone.
+	 * Unreal Blueprint timer semantics; same event re-registration replaces only this item's timer. */
+	UFUNCTION(BlueprintCallable, Category="AR|Item|Timer", meta=(DisplayName="Set Item Timer by Event", AdvancedDisplay="InitialStartDelay,InitialStartDelayVariance,bMaxOncePerFrame"))
+	FTimerHandle SetGroupedItemTimerByEvent(UPARAM(DisplayName="Event") FTimerDynamicDelegate Event, float Time,
+		bool bLooping, bool& bSuccess, EARTimeGroup TimeGroup = EARTimeGroup::World,
+		float InitialStartDelay = 0.0f, float InitialStartDelayVariance = 0.0f, bool bMaxOncePerFrame = false);
 
 	/** Item-owned guarantees are removed automatically when this runtime instance is unregistered. */
 	UFUNCTION(BlueprintCallable, Category="AR|Item|Guarantees")

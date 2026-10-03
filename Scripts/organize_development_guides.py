@@ -12,7 +12,10 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 GUIDES = ROOT / 'Docs/Guides'
+HOME_NAME = '가이드 메인 페이지.html'
+GUIDE_HOME = GUIDES / HOME_NAME
 PAGES = [
+    ('common', 'common/BASIC_CONTROLS_GUIDE_KO.html', '기본 조작', '기본 키 배치·중복 지정과 충돌 주의·키 추가/변경 문의'),
     ('common', 'common/BLUEPRINT_NODE_SEARCH_KO.html', '전체 노드 검색', '프로젝트 노드·이벤트 이름 검색과 입력·출력·구조체 설명'),
     ('common', 'common/OBJECT_STAT_GUIDE_KO.html', '스탯', '객체별 스탯·공식·기본값과 현재 자원'),
     ('common', 'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html', '피해·회복', '직접 피해·DOT·실드·회복·계산 공식'),
@@ -21,7 +24,8 @@ PAGES = [
     ('item', 'nsh/RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html', '런타임 기본', '등록·해제·아이템 타이머·효과·픽업 연결'),
     ('item', 'nsh/SKILL_RUNTIME_ACTION_GUIDE_KO.html', '아이템 스킬', '사전 조건·실행·액션 타이머·취소·종료'),
     ('enemy', 'hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html', '적 전체 가이드', '기본 설정·대상·그로기·사망·실드 이벤트'),
-    ('enemy', 'hhc/ENEMY_MOVEMENT_GUIDE_KO.html', '적 이동', 'NavMesh 만들기·컨트롤러·추적·정지'),
+    ('enemy', 'hhc/ENEMY_DETAILS_GUIDE_KO.html', '적 디테일 설정', '상속 설정·Combat Team·AI·충돌·스탯·그로기 사용'),
+    ('enemy', 'hhc/ENEMY_MOVEMENT_GUIDE_KO.html', '적 이동', 'NavMesh 담당·문의·컨트롤러·추적·정지'),
     ('enemy', 'hhc/ENEMY_ACTION_GUIDE_KO.html', '적 액션', '직접 액션 시작·공격 타이머·취소·종료'),
     ('environment', 'environment/ENEMY_SPAWN_GUIDE_KO.html', '적 스폰', '적 클래스 생성·확률·가중치·실패 처리'),
     ('environment', 'environment/ITEM_SEARCH_GUIDE_KO.html', '아이템 검색', 'DA 검색·소유 제외·중복 없이 N개 추첨'),
@@ -30,10 +34,14 @@ PAGES = [
     ('precautions', 'precautions/SKILL_PRIORITY_GUIDE_KO.html', '스킬 우선순위', '같은 우선순위 묶음·누적 비용·중단 규칙'),
     ('precautions', 'precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html', '이동 주의점', '경로/직선 혼동·CC 중단·반복 요청·실패 진단'),
     ('precautions', 'precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html', '스탯 조작·수명', '일반/아이템/액션 귀속·Permanent Flat·제거·스택'),
+    ('precautions', 'precautions/TIME_GROUP_GUIDE_KO.html', '시간 그룹', 'World·Player 선택·슬로모션·타이머 제어·기존 그래프 호환'),
 ]
 CATEGORIES = [('common','공통'),('item','아이템'),('enemy','적'),('environment','환경'),('precautions','주의점')]
 MOVE_MAP = {GUIDES/'OBJECT_STAT_GUIDE_KO.html': GUIDES/'common/OBJECT_STAT_GUIDE_KO.html',
-            GUIDES/'DAMAGE_NODES_FORMULA_GUIDE_KO.html': GUIDES/'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html'}
+            GUIDES/'DAMAGE_NODES_FORMULA_GUIDE_KO.html': GUIDES/'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html',
+            GUIDES/'index.html': GUIDE_HOME,
+            GUIDES/'GUN_BLUEPRINT_EXAMPLE_KO.md': GUIDES/'nsh/GUN_BLUEPRINT_EXAMPLE_KO.md',
+            GUIDES/'TEST_ENEMY_BLUEPRINT_KO.md': GUIDES/'hhc/TEST_ENEMY_BLUEPRINT_KO.md'}
 ANCHOR_MAP = {}
 
 def rel(source, target):
@@ -60,7 +68,7 @@ def cleanup(kind):
     return note(f'<strong>취소 후 직접 정리할 것:</strong> 경직·기절 등으로 실제 액션이 취소되면 시스템이 액션 생명주기와 액션 귀속 자원을 처리합니다. <code>Set Action Timer by Event</code>와 <code>Action Delay</code>는 자동 정리됩니다. 일반 <code>Set Timer by Event</code>·독립 Actor·공격 Bool·연출은 별도 정리가 필요합니다. <code>{event}</code>에서 해당 실행 핸들을 확인한 뒤 일반 Timer Handle을 <code>Clear and Invalidate Timer by Handle</code>에 연결하고 자체 상태를 정리하세요.{item_note} 모든 경직이 무조건 취소를 일으키지는 않습니다.')
 
 def managed_timers(context='all'):
-    shared=pins([('Event','매개변수 없는 Custom Event 또는 Create Event를 연결합니다. 콜백 안에서 자기 액션 종료/아이템 해제도 가능합니다.'),('Time','양수인 실행 간격(초). 0·음수·비유한 값은 실패. Looping=false면 이 시간 뒤 한 번 실행합니다.'),('Looping','반복 여부. false는 1회 예약, true는 정리될 때까지 반복합니다.'),('Success / Return Value','예약 성공 Bool / 실제 Timer Handle. Pause Timer by Handle·Unpause Timer by Handle·Clear and Invalidate Timer by Handle 등 기존 엔진 노드에 연결합니다.'),('Initial Start Delay · 고급','기본 -1은 첫 실행도 Time 뒤. 0은 다음 Timer Manager 처리 때, 양수는 지정 초 뒤 첫 실행합니다. -1 외 음수는 실패.'),('Max Once Per Frame · 고급','기본 true. 프레임 지연 시 밀린 반복을 같은 프레임에 여러 번 호출하지 않습니다. false면 엔진의 따라잡기 실행을 허용합니다.')])
+    shared=pins([('Event','매개변수 없는 Custom Event 또는 Create Event. 같은 수명 안에서 같은 Event를 재등록하면 기존 예약을 교체합니다.'),('Time','실행 간격(초). 양수로 예약하며 0·음수는 같은 수명·Event의 기존 예약을 제거하고 Success=false. 비유한 값은 거절합니다.'),('Looping','false는 1회 예약, true는 정리될 때까지 반복합니다.'),('Time Group','World / Player. 기본 World. 흐르는 시간 기준이며 자동 정리 수명과 별개입니다.'),('Success / Return Value','예약 성공 Bool / Timer Handle. Pause Time Group Timer·Unpause Time Group Timer·Clear Time Group Timer 및 그룹 조회 노드로 제어합니다.'),('Initial Start Delay · 고급','기본 0. 첫 실행은 Time + Initial Start Delay 뒤입니다. Time=1, Delay=0이면 1초 뒤, Delay=2이면 3초 뒤입니다.'),('Initial Start Delay Variance · 고급','기본 0. 첫 대기에 ±Variance 무작위 편차를 더합니다. 합계가 음수면 언리얼처럼 Time으로 대체됩니다. 이후 반복은 Time 간격입니다.'),('Max Once Per Frame · 고급','기본 false로 언리얼 Blueprint 타이머와 같습니다. true면 밀린 반복을 한 프레임에 최대 한 번 호출합니다.')])
     action=node('set-action-timer','Set Action Timer by Event','스킬·적 공격의 선딜, 후딜, 반복 실행은 이 노드를 우선 사용하세요. 한 액션 실행에 예약을 귀속하여 정상 End Action·실제 Cancel·소유 Actor EndPlay 때 자동 Clear합니다.',pins([('Target','Get Action Component에서 받은 AR Action Component. 아이템에서는 Get Item Owner → Get Action Component.'),('Action Handle','Execute Item Skill 또는 Try Start Action에서 받은 이번 실행의 핸들. 무효/다른 관리자 핸들은 실패.')])+shared)
     item=node('set-item-timer','Set Item Timer by Event','무기·유물 보유 중 주기 효과 또는 1회 지연 호출은 이 노드를 우선 사용하세요. 버림·교체·소유자 EndPlay로 아이템이 해제되면 자동 Clear합니다.',pins([('Target','등록된 ARLoadoutItemInstance 런타임 Self. 적 Actor·픽업 Actor·소모품 런타임에 놓는 노드가 아닙니다.'),('액션과 차이','스킬 취소만으로는 멈추지 않습니다. 스킬 선딜/반복 공격에는 액션 타이머를 사용하세요.'),('해제 이벤트 순서','아이템 타이머는 On Item Unregistered 호출 전에 제거됩니다. 해제 이벤트에서 새 아이템 타이머를 시작할 수 없습니다.')])+shared)
     selection='<p>먼저 <strong>어느 수명이 끝날 때 예약도 없어져야 하는지</strong> 선택합니다. 새 아이템·공격 그래프에서 일반 Set Timer by Event를 기본으로 쓰지 말고, 아래 귀속 노드를 사용하세요.</p>'
@@ -72,7 +80,7 @@ def managed_timers(context='all'):
           '<div class="flow">보유 효과: On Item Registered → Set Item Timer by Event(Target=Self) → Success 확인<br>스킬: Execute Item Skill → 받은 Action Handle 저장 → Set Action Timer by Event → Success 확인<br>Event 콜백 → 대상/콘텐츠 조건 확인 → 효과 처리 → 스킬 완료라면 End Action</div>')
     return chapter('managed-timers','권장 타이머 · 수명 선택과 연결',selection+action+(item if context!='enemy' else '')+flow+
         node('timer-callback','Event 콜백 · 완료와 취소의 차이','흰 실행 출력은 예약 직후이지 시간이 지난 출력이 아닙니다. 실제 효과는 Event에 연결한 Custom Event 안에서 실행합니다.',pins([('매개변수','Event는 입력 핀이 없는 Custom Event / Create Event입니다. 액션 핸들·대상은 실행별 상태에 저장해 콜백에서 읽습니다.'),('정상 완료','1회 호출이 끝나도 액션이 자동 종료되지는 않습니다. 마지막 효과 뒤 같은 관리자·핸들로 End Action. 실패 출구도 종료합니다.'),('자동 취소/해제','타이머에는 Cancelled 출력이 없습니다. On Item Skill Cancelled / On Action Cancelled / On Item Unregistered에서 자체 변수·연출·구독을 정리합니다.'),('콜백의 대상','귀속 수명과 별개로 대상 Actor가 삭제되거나 사망할 수 있습니다. Is Valid·사망·거리 등 콘텐츠 조건을 다시 확인합니다.'),('동시 실행','하나의 저장 변수로 이전 실행 핸들을 덮어쓰지 마세요. 중복 실행을 막거나 실행별 상태를 구분해야 합니다.')]),'연결 규칙')+
-        node('timer-pitfalls','중복 예약·Pause·이미 적용한 효과','전용 타이머는 예약의 수명만 관리합니다. 콘텐츠의 모든 상태를 자동 되돌리는 기능은 아닙니다.',pins([('중복 예약','호출마다 독립된 Timer가 생깁니다. 같은 Event를 넣어도 덮어쓰지 않습니다. Tick마다 시작하지 말고 등록/실행 시 한 번 시작하거나 Does Timer Exist by Handle 등으로 중복을 막습니다.'),('Pause / Unpause / Clear','Return Value를 Timer Handle 변수에 저장해 엔진 노드에 연결합니다. Pause는 남은 시간을 보존하며, 수명이 끝나면 일시정지 중이어도 제거됩니다. Clear한 타이머는 Unpause로 되살릴 수 없습니다.'),('CC와 취소 규칙','경직/기절 자체가 모든 타이머를 중단시키지는 않습니다. 해당 Action이 실제 취소되어야 액션 타이머가 제거됩니다. 아이템 보유 타이머는 별개입니다.'),('기존 일반 Timer','새 노드로 자동 전환되지 않습니다. 일반 Timer는 직접 Clear하거나 원하는 귀속 노드로 교체해야 합니다.'),('이미 적용한 효과','일반 스탯 보정·독립 투사체·등록한 DOT·Bool·구독은 타이머 Clear만으로 사라지지 않습니다. 각각의 귀속/제거 정책을 따릅니다.'),('단순 1회 대기','Looping=false로 한 번 예약할 수 있습니다. 순차 실행과 Completed/Cancelled 분기가 필요한 액션 대기는 Action Delay도 사용할 수 있습니다. 일반 Delay에는 귀속 수명이 없습니다.')]),'주의점'))
+        node('timer-pitfalls','중복 예약·Pause·이미 적용한 효과','전용 타이머는 예약의 수명만 관리합니다. 콘텐츠의 모든 상태를 자동 되돌리는 기능은 아닙니다.',pins([('중복 예약','같은 아이템 또는 같은 Action Handle 안의 같은 Event는 교체합니다. 다른 아이템·액션은 독립적입니다. Tick마다 재등록하면 예약 시간이 계속 초기화될 수 있습니다.'),('Pause / Unpause / Clear','Return Value를 저장해 그룹용 제어 노드에 연결합니다. Player 예약은 엔진 기본 월드 Timer Handle 노드로 제어하지 마세요. 일시정지 중에도 수명 종료 시 제거되고 Clear 뒤 Unpause로 되살릴 수 없습니다.'),('CC와 취소 규칙','실제 Action 취소 시 액션 타이머가 제거됩니다. 아이템 보유 타이머는 별개입니다.'),('기존 일반 Timer','일반 엔진 타이머는 World입니다. 자동 전환되지 않으며 직접 Clear하거나 귀속 노드로 교체해야 합니다.'),('이미 적용한 효과','일반 보정·독립 투사체·DOT·Bool·구독은 Timer Clear만으로 사라지지 않습니다.'),('단순 1회 대기','Looping=false로 한 번 예약할 수 있습니다. Action Delay는 활성 Action Request의 Time Group을 자동으로 따르고 Completed/Cancelled로 분기합니다. 일반 Delay는 World이며 귀속 수명이 없습니다.')]),'주의점'))
 
 def refresh_cleanup(text, kind):
     return re.sub(r'<p class="note[^\"]*"><strong>취소 후 직접 정리할 것:</strong>.*?</p>',lambda _: cleanup(kind),text,flags=re.S)
@@ -88,8 +96,8 @@ def add_managed_timers(text, context='all'):
     return text
 
 def navigation(path, category):
-    home = rel(path, GUIDES/'index.html')
-    globals_ = link(home,'가이드 메인') + ''.join(f'<a href="{home}#{key}"'+(' aria-current="true"' if key==category else '')+f'>{name}</a>' for key,name in CATEGORIES)
+    home = rel(path, GUIDE_HOME)
+    globals_ = link(home,'가이드 메인 페이지') + ''.join(f'<a href="{home}#{key}"'+(' aria-current="true"' if key==category else '')+f'>{name}</a>' for key,name in CATEGORIES)
     peers = ''.join(f'<a href="{rel(path, GUIDES/url)}"'+(' aria-current="page"' if path==GUIDES/url else '')+f'>{name}</a>' for key,url,name,_ in PAGES if key==category)
     return f'<nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global">{globals_}</div>'+ (f'<div class="guide-peers">{peers}</div>' if peers else '')+'</div></nav>'
 
@@ -116,6 +124,42 @@ COMBAT = 'Source/Action_RogueLike/Public/Foundation/Blueprint/ARCombatBlueprintL
 ACTION = 'Source/Action_RogueLike/Public/Foundation/Components/ARActionComponent.h'
 STATS = 'Source/Action_RogueLike/Public/Foundation/Blueprint/ARStatsBlueprintLibrary.h'
 ITEM = 'Source/Action_RogueLike/Public/Foundation/Items/ARLoadoutItemInstance.h'
+
+def build_controls():
+    rows = [
+        ('이동', 'W / A / S / D', '앞 / 왼쪽 / 뒤 / 오른쪽 방향 이동'),
+        ('구르기 · 회피', 'Space', '기본 회피 입력'),
+        ('인벤토리', 'I', '인벤토리 열기'),
+        ('액티브 유물 1번 슬롯', 'E', '현재 1번 슬롯에 장착한 유물 사용'),
+        ('액티브 유물 2번 슬롯', 'R', '현재 2번 슬롯에 장착한 유물 사용'),
+        ('소모품 1번 슬롯', '1', '1번 슬롯 소모품 사용'),
+        ('소모품 2번 슬롯', '2', '2번 슬롯 소모품 사용'),
+        ('소모품 3번 슬롯', '3', '3번 슬롯 소모품 사용'),
+        ('상호작용', 'F', '픽업 획득 등 현재 상호작용 대상에게 요청'),
+        ('무기 1번 스킬', 'Shift', '무기 1번 스킬 입력'),
+        ('무기 2번 스킬', 'Q', '무기 2번 스킬 입력'),
+        ('무기 3번 스킬', 'X', '무기 3번 스킬 입력'),
+    ]
+    table = '<div class="scroll"><table><thead><tr><th scope="col">기능</th><th scope="col">기본 키</th><th scope="col">용도</th></tr></thead><tbody>'
+    table += ''.join(f'<tr><th scope="row">{escape(name)}</th><td><code>{escape(key)}</code></td><td>{escape(description)}</td></tr>' for name,key,description in rows)
+    table += '</tbody></table></div>'
+    sections = [
+        ('keys', '기본 조작표', chapter('keys', '기본 조작 · 제작 기준',
+            '<p>콘텐츠 제작 시 아래 기본 키 배치를 기준으로 사용하세요. 유물·소모품 키는 현재 장착된 슬롯의 아이템을 사용하는 입력입니다.</p>'
+            + table + note('이 문서는 키 배치 안내입니다. 가이드 편집만으로 플레이어의 실제 입력 설정이나 게임 에셋이 변경되지는 않습니다.'), opened=True)),
+        ('assignment', '추가 지정·충돌 주의', chapter('assignment', '추가 키 지정 · 같은 키를 재사용할 때',
+            '<p>위 기본 조작 키에 스킬을 <strong>중복 지정하는 것도 가능합니다.</strong> 의도적으로 같은 입력을 공유할 수 있지만 <strong>충돌에 주의하세요.</strong> 기존 동작이 자동으로 대체되거나 한 동작만 실행된다고 가정하지 마세요.</p>'
+            + pins([('자유롭게 지정 가능한 권장 키', '<code>Z</code>, <code>C</code>. 새 콘텐츠에서 키가 필요한 경우 우선 고려할 수 있습니다. 다른 콘텐츠가 이미 사용하는지는 함께 확인하세요.'),
+                    ('중복 지정 시 확인', '한 번 누를 때 기존 이동·상호작용·슬롯 사용·무기 스킬 중 어떤 동작들이 요청되는지 확인합니다. 예를 들어 F에 스킬을 추가하면 상호작용 입력과 겹칠 수 있습니다.'),
+                    ('공유 입력의 스킬 우선순위', '같은 스킬 요청에 포함된 스킬들은 시스템의 우선순위·조건·비용 규칙으로 판단됩니다. 별개의 상호작용이나 슬롯 입력까지 이 우선순위가 자동으로 통합하는 것은 아닙니다.'),
+                    ('동작 검증', '단독 사용과 중복 지정 상태를 모두 테스트하세요. UI를 열었을 때와 비용 부족·쿨타임·CC 중에도 의도한 입력만 실행되는지 확인합니다.')])
+            + '<p><a href="../precautions/SKILL_PRIORITY_GUIDE_KO.html#rule">공유 스킬 입력의 우선순위·비용 규칙</a></p>')),
+        ('contact', '키 추가·변경·건의', chapter('contact', '키 정책 문의',
+            note('<strong>키를 추가하거나 변경하고 싶거나, 조작 키에 대한 건의가 있으면 이정환에게 문의하세요.</strong>', 'good')
+            + '<p>원하는 키와 용도, 기존 키와의 중복 여부를 함께 알려주세요.</p>', opened=True)),
+    ]
+    save('common/BASIC_CONTROLS_GUIDE_KO.html', page('common/BASIC_CONTROLS_GUIDE_KO.html', 'common',
+        '기본 조작 · 키 배치 참고서', '기본 키를 확인하고, 추가 지정과 충돌 주의사항을 확인합니다.', sections))
 
 def build_cc():
     s=[]
@@ -196,7 +240,7 @@ def build_environment():
     spawn.append(('weights','가중치',chapter('weights','여러 적 중 가중치로 한 종류 선택',
         '<p>콘텐츠 구조체 배열에 <code>Enemy Class</code>와 <code>Weight</code>를 저장합니다. 이 페이지는 기존 노드 조합법이며 별도의 프로젝트 가중치 추첨 노드가 구현됐다는 뜻은 아닙니다.</p><ol><li>유효 클래스이고 Weight&gt;0인 후보만 모읍니다.</li><li>가중치 합 TotalWeight를 계산합니다. 후보 없음/합0이면 생성하지 않습니다.</li><li>Random Float in Range(0,TotalWeight)를 한 번 평가하고 변수에 저장합니다.</li><li>For Each Loop with Break에서 누적 Weight를 더합니다.</li><li>RandomValue &lt; 누적값인 첫 후보를 선택하고 Break합니다. 난수의 상단 경계값에는 마지막 유효 후보를 선택하도록 처리합니다.</li><li>선택한 Class로 Spawn Actor from Class를 호출합니다.</li></ol>'+note('각 후보에 따로 확률 Branch를 걸면 한 번에 여러 종류가 생성될 수 있습니다. 한 종류만 고르는 가중치 추첨과 다릅니다. 반복 사용할 무작위 값은 변수에 저장하여 순수 노드가 연결마다 다시 평가되지 않게 합니다.')+'<p>가중치1·3은 상대 비율25%·75%입니다. 전역 생성 여부25%와 종류별 가중치를 함께 쓸 때는 두 단계로 분리합니다.</p>')))
     spawn.append(('lifecycle','생성 후 관리',chapter('lifecycle','AI 소유·사망·삭제·최대 수',
-        '<p>ARBaseEnemy 기본은 ARAIController 및 배치/스폰 자동 빙의입니다. 자식 BP의 덮어쓰기 때문에 실제 Controller가 없는지 확인하고, 필요한 경우 엔진 <code>Spawn Default Controller</code>를 사용합니다. NavMesh 없이 클래스를 생성했다고 경로 이동까지 보장되지는 않습니다.</p>'+pins([('On Character Death','적 자체 사망 처리는 직접 이벤트를 사용합니다. 외부 스포너가 추적하려면 생성한 적의 사망 디스패처에 자기 이벤트를 Bind할 수 있습니다.'),('삭제 수 집계','사망 뒤 연출 동안 Actor가 남을 수 있습니다. 살아 있는 수와 월드 Actor 수를 구분하고, 사망·Destroy 양쪽으로 중복 차감하지 않습니다.'),('소유한 Timer','스포너 EndPlay에서 자체 반복 타이머를 Clear. 스포너 제거 시 생성된 적까지 제거할지는 콘텐츠 정책입니다.')])+'<p><a href="../hhc/ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build">NavMesh 만드는 법</a> · <a href="../hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#character-death">사망 이벤트</a></p>')))
+        '<p>ARBaseEnemy 기본은 ARAIController 및 배치/스폰 자동 빙의입니다. 자식 BP의 덮어쓰기 때문에 실제 Controller가 없는지 확인하고, 필요한 경우 엔진 <code>Spawn Default Controller</code>를 사용합니다. NavMesh 없이 클래스를 생성했다고 경로 이동까지 보장되지는 않습니다. NavMesh 준비는 맵 제작자가 담당하므로 없으면 맵 제작자에게 문의하세요.</p>'+pins([('On Character Death','적 자체 사망 처리는 직접 이벤트를 사용합니다. 외부 스포너가 추적하려면 생성한 적의 사망 디스패처에 자기 이벤트를 Bind할 수 있습니다.'),('삭제 수 집계','사망 뒤 연출 동안 Actor가 남을 수 있습니다. 살아 있는 수와 월드 Actor 수를 구분하고, 사망·Destroy 양쪽으로 중복 차감하지 않습니다.'),('소유한 Timer','스포너 EndPlay에서 자체 반복 타이머를 Clear. 스포너 제거 시 생성된 적까지 제거할지는 콘텐츠 정책입니다.')])+'<p><a href="../hhc/ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build">NavMesh 담당·문의</a> · <a href="../hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#character-death">사망 이벤트</a></p>')))
     save('environment/ENEMY_SPAWN_GUIDE_KO.html',page('environment/ENEMY_SPAWN_GUIDE_KO.html','environment','적 스폰·확률 참고서','스포너에서 클래스를 선택하고, 생성 성공과 생존 수를 관리하는 노드 조합입니다.',spawn,[('Source/Action_RogueLike/Private/Foundation/Characters/ARBaseEnemy.cpp','적 기본 컨트롤러'),('Source/Action_RogueLike/Public/Foundation/Characters/ARBaseCharacter.h','사망 이벤트')]))
 
     search=[]
@@ -219,10 +263,10 @@ def build_environment():
     pickup.append(('other-types','획득·소모품',chapter('other-types','획득과 소모품 경로 구분',node('spawn-consumable','Try Spawn Consumable Pickup','소모품 DA를 월드 픽업으로 생성할 때 사용합니다. 소모품 슬롯 획득 경로는 Loadout 유물과 달라 별도 노드가 필요합니다.',pins([('Target / Definition / Desired Location','같은 월드 관리자 / 소모품 DA / 월드 위치.'),('Pickup Class','ARConsumablePickup 자식 클래스.'),('Drop Owner / Return Value / Spawned Pickup','엔진 소유자 / 생성 성공 Bool / 생성 Actor 참조.')]))+node('direct-acquire','Try Acquire Item','픽업을 만들지 않고 지정 플레이어에게 DA 획득을 요청하려는 별도 상황에 사용합니다. 월드에 보이는 픽업 생성 노드를 대체하는 목적은 아닙니다.',pins([('Player / Definition','받을 플레이어 / 아이템 DA.'),('Return Value','Request Status 구조체. Success 확인 후 보상 지급 완료로 처리합니다. 슬롯·교체 선택 등의 이유로 실패할 수 있습니다.')]))+'<p>기본 픽업 획득은 플레이어 Interaction Component의 요청을 통해 처리합니다. 성공해야 픽업이 사라지며, 사용자 정의 추가 스탯 지급은 획득 성공과 중복 방지를 함께 설계합니다.</p>')))
     save('environment/ITEM_PICKUP_SPAWN_GUIDE_KO.html',page('environment/ITEM_PICKUP_SPAWN_GUIDE_KO.html','environment','아이템·유물 픽업 소환','선택된 DA로 월드 픽업을 만들고 외형 클래스를 지정하는 연결 참고서입니다.',pickup,[('Source/Action_RogueLike/Public/Foundation/Interaction/ARWorldItemDropSubsystem.h','픽업 소환 핀'),('Source/Action_RogueLike/Private/Foundation/Interaction/ARWorldItemDropSubsystem.cpp','생성·충돌 정책'),('Source/Action_RogueLike/Public/Foundation/Interaction/ARItemPickupActors.h','픽업 클래스·이벤트')]))
 
-NAV_BUILD = node('navmesh-build','Nav Mesh Bounds Volume · NavMesh 만들기','NavMesh는 AI가 걸어갈 수 있는 영역과 경로를 계산할 탐색 데이터입니다. 이동 노드가 없는 바닥이나 통로를 자동으로 생성해 주는 것은 아닙니다.',
-    '<ol><li>레벨에 적 Capsule이 실제로 설 수 있는 바닥과 충돌을 준비합니다.</li><li>Place Actors(액터 배치)에서 <code>Nav Mesh Bounds Volume</code>을 검색해 배치합니다.</li><li>Volume의 위치·크기를 조정하여 이동할 바닥과 경로 영역을 덮습니다.</li><li>레벨 뷰포트에 포커스를 두고 <kbd>P</kbd>를 눌러 탐색 영역을 표시합니다. 생성된 이동 가능 면이 시작과 목표를 연결하는지 확인합니다.</li><li>탐색 데이터가 갱신되지 않으면 에디터의 Navigation 빌드/자동 갱신 설정을 확인합니다.</li></ol>'+
-    note('Volume이 바닥을 덮는 것만으로 통행이 보장되지는 않습니다. 바닥 충돌·수직 높이·경사·통로 폭·Nav Agent Radius/Height가 적 Capsule과 맞아야 합니다. 평면 게임의 외형 Sprite가 아니라 실제 월드 바닥을 확인하세요.')+
-    '<p><a href="https://dev.epicgames.com/documentation/unreal-engine/basic-navigation-in-unreal-engine">Epic 공식 Basic Navigation 안내</a></p>', '레벨 설정')
+# Preserve the existing anchor so bookmarks and cross-guide links keep working.
+NAV_REQUIREMENT = node('navmesh-build','NavMesh · 맵 제작자 담당','NavMesh는 AI가 이동 가능한 영역과 경로를 찾는 데 필요한 맵 데이터입니다. 생성·관리는 맵 제작자가 담당합니다.',
+    note('NavMesh가 없으면 AR AI Move To Actor / AR AI Move To Location을 사용하는 적은 경로 이동을 할 수 없습니다. NavMesh가 없거나 경로가 연결되지 않아 움직이지 않는다면 맵 제작자에게 문의하세요.')+
+    '<p>적 제작자가 이 가이드를 따라 NavMesh를 직접 만들 필요는 없습니다. Request Basic Move 같은 직선 이동 입력은 NavMesh 경로 탐색과 별개입니다.</p>', '맵 의존성')
 
 def build_movement_checklist():
     s=[]
@@ -233,10 +277,10 @@ def build_movement_checklist():
     s.append(('blocked','CC·재개',chapter('blocked','노드 내부가 검사하는 것과 제작자 책임',
         '<p>AR 경로/일반 이동 요청은 공통 Can Basic Move를 검사하여 사망·기절·경직·이동 잠금 중인 요청을 거절합니다. ARAIController는 이동 잠금 발생 시 진행 중 경로도 정지시킵니다.</p>'+note('CC가 풀려도 정지시킨 경로가 자동 재개된다고 가정하지 않습니다. AI 판단 루프가 이동 가능·목표 유효성을 다시 확인하고 필요하면 새 요청을 발행해야 합니다.')+pins([('공격 조건','이동 노드가 적의 사거리·쿨타임·타깃 선정까지 판단하지 않습니다.'),('도착 판정','Request Successful은 요청 수락이지 이동 완료가 아닙니다. 공격 전 현재 거리/높이를 다시 확인합니다.'),('정지','AI 경로를 취소하려면 Controller의 Stop Movement. 순간 속도 정지와 경로 요청 정지는 역할이 다릅니다.'),('잠금 해제','자신이 발급받은 이동 잠금만 해제합니다. 다른 상태·액션의 잠금을 전체 Clear하지 않습니다.')]))))
     s.append(('diagnose','안 움직임',chapter('diagnose','안 움직일 때 순서대로 확인',
-        '<ol><li>실행선이 실제로 노드까지 오는가? 시작 Tick/Timer/이벤트가 동작하는가?</li><li>적 Get Controller가 유효하고 ARAIController Cast가 성공하는가?</li><li>Goal이 유효한 실제 Pawn/Actor인가? 플레이어 생성 전에 캐시한 빈 참조는 아닌가?</li><li>MoveSpeed&gt;0이고 현재 Can Basic Move가 true인가?</li><li>NavMesh가 바닥에 생성되어 시작/목표까지 연결되는가?</li><li>Capsule·바닥 충돌·이동 평면 제한·물리 시뮬레이션이 충돌하지 않는가?</li><li>경로 반환 Failed / Already At Goal / Request Successful 중 무엇인가?</li><li>공격 종료의 End Action 또는 자체 이동 잠금 해제가 누락됐는가?</li></ol><p><a href="../hhc/ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build">NavMesh 생성 단계</a> · <a href="ACTION_LIFECYCLE_GUIDE_KO.html">액션 수명 점검</a></p>')))
+        '<ol><li>실행선이 실제로 노드까지 오는가? 시작 Tick/Timer/이벤트가 동작하는가?</li><li>적 Get Controller가 유효하고 ARAIController Cast가 성공하는가?</li><li>Goal이 유효한 실제 Pawn/Actor인가? 플레이어 생성 전에 캐시한 빈 참조는 아닌가?</li><li>MoveSpeed&gt;0이고 현재 Can Basic Move가 true인가?</li><li>맵 제작자가 NavMesh를 준비했는가? NavMesh가 없거나 시작/목표까지 경로가 연결되지 않으면 맵 제작자에게 문의하세요.</li><li>Capsule·바닥 충돌·이동 평면 제한·물리 시뮬레이션이 충돌하지 않는가?</li><li>경로 반환 Failed / Already At Goal / Request Successful 중 무엇인가?</li><li>공격 종료의 End Action 또는 자체 이동 잠금 해제가 누락됐는가?</li></ol><p><a href="../hhc/ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build">NavMesh 담당·문의</a> · <a href="ACTION_LIFECYCLE_GUIDE_KO.html">액션 수명 점검</a></p>')))
     s.append(('warnings','개발용 경고',chapter('warnings','출력 로그에서 이동 경고 확인',
         '<p>개발용 실행에서 AR AI Move To Actor / Location 요청이 실패하면 <strong>출력 로그(Output Log)</strong>의 <code>LogARFoundation</code>에 <code>[AR 이동:원인]</code>, 객체 이름, Controller 이름, 확인할 설정을 표시합니다. 팝업이나 화면 경고가 아니며 이동 결과와 경로를 바꾸지 않습니다.</p>'+pins([
-        ('NoPawn / NoMovementControl','제어 중인 Pawn 또는 Movement Control Component가 없습니다. 빙의·Auto Possess AI·클래스와 컴포넌트를 확인합니다.'),('InvalidGoal / InvalidDestination','Goal Actor가 없거나 제거됨 / 좌표에 유효하지 않은 수치가 있음.'),('NoNavMesh','해당 Agent가 사용할 Navigation Data가 없습니다. Bounds Volume·생성 상태·Agent 설정 확인.'),('StartOffNavMesh / GoalOffNavMesh','현재 위치 또는 목표 위치를 NavMesh에 투영하지 못함. 배치 높이·바닥 충돌·Can Ever Affect Navigation을 점검하되 특정 메시가 원인이라고 확정하는 경고는 아닙니다.'),('MoveFailed','정확한 원인을 확정하지 못한 일반 실패. 경로 연결·필터·이동 컴포넌트 상태 확인.')])+note('같은 Controller의 같은 원인은 최대 5초마다 한 번 안내합니다. 추가 NavMesh 진단도 5초 간격으로 제한합니다. CC·사망·액션 이동 잠금에 의한 정상 거절은 경고하지 않으며 Already At Goal·Request Successful도 경고하지 않습니다. Shipping 빌드에서는 이 진단을 실행하지 않습니다.')+'<p>이 경고는 C++ 이동 요청까지 도달한 경우만 검사합니다. 실행선 미연결, 실패한 Cast, 빈 Target 때문에 노드가 호출되지 않은 상황이나 이동 수락 후의 장기 정체까지 자동 발견하는 기능은 아닙니다.</p>')))
+        ('NoPawn / NoMovementControl','제어 중인 Pawn 또는 Movement Control Component가 없습니다. 빙의·Auto Possess AI·클래스와 컴포넌트를 확인합니다.'),('InvalidGoal / InvalidDestination','Goal Actor가 없거나 제거됨 / 좌표에 유효하지 않은 수치가 있음.'),('NoNavMesh','해당 Agent가 사용할 Navigation Data가 없습니다. NavMesh 생성·관리는 맵 제작자가 담당하므로 맵 제작자에게 문의하세요.'),('StartOffNavMesh / GoalOffNavMesh','현재 위치 또는 목표 위치를 NavMesh에 투영하지 못함. 배치 위치를 확인하고 맵의 경로 영역은 맵 제작자에게 문의하세요. 특정 메시가 원인이라고 확정하는 경고는 아닙니다.'),('MoveFailed','정확한 원인을 확정하지 못한 일반 실패. 경로 연결·필터·이동 컴포넌트 상태 확인.')])+note('같은 Controller의 같은 원인은 최대 5초마다 한 번 안내합니다. 추가 NavMesh 진단도 5초 간격으로 제한합니다. CC·사망·액션 이동 잠금에 의한 정상 거절은 경고하지 않으며 Already At Goal·Request Successful도 경고하지 않습니다. Shipping 빌드에서는 이 진단을 실행하지 않습니다.')+'<p>이 경고는 C++ 이동 요청까지 도달한 경우만 검사합니다. 실행선 미연결, 실패한 Cast, 빈 Target 때문에 노드가 호출되지 않은 상황이나 이동 수락 후의 장기 정체까지 자동 발견하는 기능은 아닙니다.</p>')))
     s.append(('repeat','반복 요청',chapter('repeat','반복 요청·난수·성능 주의',
         '<p>매 Tick마다 새로운 AI 경로를 강제로 재발행하면 불필요한 경로 계산·중단·재시작이 생길 수 있습니다. 타깃 변경·일정 주기·기존 이동 완료/중단 등 재요청 기준을 정하세요. 단, Request Basic Move는 방향 입력 방식이므로 지속 이동에는 반복 입력이 필요합니다.</p>'+note('두 이동 방식을 동시에 계속 호출하거나 공격 중 추적 루프가 경로를 재시작하지 않게 합니다. 공격 거리와 Acceptance Radius는 Capsule 크기 때문에 같지 않을 수 있습니다.'))))
     save('precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html',page('precautions/ENEMY_MOVEMENT_CHECKLIST_KO.html','precautions','적 이동 주의점·진단','이동 상세 문서와 별도로, 제작 중 자주 생기는 연결·CC·경로 오류를 빠르게 점검합니다.',s,[('Source/Action_RogueLike/Private/Foundation/AI/ARAIController.cpp','경로 요청·CC 정지'),('Source/Action_RogueLike/Private/Foundation/Components/ARMovementControlComponent.cpp','일반/액션 이동 검사')]))
@@ -304,13 +348,13 @@ def extract_enemy():
     for key in ['self-stun','stun-definition']:
         ANCHOR_MAP[(enemy.resolve(),key)]=GUIDES/'common/CC_STAGGER_GUIDE_KO.html'
     # Detailed movement page with engine navigation setup and exact controller chain.
-    msections=[('navmesh','NavMesh 준비',chapter('navmesh','NavMesh 만들기·경로 영역',NAV_BUILD,True)),
+    msections=[('navmesh','NavMesh 담당·문의',chapter('navmesh','NavMesh · 맵 제작자에게 문의',NAV_REQUIREMENT,True)),
                ('controller','컨트롤러 연결',chapter('controller','정확한 노드 연결·검색 위치',
                 '<ol><li>적 BP에서 <code>Get Controller</code> 노드를 놓습니다. Target은 적 Self입니다.</li><li>Return Value를 <code>Cast To ARAIController</code>의 Object에 연결합니다.</li><li>As ARAIController 출력에서 선을 끌어 <code>AR AI Move To Actor</code> 또는 <code>AR AI Move To Location</code>을 검색합니다.</li><li>Actor 추적이면 Goal에 저장한 TargetActor, 좌표 이동이면 Destination에 월드 Vector를 연결합니다.</li><li>흰 실행선은 판단 이벤트 → Cast → 이동 노드로 이어줍니다. Cast Failed도 확인합니다.</li></ol>'+note('노드 검색이 안 뜨면 빈 그래프의 검색보다 ARAIController 참조에서 선을 끌어 검색하세요. 실제 적의 AI Controller Class와 Auto Possess AI(Placed in World or Spawned) 설정도 확인합니다. 컨트롤러 캐시는 BeginPlay에 준비할 수 있지만 Spawn/빙의 시점에 없으면 이후 유효할 때 다시 얻습니다.')))]
     for key,title in [('movement','직선·정지·잠금'),('navigation','경로 요청')]:
         raw=block(movement_source,key)
         if key=='navigation':
-            raw=replace_block(raw,'nav-setup',node('nav-setup','NavMesh·Controller 준비 요약','AR 경로 이동은 실제 ARAIController 소유와 이동 가능한 NavMesh 영역이 필요합니다.','<p><a href="#navmesh-build">NavMesh 생성 단계</a> · <a href="#controller">정확한 노드 연결</a></p>','설정'))
+            raw=replace_block(raw,'nav-setup',node('nav-setup','NavMesh·Controller 준비 요약','AR 경로 이동은 실제 ARAIController 소유와 이동 가능한 NavMesh 영역이 필요합니다. NavMesh는 맵 제작자가 담당하며, 없거나 경로가 연결되지 않으면 맵 제작자에게 문의하세요.','<p><a href="#navmesh-build">NavMesh 담당·문의</a> · <a href="#controller">정확한 노드 연결</a></p>','설정'))
         raw=rewrite_links(raw,movement_origin,movement)
         msections.append((key,title,raw))
     msections.append(('recovery','CC 이후 재요청',chapter('recovery','CC가 끝난 뒤 추적 재요청',
@@ -329,7 +373,7 @@ def extract_enemy():
     # Overview keeps the complete workflow and event/groggy/death content, not duplicate pin manuals.
     replacements={
         'movement':('일반 이동 · 상세 문서','ENEMY_MOVEMENT_GUIDE_KO.html#movement','직선 방향 입력, 순간 정지, 이동 잠금·조회. 장애물 우회와는 다른 목적입니다.'),
-        'navigation':('경로 이동 · NavMesh','ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build','NavMesh 생성 단계, Get Controller 연결, AR AI Move To Actor/Location의 핀과 재요청.'),
+        'navigation':('경로 이동 · NavMesh','ENEMY_MOVEMENT_GUIDE_KO.html#navmesh-build','NavMesh는 맵 제작자가 준비합니다. 없거나 경로가 연결되지 않아 적이 움직이지 않으면 맵 제작자에게 문의하세요. Get Controller 연결, AR AI Move To Actor/Location의 핀과 재요청은 이동 참고서에서 확인합니다.'),
         'action':('액션 시작·종료','ENEMY_ACTION_GUIDE_KO.html#action','직접 Try Start Action에서 성공 핸들을 저장하고 모든 완료 경로를 End Action으로 끝냅니다.'),
         'delay':('공격 타이머·선딜·후딜','ENEMY_ACTION_GUIDE_KO.html#managed-timers','선딜·후딜·반복 공격은 Set Action Timer by Event를 우선 사용합니다. Event 콜백에서 판정하고 마지막에 End Action. 순차 대기 분기가 필요하면 Action Delay도 사용할 수 있습니다.'),
         'damage':('피해·원 판정·히트박스','ENEMY_ACTION_GUIDE_KO.html#damage','공격력 비례 피해, 결과→경직/그로기, 단일/다중 대상 판정과 액션 귀속 Actor.'),
@@ -387,17 +431,18 @@ def enhance_item():
     save(runtime,add_managed_timers(text))
 
 def portal_index():
-    path=GUIDES/'index.html'
+    path=GUIDE_HOME
     bodies=[]
-    intros={'common':'모든 콘텐츠가 공유하는 스탯·피해·상태 규칙.','item':'데이터 에셋 → 런타임 기본 → 아이템 내부 스킬 순서로 제작합니다.','enemy':'전체 흐름은 유지하고 이동과 액션 핀 설명은 독립 참고서로 분리했습니다.','environment':'스포너·보상 후보 검색·월드 픽업 생성의 노드 조합.','precautions':'제작 중 실수하기 쉬운 규칙을 별도 상세 문서로 확인합니다.'}
+    intros={'common':'기본 조작과 모든 콘텐츠가 공유하는 스탯·피해·상태 규칙.','item':'데이터 에셋 → 런타임 기본 → 아이템 내부 스킬 순서로 제작합니다.','enemy':'전체 흐름은 유지하고 이동과 액션 핀 설명은 독립 참고서로 분리했습니다.','environment':'스포너·보상 후보 검색·월드 픽업 생성의 노드 조합.','precautions':'제작 중 실수하기 쉬운 규칙을 별도 상세 문서로 확인합니다.'}
     for key,name in CATEGORIES:
         cards=''.join(f'<a class="guide-card" href="{url}"><strong>{title}</strong><span>{desc}</span></a>' for cat,url,title,desc in PAGES if cat==key)
         bodies.append(f'<section class="category-section" id="{key}" aria-labelledby="heading-{key}"><h2 id="heading-{key}">{name} 가이드</h2><p class="muted">{intros[key]}</p><div class="guide-cards">{cards}</div></section>')
     return f'''<!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>개발 가이드 · Action RogueLike</title><link rel="stylesheet" href="assets/guide.css"></head><body>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>가이드 메인 페이지 · Action RogueLike</title><link rel="stylesheet" href="assets/guide.css"></head><body>
 {navigation(path,'')}
-<header><div class="wrap"><div class="eyebrow">Action RogueLike · Blueprint 제작 참고서</div><h1>개발 가이드</h1><p class="lead">구현할 분야를 선택하고, 필요한 노드와 핀만 펼쳐보세요.</p><p class="muted">{len(PAGES)}개 참고서 · 로컬 HTML · 인터넷/서버 없이 탐색 가능 · 2026-10-03</p></div></header>
+<header><div class="wrap"><div class="eyebrow">Action RogueLike · Blueprint 제작 참고서</div><h1>가이드 메인 페이지</h1><p class="lead">구현할 분야를 선택하고, 필요한 노드와 핀만 펼쳐보세요.</p><p class="muted">{len(PAGES)}개 참고서 · 로컬 HTML · 인터넷/서버 없이 탐색 가능 · 2026-10-04</p></div></header>
 <main class="wrap"><p class="guide-portal-hint">모든 문서 상단에서 다른 분야와 같은 분야의 문서로 바로 이동할 수 있습니다. 노드 설명은 접이식이며 문서 안 검색·전체 펼치기·인쇄를 지원합니다.</p>
+<p class="note"><a href="common/BASIC_CONTROLS_GUIDE_KO.html#keys">기본 조작표 열기</a> · 같은 키의 중복 지정은 가능하지만 충돌에 주의하세요. 키 추가·변경·건의는 이정환에게 문의하세요.</p>
 <div class="note good">처음 제작한다면 <a href="nsh/ITEM_ASSET_CREATION_GUIDE_KO.html">아이템 데이터 에셋</a> 또는 <a href="hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html">적 전체 가이드</a>에서 시작하세요. 진행 중 막히면 <a href="#precautions">주의점 참고서</a>로 이동하세요.</div>
 {''.join(bodies)}
 </main><footer><div class="wrap">가이드는 공통 시스템을 사용하는 콘텐츠 개발자용입니다. 중복 API의 상세 설명은 간편한 경로를 우선 안내하며, 실제 게임 노드·C++ API를 삭제한 것은 아닙니다.</div></footer></body></html>'''
@@ -426,13 +471,6 @@ def inject_portal(url, category):
     text=re.sub(r'(<span class="chapter-number">)\d+(</span>)',lambda m:m.group(1)+f'{next(index):02d}'+m.group(2),text)
     save(url,text)
 
-def migrate_common():
-    for old,new in MOVE_MAP.items():
-        # The destination is the canonical authored copy after the initial move.
-        if new.exists(): continue
-        text=old.read_text(encoding='utf-8')
-        save(new.relative_to(GUIDES),rewrite_links(text,old,new))
-
 def simplify_damage():
     path=GUIDES/'common/DAMAGE_NODES_FORMULA_GUIDE_KO.html'
     text=path.read_text(encoding='utf-8')
@@ -450,12 +488,6 @@ def simplify_damage():
     text=text.replace('<span id="stagger-result"></span>','')
     text=text.replace('<details class="node" id="apply-stagger">','<span id="stagger-result"></span><details class="node" id="apply-stagger">')
     save('common/DAMAGE_NODES_FORMULA_GUIDE_KO.html',text)
-
-def legacy_links():
-    for old,new in MOVE_MAP.items():
-        href=rel(old,new)
-        text=f'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>가이드 위치 변경</title><link rel="stylesheet" href="assets/guide.css"></head><body><main class="guide-legacy"><h1>공통 가이드로 이동했습니다</h1><p>이전 파일 링크와 세부 항목 주소는 새 참고서로 이어집니다.</p><p><a id="destination" href="{href}">새 가이드 열기</a> · <a href="index.html">전체 가이드 메인</a></p></main><script>const target={href!r}+location.hash;document.getElementById('destination').href=target;location.replace(target);</script></body></html>'''
-        save(old.relative_to(GUIDES),text)
 
 def update_timer_references():
     """Keep retained manuals and generated pages consistent with lifetime timers."""
@@ -501,7 +533,7 @@ def update_timer_references():
             '<tr><td>Set Action Timer by Event</td><td>해당 액션 End/Cancel/Owner EndPlay 때 자동 Clear</td></tr><tr><td>Set Item Timer by Event</td><td>아이템 해제 때 자동 Clear. 스킬 취소만으로는 유지</td></tr><tr><td>일반 Set Timer by Event</td><td>자동 액션/아이템 귀속 없음. 제작자가 Clear</td></tr>',
     }
     for category,url,_,_ in PAGES:
-        if url.endswith('BLUEPRINT_NODE_SEARCH_KO.html'): continue
+        if url.endswith(('BLUEPRINT_NODE_SEARCH_KO.html','TIME_GROUP_GUIDE_KO.html')): continue
         text=(GUIDES/url).read_text(encoding='utf-8')
         text=text.replace('2026-10-03 코드 기준','2026-10-04 코드 기준')
         for old,new in replacements.items(): text=text.replace(old,new)
@@ -554,7 +586,7 @@ def upsert_reference(text,key,title,body):
     return text
 
 def main():
-    migrate_common()
+    build_controls()
     build_cc()
     build_priority()
     build_lifecycle()
@@ -562,12 +594,16 @@ def main():
     build_environment()
     build_movement_checklist()
     extract_enemy()
+    from generate_enemy_details_guide import generate as generate_enemy_details
+    generate_enemy_details()
     enhance_item()
     simplify_damage()
+    from update_time_group_guides import update
     update_timer_references()
+    update()
     from generate_node_search_guide import generate
     generate()
-    save('index.html',portal_index())
+    save(HOME_NAME,portal_index())
     # Rewrite moved common references and split enemy anchors across every canonical page.
     for category,url,_,_ in PAGES:
         path=GUIDES/url
@@ -575,7 +611,6 @@ def main():
         text=text.replace('47개 스탯 목록에 포함되지 않음','스탯 목록에 포함되지 않음')
         save(url,text)
         inject_portal(url,category)
-    legacy_links()
-    print(f'Generated portal + {len(PAGES)} canonical references; retained 2 legacy link entry points.')
+    print(f'Generated {HOME_NAME} + {len(PAGES)} categorized references; no root-level redirect pages.')
 
 if __name__=='__main__': main()

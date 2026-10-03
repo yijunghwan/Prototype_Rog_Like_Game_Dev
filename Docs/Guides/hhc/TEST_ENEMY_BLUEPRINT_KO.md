@@ -2,9 +2,9 @@
 
 이 적의 동작은 기존 공통 시스템 노드를 연결한 Blueprint입니다. 전용 적 게임플레이 C++ 클래스는 추가하지 않습니다.
 
-공통 제작 절차·노드·입력 핀은 [적 제작 HTML 참고서](hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html)를 보세요. 이 문서는 현재 테스트 적의 설정과 사용 안내입니다.
+공통 제작 절차·노드·입력 핀은 [적 제작 HTML 참고서](ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html)를 보세요. 이 문서는 현재 테스트 적의 설정과 사용 안내입니다. [가이드 메인 페이지](<../가이드 메인 페이지.html>)
 
-2026-10-03 이동 예제 갱신: 현재 `Enemy_Move`에는 네 가지 이동 방식이 있습니다. 실제 Tick 실행은 플레이어 Actor까지 NavMesh 경로를 탐색하는 방식 하나만 연결했습니다. 기존 사용자 작성 `Enemy_Attack`과 `Enemy_Event`는 유지합니다. CC는 [간편 노드 참고서](common/CC_STAGGER_GUIDE_KO.html)에서 확인하세요.
+2026-10-03 이동 예제 갱신: 현재 `Enemy_Move`에는 네 가지 이동 방식이 있습니다. 실제 Tick 실행은 플레이어 Actor까지 NavMesh 경로를 탐색하는 방식 하나만 연결했습니다. 기존 사용자 작성 `Enemy_Attack`과 `Enemy_Event`는 유지합니다. CC는 [간편 노드 참고서](../common/CC_STAGGER_GUIDE_KO.html)에서 확인하세요.
 
 ## 생성 에셋과 배치
 
@@ -14,7 +14,7 @@
 
 콘텐츠 브라우저에서 BP_TestEnemy를 찾아 테스트 레벨 바닥 위에 배치합니다. 별도로 객체나 클래스를 선언하거나 입력 키를 등록할 필요가 없습니다. 플레이 시 로컬 Player Index 0의 Pawn을 찾아 추적합니다. 나중에 `Spawn Actor From Class`로 같은 BP를 스폰할 수도 있습니다. AI Controller Class는 `ARAIController`, Auto Possess AI는 `Placed in World or Spawned`입니다.
 
-맵에는 `Nav Mesh Bounds Volume`을 추가하고 이동할 바닥을 덮도록 크기를 조정해야 합니다. P 키로 녹색 이동 영역을 확인하세요. [NavMesh 준비와 이동 참고서](hhc/ENEMY_MOVEMENT_GUIDE_KO.html). 이번 작업은 BP만 수정하며, 현재 저장된 Test_Level에는 NavMesh와 적 인스턴스가 없으므로 배치 작업이 필요합니다. 이 적은 바닥 위에서 일반 Walking을 사용하도록 Z=0 평면 고정·시작 시 평면 스냅을 해제했습니다. 공격 거리 판정은 기존 XY 기준을 유지합니다.
+맵에는 `Nav Mesh Bounds Volume`을 추가하고 이동할 바닥을 덮도록 크기를 조정해야 합니다. P 키로 녹색 이동 영역을 확인하세요. [NavMesh 준비와 이동 참고서](ENEMY_MOVEMENT_GUIDE_KO.html). 이번 작업은 BP만 수정하며, 현재 저장된 Test_Level에는 NavMesh와 적 인스턴스가 없으므로 배치 작업이 필요합니다. 이 적은 바닥 위에서 일반 Walking을 사용하도록 Z=0 평면 고정·시작 시 평면 스냅을 해제했습니다. 공격 거리 판정은 기존 XY 기준을 유지합니다.
 
 기존 레벨·플레이어·GUN 에셋은 변경하지 않습니다. 레벨에 적을 배치하는 작업은 사용자가 진행합니다.
 

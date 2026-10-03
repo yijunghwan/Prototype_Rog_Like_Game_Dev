@@ -154,13 +154,14 @@ int32 UARLoadoutItemInstance::RemoveAllOwnItemModifiers()
 	return Removed;
 }
 
-FTimerHandle UARLoadoutItemInstance::SetItemTimerByEvent(FTimerDynamicDelegate Event, float Time, bool bLooping,
-	bool& bSuccess, float InitialStartDelay, bool bMaxOncePerFrame)
+FTimerHandle UARLoadoutItemInstance::SetGroupedItemTimerByEvent(FTimerDynamicDelegate Event, float Time, bool bLooping,
+	bool& bSuccess, EARTimeGroup TimeGroup, float InitialStartDelay, float InitialStartDelayVariance, bool bMaxOncePerFrame)
 {
 	bSuccess = false;
 	if (!bRegistered || bUnregistering || !ItemOwner.IsValid() || ItemOwner->IsActorBeingDestroyed()) return FTimerHandle();
 	const TWeakObjectPtr<UARLoadoutItemInstance> WeakOwner(this);
-	return ARLifetimeTimer::Start(this, Event, Time, bLooping, InitialStartDelay, bMaxOncePerFrame,
+	return ARLifetimeTimer::StartGrouped(this, Event, Time, bLooping, TimeGroup, InitialStartDelay,
+		InitialStartDelayVariance, bMaxOncePerFrame,
 		[WeakOwner]()
 		{
 			const AARPlayerCharacter* Owner = WeakOwner.IsValid() ? WeakOwner->GetItemOwner() : nullptr;

@@ -1,5 +1,54 @@
 # 다음 에이전트용 작업 인계 — 현재 상태
 
+## 2026-10-04 적 HTML NavMesh 책임 안내 — 완료
+
+- 사용자 요청에 따라 적 이동 가이드의 NavMesh 직접 생성 절차(Volume 배치·크기·P 표시·빌드)를 제거. NavMesh 생성·관리는 맵 제작자 담당이며 없거나 경로가 연결되지 않아 경로 이동이 불가능하면 맵 제작자에게 문의하도록 안내. 직선 Request Basic Move는 NavMesh와 별개임을 유지.
+- 적 전체·디테일 가이드, 이동 주의점, 적 스폰 가이드, 메인 적 이동 카드의 관련 문구·링크 제목도 일치시킴. 기존 navmesh-build 앵커는 북마크·링크 호환을 위해 유지. 생성기 두 개와 회귀 검사도 갱신하여 재생성 시 직접 만들기 안내가 복구되지 않도록 함.
+- HTML21개/로컬 링크·리소스1691개, 적 디테일·NavMesh 책임 검사, 타이머 설명, 노드검색395개, 펼침·검색/inline JS4개 검사 통과. 게임 코드·BP·DA·맵 미변경, 빌드·Git 커밋/푸시 없음.
+
+## 2026-10-04 적 디테일·상속 설정 가이드 — 완료
+
+- 사용자 요청: 적 BP에서 상속받은 클래스/컴포넌트의 디테일 패널 항목을 노드 가이드와 별도로 설명. 사진의 Combat Team 및 추가 요청한 그로기 사용 설정 포함. hhc/ENEMY_DETAILS_GUIDE_KO.html 생성, 메인 적 카드/적 공통 네비게이션/적 전체 가이드 setup·groggy에서 연결. 루트는 가이드 메인 페이지.html 한 개 유지.
+- 클래스 디폴트 vs 컴포넌트 선택 vs 맵 인스턴스 덮어쓰기, Combat Team(EditDefaultsOnly)의 Player/Enemy/Environment 실제 피해 규칙·조종/충돌과의 차이, AI Controller Class/Auto Possess AI/Auto Possess Player, Stats Base Stats/4개 Caps, Health 2개 설정, Stagger 4개 설정, Immune Status Tags, 이동 속도 반영/평면 제한/캡슐/외형/Actor·Component Tick 경계 설명. 각 항목 선택 위치·용도·기본값·설정 기준·주의점을 접이식으로 제공. 언리얼 전체 속성 사전이 아닌 AR 적 제작 핵심 참고서.
+- 그로기: Use Groggy Gauge 기본false와 MaxGroggy 양수 필요, 원형 Max/Recovery 3스탯 기본0, BeginPlay 최대값 충전, Delay vs 기절기간 구분, RecoveryPerSecond 자연 회복, 소진 양수→0 이벤트·소진 잠금·잠금 중 자연 회복/차감 중단·Reset(-1) 복구 설명. 자동 기절 아님, CanBeStaggered/슈퍼아머/CC 면역 별개, 공격 측 양수 그로기 피해 및 기절 적용 실패/복구 정책 설명. 실제 이벤트 연결은 기존 적 전체 가이드 링크로 유지.
+- 문서는 현재 헤더·구현·UE5.8 엔진 Pawn/Movement/Tick 선언과 Epic Navigation/Collision 자료 확인 후 작성. 원형 기본값과 사용자 BP/인스턴스 덮어쓰기를 구분. 게임 코드/BP/DA/레벨 미변경, 빌드·Git 커밋/푸시 없음.
+- 생성원 Scripts/generate_enemy_details_guide.py, organize 호출/PAGES/Time 부록 제외 갱신. test_enemy_details_guide.py는 항목·그로기 경계·링크 및 기본값의 소스 드리프트 검사. HTML21개/로컬 링크·리소스1691개, 기본 조작/타이머/전체 노드 검색395개/펼침·검색/inline JS4개 검사 통과. 재생성 멱등성 확인. 브라우저 화면 렌더링/실제 적 플레이는 이번 문서 작업에서 미검증.
+
+## 2026-10-04 기본 조작 안내 추가 — 완료 (무기 1번 키 해석 확인 필요)
+
+- common/BASIC_CONTROLS_GUIDE_KO.html 추가. 메인의 공통 첫 카드·상단 바로가기와 공통 문서의 네비게이션에서 접근. 기본 표는 펼쳐 표시하고 추가 지정/충돌 안내는 접이식, 키 정책 문의도 기본 펼침.
+- 사용자 기준: WASD 이동, Space 회피, I 인벤토리, E/R 유물 1/2번 슬롯, 1/2/3 소모품 슬롯, F 상호작용, 무기 2번 Q·3번 X. 원문 '1shfit f'는 모호하여 무기 1번 Shift 또는 Shift+F인지 비동기 질문했고 우선 Shift로 기재한다고 사용자에게 명시. 답변이 도착하면 생성기의 조작표와 test_controls_guide.py를 함께 수정할 것.
+- 같은 기본 키에 추가 스킬 중복 지정 가능하되 충돌 주의, 현재 자유 지정 권장 키 Z/C, 키 추가·변경·건의는 이정환 문의 명시. 별개의 상호작용/슬롯 입력까지 스킬 우선순위가 자동 통합하지 않음 안내. 문서만 수정하며 게임의 실제 IA/IMC/BP/키 바인딩은 변경하지 않음.
+- 생성기에서 재생성 가능. 기본 조작에는 무관한 시간 그룹 부록을 삽입하지 않도록 제외. 신규 조작표 회귀 검사 및 기존 링크/검색/펼침/타이머 설명 검사 통과: HTML20 / 로컬 링크·리소스1621개 / 노드검색395개. 생성 멱등성 확인. 빌드·게임 에셋 변경·Git 커밋/푸시 없음.
+
+## 2026-10-04 가이드 폴더 정리·메인 이름 변경 — 완료
+
+- 사용자 요청: Docs/Guides 최상위에는 메인 HTML 한 개만, 나머지는 nsh/hhc 등 분류별 폴더로 관리. index.html을 **가이드 메인 페이지.html**로 변경하고 title/h1/상단 메인 버튼 이름도 통일. 공통/common, 아이템/nsh, 적/hhc, 환경/environment, 주의점/precautions, 공유 리소스/assets 유지.
+- 최상위 예제 MD 2개는 nsh/GUN_BLUEPRINT_EXAMPLE_KO.md와 hhc/TEST_ENEMY_BLUEPRINT_KO.md로 이동하고 상대 링크 수정. 최상위 스탯/피해 구형 위치 안내 HTML 2개만 삭제; 실제 상세 본문은 common에 유지. 삭제된 안내 파일은 Git에서 복구 가능하나 최상위에 재생성하지 말 것. 과거 브라우저 북마크/외부 file 링크는 새 경로로 변경해야 함.
+- organize_development_guides.py의 HOME_NAME/GUIDE_HOME, 링크 재작성과 생성 경로를 갱신하고 이전 위치 안내 생성·초기 마이그레이션 제거. 기존 루트 URL은 링크 재작성 매핑에만 유지. Foundation 문서의 가이드 경로도 현행 common 경로로 수정. 검증기는 최상위 단일 파일·메인 제목·이전 index 링크 부재·이동한 예제 MD 상대 링크를 검사.
+- 검증: HTML 19개 / 로컬 링크·리소스1598개 모두 유효, 노드 검색395개 및 검색/펼침·접기/타이머 설명/inline JS4개 검사 통과. 코드·게임 에셋은 수정하지 않았으며 빌드·Git 커밋/푸시 없음.
+
+## 2026-10-04 레거시 아이템·액션 타이머 제거 — 완료
+
+- 사용자 확인: 기존 레거시 노드를 모두 지웠으므로 코드와 HTML에서도 제거 요청. 에디터 미실행 확인 후 작업. GUN 및 다른 Blueprint/DA/Content 에셋을 자동 수정하지 않았음.
+- SetItemTimerByEvent / SetActionTimerByEvent의 구형 UFUNCTION 선언·구현과 ARLifetimeTimer::Start 제거. 현재 사용 중인 SetGroupedItemTimerByEvent / SetGroupedActionTimerByEvent의 C++ 이름·핀·동작은 유지. BP 표시명은 Set Item Timer by Event / Set Action Timer by Event. 언리얼 기본 타이머는 변경하지 않음.
+- 기존 수명/격리/입력 검증/부하 테스트를 시간 그룹 지원 API로 이전. Initial Start Delay는 추가 지연, Max Once Per Frame은 명시적 true로 검사하도록 수정. 음수 지연 구형 제한 대신 비유한 지연 거절 검사. 종료·취소·아이템 해제·소유자 파괴 자동 정리 테스트 보존.
+- 생성기와 아이템·스킬·적 액션·액션 생명주기·시간 그룹 HTML의 레거시 호환 안내 삭제. 전체 노드 검색에서 구형 2항목 삭제(395개); 검색 테스트는 구형 항목 부재를 확인. 아래 시간 그룹 구현 기록의 'Legacy 보존'은 과거 상태이며 현재는 삭제됨.
+- 정식 Development Editor 빌드 성공. 전체 AR 자동 테스트 **68/68 Success, 실패0/리포트 경고0/미실행0**: Saved/Automation/LegacyTimerRemoval/index.json, Saved/Logs/LegacyTimerRemoval.log. HTML 21개 / 로컬 링크·리소스1604개, 타이머 설명·검색·접기·JS 구문 검사 통과. 재생성 멱등성 확인, git diff --check 통과. 실제 플레이/화면 렌더링은 이번 작업에서 미검증.
+- 기존 사용자 Content 변경 보존. 이번 작업 Git 커밋/푸시 없음. 에셋 업로드 금지 유지.
+
+## 2026-10-04 World / Player 시간 그룹 — 구현·검증 완료
+
+- 사용자 승인: 모든 선택형 기본 World. AR 플레이어 자체 시간은 Player, DA 쿨타임·Action Request·아이템/액션 타이머는 선택. 주의점에는 적 전체 World 권장 / 플레이어 아이템은 제작 의도에 따른 선택, 나머지 가이드는 기능 설명만. 작업 저장·에디터 종료 확인 후 빌드. GUN 그래프/에셋 자동 수정 금지, 에셋 업로드 금지 유지.
+- UARTimeSubsystem/EARTimeGroup 및 ARTimeBlueprintLibrary 추가. World는 기존 엔진 글로벌 시간·Timer Manager, Player는 pause-aware 별도 시계·FTimerManager. PreActorTick에서 실제 유효 World 배율을 보상. ARPlayerCharacter 등록/해제 및 CustomTimeDilation 보정으로 캐릭터 Tick/Movement·회복 정상 진행. 구르기 쿨타임, 대상 플레이어의 스탯/실드/CC/슈퍼아머 기간과 HUD 효과 카운트다운도 Player 기준. 적/환경과 DOT·피해 이름 제한은 World. 게임 Pause는 양쪽 정지.
+- FARSkillDefinition.CooldownTimeGroup 및 FARActionRequest.TimeGroup 기본 World. 쿨타임 시작/검사/UI/변경 모두 선택 시계 사용. Action Delay는 액션 그룹 상속. 새 SetGroupedItemTimerByEvent / SetGroupedActionTimerByEvent의 BP 표시명은 기존 Set Item/Action Timer by Event이며 TimeGroup 기본 World를 예약별 선택(액션 그룹 자동 상속 아님; Get Action Time Group 연결 가능).
+- 새 타이머: Unreal Blueprint Set Timer by Event 기준 FirstDelay=Time+InitialStartDelay±Variance, 기본 Delay=0/Variance=0/MaxOncePerFrame=false. 같은 수명·Event 재등록은 교체, 다른 아이템/액션은 독립, Time≤0은 기존 이벤트 예약 제거. 비유한 값·그룹 무효·첫 지연 연산 오버플로 거절. 정상 종료/취소/아이템 해제/소유자 EndPlay에서 두 그룹 즉시 정리. 실행 중 자기 종료/해제도 테스트.
+- 기존 SetItemTimerByEvent / SetActionTimerByEvent C++ 이름과 구현은 BlueprintInternalUseOnly 호환용 (Legacy)로 보존: 기존 World·-1/절대 첫 지연·호출마다 독립 예약 의미. 기존 그래프가 새 규칙으로 자동 전환되지 않음. 검색에서 새 노드를 배치하여 수동 교체할 것. GUN을 자동 변경하지 않았음.
+- 그룹 제어 노드 Set/Get Time Group Rate, Get Time Group Seconds, Pause/Unpause/Clear Time Group Timer, Get Time Group Timer Remaining, Does Time Group Timer Exist, Is Time Group Timer Paused 추가. 핸들만으로 관리자 조회. 엔진 기본 핸들 노드는 Player manager를 제어할 수 없음. World배율 setter는 0.001~10 유한값만 받으며 실제 엔진 제한은 Getter 확인. 배율 복구는 자동 액션 귀속 아님; 중첩 슬로모션 정책·네트워크 복제·Chaos 플레이어 개별 시뮬레이션은 미구현.
+- Docs/Guides/precautions/TIME_GROUP_GUIDE_KO.html 추가 + 메인/네비/18개 정규 가이드에 설명 연결. 타이머 기존 핀/재등록 설명 수정, 검색 카탈로그 397개(중복 subsystem 함수 노출 안 함), Legacy 숨김. 생성원 Scripts/update_time_group_guides.py + organize/generate scripts 변경. 재생성 멱등성 True.
+- 정식 Development Editor 빌드 성공. 전체 AR 테스트 **68/68 Success, 실패0/리포트 경고0/미실행0**: Saved/Automation/TimeGroupsFinal/index.json, Saved/Logs/TimeGroupsFinal.log. 3개 시간 테스트는 rate 변경·pause·혼합 쿨타임·Action Delay·대상 효과 시계·첫 지연/variance·재등록/격리·삭제·숫자 경계 포함. 초기 소유자 삭제 검사 실패는 synthetic fixture가 PostInitializeComponents를 빠뜨려 RouteEndPlay를 건너뛴 원인으로 수정; 모든 안전성 테스트 fixture 생명주기 정확화. 기존 GUN GetInstanceId 미연결 컴파일 경고는 수정하지 않음. 실 플레이/물리 연출/패키징 테스트와 화면 QA는 별도.
+- HTML 21개/로컬 링크·리소스1610개 유효, ID/마크업/JSON·JS 검사 및 타이머 문서/검색/접기 단위 테스트 통과, git diff --check 통과. 기존 사용자 Content 변경은 보존. 이번 작업 Git 커밋/푸시 없음. 이전 푸시는 저장소 공개 대상 승인 부족으로 차단된 상태; 추정해서 재시도하지 말 것.
+
 ## 2026-10-04 귀속 타이머 가이드 전반 통합 — 완료
 
 - 사용자 요청: 새 아이템/액션 타이머를 제작 가이드와 주의점 HTML 전반에 반영하고 사용을 권장. 기존 구현된 Set Item Timer by Event / Set Action Timer by Event의 헤더·동작 기준으로 문서만 수정. C++/GUN/BP/DA/IA/IMC/레벨 미변경, 빌드·에디터 실행·Git 커밋/푸시 없음. 기존 게임 개발 변경과 사용자 Content 보존.
@@ -55,7 +104,7 @@
 
 ## 2026-10-03 개발 참고서 포털·분야별 HTML — 완료
 
-- 사용자 요청에 따라 Docs/Guides/index.html 메인 + 독립 참고서16개(공통3/아이템3/적3/환경3/주의점4) 구성. 기존 nsh/hhc 유지, common/environment/precautions/assets 추가. 공통 스탯/피해는 common으로 이동하고 루트의 이전2 HTML은 새 위치+hash 연결용 진입 페이지로 유지. 원래 내용 전체를 잃지 않도록 상세 블록을 재사용했으며 기존 상대 링크/분리한 적 앵커를 갱신. 기존 Foundation 문서의 루트 링크는 진입 페이지로 계속 사용 가능.
+- 사용자 요청에 따라 Docs/Guides/가이드 메인 페이지.html 메인 + 독립 참고서16개(공통3/아이템3/적3/환경3/주의점4) 구성. 기존 nsh/hhc 유지, common/environment/precautions/assets 추가. 공통 스탯/피해는 common으로 이동하고 루트의 이전2 HTML은 새 위치+hash 연결용 진입 페이지로 유지. 원래 내용 전체를 잃지 않도록 상세 블록을 재사용했으며 기존 상대 링크/분리한 적 앵커를 갱신. 기존 Foundation 문서의 루트 링크는 진입 페이지로 계속 사용 가능.
 - shared guide.css에 상단 분야 이동·동일 분야 문서 버튼·줄바꿈·좁은 화면 레이아웃·인쇄 대응. guide.js는 새 문서와 기존 적 전체/아이템 에셋/런타임 기본에 공통 접이식 검색·초기화·펼치기/접기·hash 상위 펼침·인쇄 상태 복원. 기존 스탯 동적48/47 목록 필터와 기존 피해/아이템 스킬 핀 UI·검색은 보존. Guide main은16문서 카드와 분야 바로가기. 모든 canonical 페이지는 공통 탐색 바 정확히1개.
 - CC 문서는 간편 Apply Crowd Control·From Result 경직·저항/면역·상태 제거를 다룸. 스탯 둔화는 Spec Affected By Tenacity 체크만 짧게 설명하고 STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html#tenacity로 연결. 그로기 상세는 적 전체 #groggy 안내. 아이템 On Item Skill Cancelled와 적 On Action Cancelled의 용도 바로 아래에 별도 Timer Handle 저장/Clear and Invalidate Timer by Handle 등 직접 정리 책임 추가. 실제 취소 알림 기준이며 모든 경직이 무조건 취소된다고 설명하지 않음.
 - SKILL_PRIORITY_GUIDE_KO.html은 입력 키/IA/InputTag/슬롯 설정 비교를 다루지 않음. 실제 ExecuteSkillCandidates 기준 작은 숫자부터·같은 숫자 원자 묶음·MP/SP 자원별 누적 비용·조건 하나 실패/비용 부족 시 해당묶음과 이후중단·앞서통과묶음만실행 설명. 최종 액션 거래 실패 롤백·Execute 이후 콘텐츠 실패의 비용/쿨타임 환불 없음도 명시. 스탯 상세는 실제 enum Independent Damage Reduction(Override 아님), Permanent Flat, 필드/소유권/제거/Count 스택 소비까지 포함.
@@ -104,7 +153,7 @@
 - TryStartAction 성공 시 핸들 저장/일반 이동 차단. ActionDelay 완료 후 유효한 생존 대상·거리 재확인, 맞음/빗나감 모두 EndAction. 취소 시 지연 타격 없음. 선딜 개발용 빨간 DebugCircle 제공. GroggyGaugeDepleted에서 자기 Stun DA 적용(강인함 감소 끔), 정확한 저장 StatusHandle 제거 시 게이지 최대치 복구. 사망은 DestroyActor. 전체 CC 면역 추가 시 자기 기절도 거절될 수 있다는 문서 주의사항 유지.
 - 외부 제작 도구는 `C:/Users/ghksd/Desktop/game_dev/LocalTools/EnemyBlueprintAuthoring`에만 있다. 임시 AdditionalPluginDirectories 제거 후 .uproject 내용 작업 전으로 복구, 정식 빌드 성공. 도구 DLL/PDB도 프로젝트 Binaries에서 외부 ProjectBuildArtifacts로 이동(복구 가능), 모듈 manifest의 임시 항목 제거. 정상 target/uproject/manifest에 도구 의존성 없음. Source에는 도구를 넣지 않았다.
 - 생성 직후와 저장 후 -Verify 각각 21/21 그래프 실행 검사 통과/새 BP 컴파일 오류0 경고0. Saved/Logs/TestEnemyAuthoring.log, TestEnemySavedVerify.log 참조. 외부 플러그인 없는 Python 검사에서 새 BP/DA 기본값 확인, 콘텐츠 10BP/2ItemDA 읽기·컴파일 성공/저장 없음. 기존 GUN GetInstanceId 미연결 경고2회(1종)는 사용자 지시로 유지. Saved/Logs/TestEnemySavedContent.log 참조. 검증 스크립트 최초 Python class API 오용은 스크립트만 수정 후 재실행 성공.
-- AR.Foundation 45/45 Success/실패0/경고0/미실행0, Saved/Automation/TestEnemyFoundation/index.json. GUN 4 uasset 작업 전후 SHA256 동일. 기존 레벨/플레이어/GUN 저장·수정 없음. Docs/Guides/TEST_ENEMY_BLUEPRINT_KO.md에 설정·사용·제약·검증 안내. GUI PIE·실제 바닥/충돌/이동 외형은 미검증이며 사용자가 레벨 배치 후 확인해야 한다. 커밋·푸시 없음.
+- AR.Foundation 45/45 Success/실패0/경고0/미실행0, Saved/Automation/TestEnemyFoundation/index.json. GUN 4 uasset 작업 전후 SHA256 동일. 기존 레벨/플레이어/GUN 저장·수정 없음. Docs/Guides/hhc/TEST_ENEMY_BLUEPRINT_KO.md에 설정·사용·제약·검증 안내. GUI PIE·실제 바닥/충돌/이동 외형은 미검증이며 사용자가 레벨 배치 후 확인해야 한다. 커밋·푸시 없음.
 
 ## 2026-10-02 피해 결과 직접 연결 경직·그로기 노드 — 빌드·검증 완료
 
@@ -125,7 +174,7 @@
 
 ## 2026-10-02 피해 참고서 — 노드 용도·핀 중심 구성으로 개편
 
-- 사용자가 현재 `Docs/Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html`을 지정했다. 이전 nsh 위치가 아니라 이 경로에만 수정했다. 직접 피해·DOT·경직 노드를 용도 설명 → 입력 핀 → 출력 핀 → 구조체 연결법 순으로 개편했다. Request/Spec/Return Value는 실제 이름·타입을 유지하고 펼침 제목에는 실제 포함 값도 표시한다.
+- 사용자가 현재 `Docs/Guides/common/DAMAGE_NODES_FORMULA_GUIDE_KO.html`을 지정했다. 이전 nsh 위치가 아니라 이 경로에만 수정했다. 직접 피해·DOT·경직 노드를 용도 설명 → 입력 핀 → 출력 핀 → 구조체 연결법 순으로 개편했다. Request/Spec/Return Value는 실제 이름·타입을 유지하고 펼침 제목에는 실제 포함 값도 표시한다.
 - Request의 수치·대상/옵션, 피해 Result·Hit Context, DOT Spec·매 틱 Request·Stagger Template, 경직 Request/Result를 노드 안에 포함시켰다. 출처 Category/Source Id/Display Name와 중첩 타격 기록을 제자리에서 펼쳐 읽는다. 큰 필드 표를 핀별 카드로 바꿨고 구조체 통째 연결·Make/Break·핀 분할 안내는 별도 유지했다. 공식은 뒤쪽, 용어는 마지막 장으로 옮겼다. 기존 앵커 ID 보존 및 이동된 문서의 상대 링크 수정.
 - 정적 검사 ID 중복0/상대 링크 및 앵커 오류0. 로컬 브라우저에서 내부값·출처 펼침, 검색의 중첩 필드 노출, 검색0결과/초기화, 61개 details 전체 펼침/접기, 가로 넘침 없음, JavaScript 오류0 확인. 게임 코드·BP·DA·피해 공식 자체는 변경하지 않았고 빌드는 필요하지 않아 실행하지 않았다. 테스트 탭/서버/일회성 외부 편집 스크립트는 정리한다. 커밋·푸시 없음.
 
@@ -165,7 +214,7 @@
 
 ## 2026-10-02 객체별 스탯 / 스킬 런타임 HTML 가이드
 
-- 사용자 요청으로 `Docs/Guides/OBJECT_STAT_GUIDE_KO.html`과 `SKILL_RUNTIME_ACTION_GUIDE_KO.html`을 작성했다. 외부 라이브러리/서버 없이 로컬 HTML로 열 수 있다. 게임 C++·DA·GUN BP는 변경하지 않았다. 기존 유물 런타임 가이드 상단에 두 문서 링크를 추가했다.
+- 사용자 요청으로 `Docs/Guides/common/OBJECT_STAT_GUIDE_KO.html`과 `SKILL_RUNTIME_ACTION_GUIDE_KO.html`을 작성했다. 외부 라이브러리/서버 없이 로컬 HTML로 열 수 있다. 게임 C++·DA·GUN BP는 변경하지 않았다. 기존 유물 런타임 가이드 상단에 두 문서 링크를 추가했다.
 - 객체별 가이드는 Player/Enemy/Environment 탭, 스탯 47개 설명 펼치기, 한국어/영문 검색, 분류/사용 상태 필터, C++ 초기값·안전 범위·사용 조건을 제공한다. 특정 저장 BP 값이나 실행 중 스냅샷이 아님을 명시했다. 적 기본 클래스의 자원/Loadout/구르기 부재, 환경 CombatSource만으로 Stats가 생기지 않음, 현재 Environment 피격 거절 규칙, 공격속도/Range/RecoveryPower/Luck의 콘텐츠 연결 필요를 구분한다.
 - 스킬 가이드는 11장/20개 노드 묶음. Execute Item Skill 전에 처리되는 DA 비용/쿨다운/액션 시작, Switch 분기 후 스킬별 핸들 저장(값 핀 필수), 정상 End Action/취소 정리 구분, Action Delay 완료/취소, 액션/아이템/대상 효과 수명, CC 취소 규칙, 히트박스/이동, 등록/해제, 증상 점검을 포함한다. 같은 런타임의 다른 실행이 지연 핸들을 덮어쓰지 않도록 안내했다.
 - 검증: EARStatType의 47개 키와 가이드 항목이 중복/누락 없이 일치. 파일 상대 링크·목차 앵커·ID 중복 검사 성공. 로컬 브라우저에서 3객체 모두 47개, 상태 배지, 검색/필터, 펼치기/접기, 키보드 탭 이동, 스킬 목차 자동 펼치기 확인. 두 HTML JavaScript 오류 0. 테스트용 브라우저 탭은 닫았고 에셋은 로드/수정/저장하지 않았다. 커밋/푸시 없음.
@@ -200,7 +249,7 @@
 - 장전 5초, CC 취소, 물리/화염/마법 받는 피해 증가 Flat 50(공허는 기존 규칙대로 제외), 탄약 최대 8발 충전. 플레이어 소유 `Relic/GUN.Ammo` 스택 사용. 첫 획득 마커 `Relic/GUN.FirstPickup`로 영구 지속시간 실드 10 중복 지급 방지. 발사 후 1초 아이템 소유 CC 면역+슈퍼아머. 유물 제거 시 액션/버프 회수, 탄약/실드 보존.
 - 미정 피해량과 공격력/주문력 계수는 0. 임시 사거리 환산 `RangeCmPerStat=100`cm, 임시 탄속 `BulletSpeed=1500`cm/s. 첫 탄약은 예제 기본값 0. 사거리 종료/충돌 시 투사체 삭제. 플레이어 입력 바인딩/맵 배치는 변경하지 않았다.
 - Editor Win64 Development 정식 빌드 성공. 저장된 두 BP 모두 컴파일 오류/경고 0. `-run=ARGunExample -Verify`의 실제 그래프 실행 검사 35개 통과, 실패 0 (`Saved/Logs/GunVerify.log`). `AR.Foundation` 36/36 통과 (`GunFoundationRegression.log`). 저장 콘텐츠 검사도 성공 (`GunSavedContentValidation.log`), 검사는 에셋을 저장하지 않았다. 수동 PIE 조작감 검증은 별도다.
-- 생성 전 DA 백업 `Saved/GunExampleBackup/20261002_033528`. 해당 런타임 BP는 저장된 파일이 없어 정확히 요청한 경로에 생성했다. 생성기는 기존 노드가 있으면 거절하므로 사용자 수정 후 덮어쓰기하지 않는다. 자세한 흐름과 임시값은 `Docs/Guides/GUN_BLUEPRINT_EXAMPLE_KO.md` 참조. 커밋·푸시하지 않았다.
+- 생성 전 DA 백업 `Saved/GunExampleBackup/20261002_033528`. 해당 런타임 BP는 저장된 파일이 없어 정확히 요청한 경로에 생성했다. 생성기는 기존 노드가 있으면 거절하므로 사용자 수정 후 덮어쓰기하지 않는다. 자세한 흐름과 임시값은 `Docs/Guides/nsh/GUN_BLUEPRINT_EXAMPLE_KO.md` 참조. 커밋·푸시하지 않았다.
 - 정식 빌드 후 Python으로 확인한 테스트 플레이어의 Skill Input Bindings 두 항목 모두 IA_Mouse_Left / InputTag=None. 슬롯 바인딩은 slot=1 / skill_index=1, slot=2 / skill_index=2. 이 작업은 플레이어를 수정하지 않았다. 실제 좌클릭 조작에는 Input.Skill.MouseLeft 연결이 필요하고, 2번 슬롯 GUN 장전에는 로컬 스킬 인덱스 1이 필요하다. 이전 Live Coding 세션의 Python 조회는 DA 필드값을 잘못 보고했으며, 새 프로세스에서 원래 Reload/Fire/DoneUseWeapon 설정이 정상 확인됐다.
 
 ## 2026-10-02 Action Tag 저작 항목 제거

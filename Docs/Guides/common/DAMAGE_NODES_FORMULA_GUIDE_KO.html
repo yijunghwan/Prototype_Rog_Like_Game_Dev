@@ -100,7 +100,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <link rel="stylesheet" href="../assets/guide.css">
 </head>
 <body>
-<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common" aria-current="true">공통</a><a href="../index.html#item">아이템</a><a href="../index.html#enemy">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="BLUEPRINT_NODE_SEARCH_KO.html">전체 노드 검색</a><a href="OBJECT_STAT_GUIDE_KO.html">스탯</a><a href="DAMAGE_NODES_FORMULA_GUIDE_KO.html" aria-current="page">피해·회복</a><a href="CC_STAGGER_GUIDE_KO.html">CC·경직</a></div></div></nav><!-- GUIDE PORTAL END -->
+<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../가이드 메인 페이지.html">가이드 메인 페이지</a><a href="../가이드 메인 페이지.html#common" aria-current="true">공통</a><a href="../가이드 메인 페이지.html#item">아이템</a><a href="../가이드 메인 페이지.html#enemy">적</a><a href="../가이드 메인 페이지.html#environment">환경</a><a href="../가이드 메인 페이지.html#precautions">주의점</a></div><div class="guide-peers"><a href="BASIC_CONTROLS_GUIDE_KO.html">기본 조작</a><a href="BLUEPRINT_NODE_SEARCH_KO.html">전체 노드 검색</a><a href="OBJECT_STAT_GUIDE_KO.html">스탯</a><a href="DAMAGE_NODES_FORMULA_GUIDE_KO.html" aria-current="page">피해·회복</a><a href="CC_STAGGER_GUIDE_KO.html">CC·경직</a></div></div></nav><!-- GUIDE PORTAL END -->
 <header>
 <div class="wrap">
 <div class="eyebrow">Action RogueLike · 공통 피해 API · 2026-10-02 코드 기준</div>
@@ -110,7 +110,7 @@ pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px 14px; backgroun
 <p class="muted">프로젝트 코드의 현재 동작 기준입니다. 언리얼 전체의 표준 피해 공식이나 특정 아이템의 고정 수치가 아닙니다. 적 AI의 액션 저작 절차·상태 이상 상세 가이드는 포함하지 않습니다.</p>
 </div></header>
 <nav aria-label="목차">
-<div class="wrap"><a href="#damage-timing">예약 공격·주기 회복·DOT 구분</a><a href="#quick">노드 선택</a><a href="#damage-nodes">직접 피해</a><a href="#results">피해 이벤트</a><a href="#dot">지속 피해</a><a href="#stagger">경직·그로기</a><a href="#hitbox">충돌 연결</a><a href="#shield">실드·판정</a><a href="#healing">회복</a><a href="#formula">공식</a><a href="#trouble">문제 찾기</a><a href="#terms">용어·속성</a>
+<div class="wrap"><a href="#time-groups">시간 그룹 · 기능과 설정</a><a href="#damage-timing">예약 공격·주기 회복·DOT 구분</a><a href="#quick">노드 선택</a><a href="#damage-nodes">직접 피해</a><a href="#results">피해 이벤트</a><a href="#dot">지속 피해</a><a href="#stagger">경직·그로기</a><a href="#hitbox">충돌 연결</a><a href="#shield">실드·판정</a><a href="#healing">회복</a><a href="#formula">공식</a><a href="#trouble">문제 찾기</a><a href="#terms">용어·속성</a>
 </div></nav>
 <main class="wrap">
 <div class="search-tools"><label for="node-search">노드·용어 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 핀, 용어, 공식 검색" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button>
@@ -1097,6 +1097,7 @@ B × max(0, 1 + A/100) × C</pre>
 </details>
 <div id="no-results" class="note" hidden>일치하는 항목이 없습니다. 노드의 영문 이름이나 더 짧은 검색어로 찾아보세요.</div>
 <details class="chapter" id="damage-timing"><summary>예약 공격·주기 회복·DOT 구분</summary><div class="chapter-body"><p>스킬/적의 선딜·반복 직접 피해·반복 회복은 <code>Set Action Timer by Event</code>, 무기/유물 보유 중 주기 회복은 <code>Set Item Timer by Event</code>를 사용하세요. 실제 피해/회복은 Event 콜백에서 적용하며 마지막 스킬 단계 뒤 End Action을 호출합니다.</p><p>등록한 DOT는 이미 자체 기간·틱 간격을 처리합니다. 틱마다 DOT 등록 노드를 다시 부르는 타이머를 추가하지 마세요. 동일 Damage Name 제한도 피해 요청의 설정이며 별도 BP 타이머가 필요 없습니다. 타이머 제거는 이미 등록한 독립 DOT·실드·보정을 제거하지 않습니다.</p><p><a href="../precautions/ACTION_LIFECYCLE_GUIDE_KO.html#managed-timers">타이머 핀·수명·콜백 연결</a> · <a href="../precautions/STAT_MODIFIER_LIFECYCLE_GUIDE_KO.html">효과 수명과 제거</a></p></div></details>
+<details class="chapter" id="time-groups"><summary>시간 그룹 · 기능과 설정</summary><div class="chapter-body"><p><code>World</code>와 <code>Player</code>라는 시간 그룹이 있습니다. 선택형 기본값은 World이며 게임 Pause 시 두 그룹 모두 멈춥니다. 시간 기준은 아이템/액션의 자동 정리 수명과 별개입니다.</p><p>직접 피해는 즉시 처리하며 DOT의 기간·틱과 동일 Damage Name 제한은 World 기준입니다. 선딜 타이머는 그룹 선택이 가능하고, 대상 실드의 기간은 플레이어/그 외 대상의 자체 시간 기준을 따릅니다.</p><p><a href="../precautions/TIME_GROUP_GUIDE_KO.html">그룹 설정 위치·제어 노드·호환과 주의점</a></p></div></details>
 </main>
 <footer>
 <div class="wrap">

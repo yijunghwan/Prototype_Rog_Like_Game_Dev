@@ -1,4 +1,5 @@
 #include "Foundation/Components/ARStatusEffectComponent.h"
+#include "Foundation/Time/ARTimeSubsystem.h"
 
 #include "Engine/World.h"
 #include "Foundation/Components/ARStatsComponent.h"
@@ -330,5 +331,5 @@ void UARStatusEffectComponent::RefreshTickState()
 
 double UARStatusEffectComponent::GetNow() const
 {
-	return GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return UARTimeSubsystem::OwnerNow(GetOwner());
 }

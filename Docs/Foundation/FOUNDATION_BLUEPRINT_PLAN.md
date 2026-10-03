@@ -1,10 +1,10 @@
 # Foundation 블루프린트 설계서
 
-> **현행 추가 (2026-10-03):** 일반 Apply Stat Modifier의 Operation에 Permanent Flat을 추가했다. 양/음수 Value를 기본값에 직접 더하며 기록·만료·반환 핸들 없음(Success로 판정). 아이템/액션/DA 기본 효과에서는 거절한다. Money는 플레이어 전용, 기본0, float 수치이며 부족한 기본 잔액 차감은 무변경 실패. Get Final Stat·Get Base Stat·OnFinalStatChanged·플레이어 전체 스탯 목록에 반영; 적/환경의 Money 적용은 거절하고 목록에서 제외한다. 자동 돈 HUD·상점·세이브는 없다. [사용 참고서](../Guides/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
+> **현행 추가 (2026-10-03):** 일반 Apply Stat Modifier의 Operation에 Permanent Flat을 추가했다. 양/음수 Value를 기본값에 직접 더하며 기록·만료·반환 핸들 없음(Success로 판정). 아이템/액션/DA 기본 효과에서는 거절한다. Money는 플레이어 전용, 기본0, float 수치이며 부족한 기본 잔액 차감은 무변경 실패. Get Final Stat·Get Base Stat·OnFinalStatChanged·플레이어 전체 스탯 목록에 반영; 적/환경의 Money 적용은 거절하고 목록에서 제외한다. 자동 돈 HUD·상점·세이브는 없다. [사용 참고서](../Guides/common/OBJECT_STAT_GUIDE_KO.html#permanent-flat).
 
 > **현행 추가 (2026-10-03):** 기본 CC는 `Apply Crowd Control`로 DA 없이 적용 가능하다. Target Actor / CC Type(Stun·Root) / Duration(초, 기본1, >0) / Affected By Tenacity(기본 체크)를 입력하고 Success / Return Value(상태 핸들)를 받는다. Source·Failure Reason·Applied Duration은 고급 핀. 정확한 자기 기절3초는 Duration=3, 강인함 체크 해제(면역은 여전히 적용). 기존 DA 및 해제 노드는 유지한다. [핀 참고서](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#apply-crowd-control).
 
-> **현행 보완 (2026-10-02):** 공통 Character의 직접 BP 이벤트 6개(사망·그로기 소진·실드 파괴·피해 적용·액션 취소·상태 제거)를 지원한다. 등장 초기화는 기존 Event BeginPlay. 기존 컴포넌트/Character 디스패처와 중복 처리하지 않는다. 실드 파괴는 총합 양수→0의 피해 또는 명시적 제거만 발생하고 시간 만료·Ignore Shield는 제외한다. Health의 변경 알림 이후 파괴 전이 스냅샷을 전달한다. Restore Health/Mana/Stamina는 현재값을 최대치까지만 더하며 실제 증가량을 반환한다. 최대 스탯 변경·부활·RecoveryPower 자동 배율은 아니다. [직접 이벤트](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events) · [회복 핀 참고](../Guides/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing).
+> **현행 보완 (2026-10-02):** 공통 Character의 직접 BP 이벤트 6개(사망·그로기 소진·실드 파괴·피해 적용·액션 취소·상태 제거)를 지원한다. 등장 초기화는 기존 Event BeginPlay. 기존 컴포넌트/Character 디스패처와 중복 처리하지 않는다. 실드 파괴는 총합 양수→0의 피해 또는 명시적 제거만 발생하고 시간 만료·Ignore Shield는 제외한다. Health의 변경 알림 이후 파괴 전이 스냅샷을 전달한다. Restore Health/Mana/Stamina는 현재값을 최대치까지만 더하며 실제 증가량을 반환한다. 최대 스탯 변경·부활·RecoveryPower 자동 배율은 아니다. [직접 이벤트](../Guides/hhc/ENEMY_BLUEPRINT_CREATION_GUIDE_KO.html#direct-events) · [회복 핀 참고](../Guides/common/DAMAGE_NODES_FORMULA_GUIDE_KO.html#healing).
 
 > **현행 보완 (2026-09-30):** 유물/무기 런타임에서 `Apply Item Super Armor`와 `Apply Item CC Immunity`를 사용하면 아이템 제거 시 자동 해제된다. 스킬 행동에만 붙일 때는 `Apply Action Super Armor` / `Apply Action CC Immunity`를 사용한다. CC 면역은 강인함 100 수정치가 아니라 새 CC의 적용을 사전에 차단하는 별도 보장 효과다. 지속시간 `-1`은 무기한이고, 이미 걸린 상태를 지우지는 않는다.
 

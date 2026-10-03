@@ -69,13 +69,13 @@
 <link rel="stylesheet" href="../assets/guide.css">
 </head>
 <body data-guide-ui="shared">
-<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../index.html">가이드 메인</a><a href="../index.html#common">공통</a><a href="../index.html#item" aria-current="true">아이템</a><a href="../index.html#enemy">적</a><a href="../index.html#environment">환경</a><a href="../index.html#precautions">주의점</a></div><div class="guide-peers"><a href="ITEM_ASSET_CREATION_GUIDE_KO.html" aria-current="page">데이터 에셋</a><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">런타임 기본</a><a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬</a></div></div></nav><!-- GUIDE PORTAL END -->
+<!-- GUIDE PORTAL START --><nav class="guide-nav" aria-label="가이드 이동"><div class="wrap"><div class="guide-global"><a href="../가이드 메인 페이지.html">가이드 메인 페이지</a><a href="../가이드 메인 페이지.html#common">공통</a><a href="../가이드 메인 페이지.html#item" aria-current="true">아이템</a><a href="../가이드 메인 페이지.html#enemy">적</a><a href="../가이드 메인 페이지.html#environment">환경</a><a href="../가이드 메인 페이지.html#precautions">주의점</a></div><div class="guide-peers"><a href="ITEM_ASSET_CREATION_GUIDE_KO.html" aria-current="page">데이터 에셋</a><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html">런타임 기본</a><a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html">아이템 스킬</a></div></div></nav><!-- GUIDE PORTAL END -->
 <header><div class="wrap">
   <div class="eyebrow">Action RogueLike · 제작자용</div>
   <h1>아이템 에셋 제작 가이드</h1>
   <p class="lead">무기, 액티브 유물, 패시브 유물, 소모품을 만드는 공통 데이터 에셋과 각 항목의 의미를 현재 프로젝트 코드 기준으로 설명합니다. <strong>정보를 담는 데이터 에셋</strong>과 <strong>실제 동작을 만드는 런타임 블루프린트</strong>를 구분해서 읽으세요.</p>
 </div></header>
-<nav aria-label="목차"><div class="wrap"><a href="#runtime-timing">Runtime에서 시간 작업을 만들 때</a>
+<nav aria-label="목차"><div class="wrap"><a href="#time-groups">시간 그룹 · 기능과 설정</a><a href="#runtime-timing">Runtime에서 시간 작업을 만들 때</a>
   <a href="#start">제작 순서</a><a href="#types">유형별 사용표</a><a href="#identity">Identity</a><a href="#display">Display</a><a href="#stats">Stats</a><a href="#skills">Skills</a><a href="#runtime">Runtime</a><a href="#ui">UI</a><a href="#guarantees">보장 효과</a><a href="#evolution">Evolution</a><a href="#catalog">검색·획득</a><a href="#checks">검증</a>
 </div></nav>
 <main class="wrap"><div class="guide-tools"><label for="node-search">노드·내용 찾기</label><input id="node-search" type="search" placeholder="노드 이름, 필드, 수명…" autocomplete="off"><button id="clear-search" type="button">검색 지우기</button></div><p id="search-result" class="search-result" role="status" aria-live="polite"></p>
@@ -250,6 +250,7 @@
     <p class="small muted">현재 코드의 데이터 구조를 설명하는 문서입니다. UI 스킨·픽업 스프라이트·공격 판정은 별도 블루프린트/위젯 제작 영역입니다.</p>
   </div></details>
 <details class="chapter" id="runtime-timing"><summary>Runtime에서 시간 작업을 만들 때</summary><div class="chapter-body"><p>DA의 쿨타임·기본 효과 Duration과 BP 예약은 서로 다릅니다. 보유 주기 효과는 런타임의 <code>On Item Registered → Set Item Timer by Event</code>, 스킬 선딜·반복 효과는 <code>Execute Item Skill → Set Action Timer by Event</code>로 연결하세요. DA에 시간을 적는 것만으로 BP 콜백이 생성되지는 않습니다.</p><p><a href="RELIC_RUNTIME_BLUEPRINT_NODE_GUIDE_KO.html#managed-timers">보유 타이머 핀·등록/해제</a> · <a href="SKILL_RUNTIME_ACTION_GUIDE_KO.html#managed-timers">스킬 타이머 핀·완료/취소</a></p></div></details>
+<details class="chapter" id="time-groups"><summary>시간 그룹 · 기능과 설정</summary><div class="chapter-body"><p><code>World</code>와 <code>Player</code>라는 시간 그룹이 있습니다. 선택형 기본값은 World이며 게임 Pause 시 두 그룹 모두 멈춥니다. 시간 기준은 아이템/액션의 자동 정리 수명과 별개입니다.</p><p>DA의 Skill Definitions에서 Cooldown Time Group과 Action Request → Time Group을 별도로 선택합니다. Action Delay는 액션의 그룹을 따르며, 아이템·액션 타이머의 Time Group은 예약마다 따로 선택합니다.</p><p><a href="../precautions/TIME_GROUP_GUIDE_KO.html">그룹 설정 위치·제어 노드·호환과 주의점</a></p></div></details>
 </main>
 <footer><div class="wrap">코드 대조 기준: <code>ARItemDefinition.h</code>, <code>ARItemTypes.h</code>, <code>ARStatsComponent.h</code>, <code>ARLoadoutComponent.cpp</code>, <code>ARConsumableComponent.cpp</code>, <code>ARItemCatalogBlueprintLibrary.cpp</code>. 기존 코드·기획서를 바꾸지 않고 제작 절차를 풀어 쓴 가이드입니다.</div></footer>
 

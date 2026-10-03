@@ -35,6 +35,14 @@ assert.equal(onItem.inputs.length,0);assert(onItem.outputs.some(p=>p.name==='Ski
 const can=data.nodes.find(n=>n.name==='CanExecuteItemSkill');
 assert(can.inputs.some(p=>p.name==='SkillId'));assert(can.outputs.some(p=>p.name==='FailureTag'));
 assert(data.nodes.find(n=>n.name==='RemoveOneStatModifierStack').hidden);
+for (const name of ['SetGroupedItemTimerByEvent','SetGroupedActionTimerByEvent']) {
+  const n=data.nodes.find(n=>n.name===name);assert(n&&!n.hidden);
+  for(const [key,value] of [['TimeGroup','EARTimeGroup::World'],['InitialStartDelay','0.0f'],['InitialStartDelayVariance','0.0f'],['bMaxOncePerFrame','false']]) {
+    assert.equal(n.inputs.find(p=>p.name===key).default,value);
+  }
+}
+for(const name of ['SetItemTimerByEvent','SetActionTimerByEvent'])assert(!data.nodes.some(n=>n.name===name));
+for(const name of ['SetTimeGroupRate','PauseTimeGroupTimer','UnpauseTimeGroupTimer','ClearTimeGroupTimer','GetTimeGroupTimerRemaining'])assert(data.nodes.find(n=>n.name===name&&!n.hidden));
 
 // Event wiring and view-state tests with a DOM-shaped model. No rendering.
 class Element {

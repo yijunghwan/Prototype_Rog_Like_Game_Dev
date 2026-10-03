@@ -31,6 +31,11 @@ void UARActionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 FARRequestStatus UARActionComponent::CanStartAction(const FARActionRequest& Request) const
 {
 	FARRequestStatus Status;
+	if (Request.TimeGroup != EARTimeGroup::World && Request.TimeGroup != EARTimeGroup::Player)
+	{
+		Status.Result = EARRequestResult::InvalidDefinition;
+		return Status;
+	}
 	if (bEndingPlay || !IsValid(GetOwner()) || GetOwner()->IsActorBeingDestroyed())
 	{
 		Status.Result = EARRequestResult::InvalidOwner;
@@ -351,17 +356,29 @@ void UARActionComponent::CleanupAction(FARActiveAction& Action)
 	}
 }
 
-FTimerHandle UARActionComponent::SetActionTimerByEvent(FARActionHandle ActionHandle, FTimerDynamicDelegate Event,
-	float Time, bool bLooping, bool& bSuccess, float InitialStartDelay, bool bMaxOncePerFrame)
+FTimerHandle UARActionComponent::SetGroupedActionTimerByEvent(FARActionHandle ActionHandle, FTimerDynamicDelegate Event,
+	float Time, bool bLooping, bool& bSuccess, EARTimeGroup TimeGroup, float InitialStartDelay,
+	float InitialStartDelayVariance, bool bMaxOncePerFrame)
 {
 	bSuccess = false;
 	FARActiveAction* Action = !bEndingPlay && IsValid(GetOwner()) && !GetOwner()->IsActorBeingDestroyed()
 		? FindActiveAction(ActionHandle) : nullptr;
 	if (!Action) return FTimerHandle();
 	const TWeakObjectPtr<UARActionComponent> WeakOwner(this);
-	return ARLifetimeTimer::Start(this, Event, Time, bLooping, InitialStartDelay, bMaxOncePerFrame,
-		[WeakOwner, ActionHandle]() { return WeakOwner.IsValid() && WeakOwner->IsActionActive(ActionHandle); },
+	return ARLifetimeTimer::StartGrouped(this, Event, Time, bLooping, TimeGroup, InitialStartDelay,
+		InitialStartDelayVariance, bMaxOncePerFrame,
+		[WeakOwner, ActionHandle]()
+		{
+			const AActor* Owner = WeakOwner.IsValid() ? WeakOwner->GetOwner() : nullptr;
+			return IsValid(Owner) && !Owner->IsActorBeingDestroyed() && WeakOwner->IsActionActive(ActionHandle);
+		},
 		Action->TimerHandles, bSuccess);
+}
+
+EARTimeGroup UARActionComponent::GetActionTimeGroup(FARActionHandle Handle) const
+{
+	const FARActiveAction* Action = FindActiveAction(Handle);
+	return Action ? Action->Request.TimeGroup : EARTimeGroup::World;
 }
 
 bool UARActionComponent::ShouldCancelForReason(const FARActiveAction& Action, EARActionCancelReason Reason) const
